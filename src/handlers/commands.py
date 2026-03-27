@@ -1,0 +1,215 @@
+from aiogram import Router
+from aiogram.filters import Command
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+
+from src.config import ADMIN_IDS, SUPPORT_BOT_USERNAME
+from src.database import (
+    add_credits,
+    clear_dialog_messages,
+    ensure_user,
+    get_credits,
+    take_credits,
+)
+
+
+router = Router(name="commands")
+
+
+@router.message(Command("start"))
+async def cmd_start(message: Message) -> None:
+    if not message.from_user:
+        return
+
+    await ensure_user(message.from_user.id, message.from_user.username)
+    balance = await get_credits(message.from_user.id)
+
+    await message.answer(
+        "Привет! Я Avira.\n\n"
+        "Напиши сообщение — и я отвечу.\n"
+        f"Твой баланс: {balance} кредитов.\n\n"
+        "Команды: /help /profile"
+    )
+
+
+@router.message(Command("help"))
+async def cmd_help(message: Message) -> None:
+    await message.answer(
+        "Доступно сейчас:\n"
+        "- /start — запуск\n"
+        "- /help — помощь\n"
+        "- /profile — баланс кредитов\n"
+        "- /newchat или /clear — полностью очистить память диалога\n"
+        "- /support — перейти в отдельный чат поддержки\n"
+        "- /myid — показать твой Telegram ID\n\n"
+        "Сейчас: 1 текстовый запрос = 1 кредит.\n"
+        "Дальше подключим ИИ (Gemini через прокси)."
+    )
+
+
+@router.message(Command("profile"))
+async def cmd_profile(message: Message) -> None:
+    if not message.from_user:
+        return
+
+    await ensure_user(message.from_user.id, message.from_user.username)
+    balance = await get_credits(message.from_user.id)
+    if message.from_user.id in ADMIN_IDS:
+        await message.answer("Твой текущий баланс: безлимит (режим админа).")
+        return
+    await message.answer(f"Твой текущий баланс: {balance} кредитов.")
+
+
+@router.message(Command("newchat"))
+@router.message(Command("clear"))
+async def cmd_newchat(message: Message) -> None:
+    if not message.from_user:
+        return
+    await clear_dialog_messages(message.from_user.id)
+    await message.answer(
+        "Готово ✅ История этого диалога очищена.\n"
+        "Можешь начать новую тему."
+    )
+
+
+@router.message(Command("support"))
+async def cmd_support(message: Message) -> None:
+    if not SUPPORT_BOT_USERNAME:
+        await message.answer(
+            "Чат поддержки пока не подключен.\n"
+            "Админ должен заполнить SUPPORT_BOT_USERNAME в .env"
+        )
+        return
+    support_url = f"https://t.me/{SUPPORT_BOT_USERNAME}?start=from_avira"
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Открыть чат поддержки", url=support_url)]
+        ]
+    )
+    await message.answer(
+        "Для обращений используй отдельный чат поддержки.\n"
+        "Нажми кнопку ниже:",
+        reply_markup=keyboard,
+    )
+
+
+@router.message(Command("myid"))
+async def cmd_myid(message: Message) -> None:
+    if not message.from_user:
+        return
+    await message.answer(f"Твой Telegram ID: {message.from_user.id}")
+
+
+@router.message(Command("chatid"))
+async def cmd_chatid(message: Message) -> None:
+    if not message.from_user:
+        return
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("Эта команда только для администраторов.")
+        return
+    await message.answer(f"ID этого чата: {message.chat.id}")
+
+
+@router.message(Command("adminhelp"))
+async def cmd_adminhelp(message: Message) -> None:
+    if not message.from_user or message.from_user.id not in ADMIN_IDS:
+        return
+    await message.answer(
+        "Админ-команды:\n"
+        "/admin\n"
+        "/addcredits <user_id> <amount>\n"
+        "/takecredits <user_id> <amount>\n"
+        "/myid\n"
+        "/chatid"
+    )
+
+
+@router.message(Command("addcredits"))
+async def cmd_addcredits(message: Message) -> None:
+    if not message.from_user or message.from_user.id not in ADMIN_IDS:
+        await message.answer("Эта команда только для администраторов.")
+        return
+
+    raw = (message.text or "").strip()
+    parts = raw.split(maxsplit=2)
+    if len(parts) < 3 or not parts[1].isdigit() or not parts[2].isdigit():
+        await message.answer(
+            "Формат:\n"
+            "/addcredits <user_id> <amount>\n\n"
+            "Пример:\n"
+            "/addcredits 123456789 50"
+        )
+        return
+
+    target_user_id = int(parts[1])
+    amount = int(parts[2])
+    if amount <= 0:
+        await message.answer("Количество кредитов должно быть больше 0.")
+        return
+
+    await ensure_user(target_user_id, None)
+    ok = await add_credits(target_user_id, amount)
+    if not ok:
+        await message.answer("Не удалось начислить кредиты.")
+        return
+
+    new_balance = await get_credits(target_user_id)
+    await message.answer(
+        f"Готово ✅ Пользователю {target_user_id} начислено {amount} кредитов.\n"
+        f"Новый баланс: {new_balance}."
+    )
+
+
+@router.message(Command("takecredits"))
+async def cmd_takecredits(message: Message) -> None:
+    if not message.from_user or message.from_user.id not in ADMIN_IDS:
+        await message.answer("Эта команда только для администраторов.")
+        return
+
+    raw = (message.text or "").strip()
+    parts = raw.split(maxsplit=2)
+    if len(parts) < 3 or not parts[1].isdigit() or not parts[2].isdigit():
+        await message.answer(
+            "Формат:\n"
+            "/takecredits <user_id> <amount>\n\n"
+            "Пример:\n"
+            "/takecredits 123456789 20"
+        )
+        return
+
+    target_user_id = int(parts[1])
+    amount = int(parts[2])
+    if amount <= 0:
+        await message.answer("Количество кредитов должно быть больше 0.")
+        return
+
+    await ensure_user(target_user_id, None)
+    before_balance = await get_credits(target_user_id)
+    ok = await take_credits(target_user_id, amount)
+    if not ok:
+        await message.answer("Не удалось списать кредиты.")
+        return
+
+    new_balance = await get_credits(target_user_id)
+    taken = before_balance - new_balance
+    await message.answer(
+        f"Готово ✅ У пользователя {target_user_id} списано {taken} кредитов.\n"
+        f"Новый баланс: {new_balance}."
+    )
+
+
+@router.message(Command("admin"))
+async def cmd_admin(message: Message) -> None:
+    if not message.from_user:
+        return
+
+    user_id = message.from_user.id
+    if user_id not in ADMIN_IDS:
+        await message.answer("Эта команда только для администраторов.")
+        return
+
+    await message.answer(
+        "Админ-панель (MVP):\n"
+        "- Ты распознан как админ.\n"
+        "- Подсказки: /adminhelp"
+    )
+
