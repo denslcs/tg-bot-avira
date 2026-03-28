@@ -47,3 +47,11 @@ ADMIN_IDS: set[int] = _parse_admin_ids(os.getenv("ADMIN_IDS", ""))
 SUPPORT_USERNAME: str = os.getenv("SUPPORT_USERNAME", "").strip()
 SUPPORT_CHAT_ID: int = _parse_int(os.getenv("SUPPORT_CHAT_ID", "0"))
 
+# Если основной бот добавлен в админ-группу с топиками: по умолчанию НЕ дублируем ответы
+# из тем в личку (это делает support-бот). Включи 1 только если нужен старый режим одного бота.
+MAIN_BOT_RELAY_SUPPORT_TOPICS: bool = os.getenv("MAIN_BOT_RELAY_SUPPORT_TOPICS", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
+

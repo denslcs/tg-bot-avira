@@ -2,7 +2,7 @@ from aiogram import F, Router
 from aiogram.types import Message
 
 from src.antispam_state import check_spam_private_message
-from src.config import ADMIN_IDS, SUPPORT_CHAT_ID
+from src.config import ADMIN_IDS, MAIN_BOT_RELAY_SUPPORT_TOPICS, SUPPORT_CHAT_ID
 from src.database import (
     add_dialog_message,
     ensure_user,
@@ -27,6 +27,8 @@ router = Router(name="messages")
 
 @router.message(F.chat.id == SUPPORT_CHAT_ID, F.message_thread_id)
 async def support_topic_admin_reply(message: Message) -> None:
+    if not MAIN_BOT_RELAY_SUPPORT_TOPICS:
+        return
     if not message.from_user:
         return
     if message.from_user.id not in ADMIN_IDS:
