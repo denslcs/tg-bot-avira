@@ -6,7 +6,9 @@ from aiogram.types import BotCommand
 
 from src.config import TELEGRAM_BOT_TOKEN
 from src.database import init_db
+from src.handlers.admin_panel import router as admin_panel_router
 from src.handlers.commands import router as commands_router
+from src.handlers.faq_handlers import router as faq_router
 from src.handlers.messages import router as messages_router
 
 
@@ -23,6 +25,7 @@ async def main() -> None:
         [
             BotCommand(command="start", description="Запуск"),
             BotCommand(command="help", description="Помощь"),
+            BotCommand(command="faq", description="Частые вопросы"),
             BotCommand(command="profile", description="Баланс кредитов"),
             BotCommand(command="newchat", description="Очистить историю диалога"),
             BotCommand(command="support", description="Открыть обращение в поддержку"),
@@ -35,6 +38,8 @@ async def main() -> None:
     dp = Dispatcher()
 
     dp.include_router(commands_router)
+    dp.include_router(admin_panel_router)
+    dp.include_router(faq_router)
     dp.include_router(messages_router)
 
     await dp.start_polling(bot)

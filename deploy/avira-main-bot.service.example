@@ -1,0 +1,15 @@
+[Unit]
+Description=Avira main Telegram bot
+After=network.target
+
+[Service]
+Type=simple
+User=YOUR_LINUX_USER
+WorkingDirectory=/home/YOUR_LINUX_USER/avira-bot
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/YOUR_LINUX_USER/avira-bot/venv/bin/python -m src.bot
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

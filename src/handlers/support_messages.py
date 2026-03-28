@@ -7,6 +7,7 @@ from src.database import (
     close_ticket,
     get_open_ticket_by_id,
     get_open_ticket_by_thread,
+    record_support_rating,
     update_ticket_thread,
 )
 from src.support_state import (
@@ -41,6 +42,17 @@ def _resolution_keyboard(ticket_id: int) -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text="Да", callback_data=f"ticket_res:{ticket_id}:yes"),
                 InlineKeyboardButton(text="Нет", callback_data=f"ticket_res:{ticket_id}:no"),
+            ]
+        ]
+    )
+
+
+def _rating_keyboard(ticket_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=str(i), callback_data=f"tickrate:{ticket_id}:{i}")
+                for i in range(1, 6)
             ]
         ]
     )
@@ -289,29 +301,89 @@ async def ticket_resolution_callback(callback: CallbackQuery) -> None:
         return
 
     if action == "yes":
-        await close_ticket(ticket.ticket_id)
-        clear_admin_ticket_flow(ticket.ticket_id)
-        try:
-            await callback.bot.edit_forum_topic(
-                chat_id=SUPPORT_CHAT_ID,
-                message_thread_id=ticket.thread_id,
-                name=_topic_name(ticket.ticket_id, ticket.username, "CLOSED"),
-            )
-        except Exception:
-            pass
-        try:
-            await callback.bot.close_forum_topic(
-                chat_id=SUPPORT_CHAT_ID,
-                message_thread_id=ticket.thread_id,
-            )
-        except Exception:
-            pass
-        clear_support_draft(ticket.user_id)
-        await callback.message.edit_text("Отлично, тикет закрыт ✅")
-        await callback.answer("Спасибо!")
+        await callback.message.edit_text(
+            "Рад, что помогло 🎉\n"
+            "Оцени ответ поддержки от 1 до 5 (1 — плохо, 5 — отлично).\n"
+            "После выбора тикет закроется.",
+            reply_markup=_rating_keyboard(ticket_id),
+        )
+        await callback.answer()
         return
 
     start_support_draft(ticket.user_id, ticket.ticket_id)
     schedule_support_draft_timers(callback.bot, ticket.user_id, ticket.ticket_id)
     await callback.message.edit_text("Понял, продолжаем. Опиши проблему еще раз и отправь: готово")
     await callback.answer("Ок, продолжаем.")
+
+
+async def _close_ticket_after_rating(
+    bot,
+    ticket_id: int,
+    thread_id: int,
+    username: str,
+    user_id: int,
+) -> None:
+    clear_admin_ticket_flow(ticket_id)
+    try:
+        await bot.edit_forum_topic(
+            chat_id=SUPPORT_CHAT_ID,
+            message_thread_id=thread_id,
+            name=_topic_name(ticket_id, username, "CLOSED"),
+        )
+    except Exception:
+        pass
+    try:
+        await bot.close_forum_topic(
+            chat_id=SUPPORT_CHAT_ID,
+            message_thread_id=thread_id,
+        )
+    except Exception:
+        pass
+    clear_support_draft(user_id)
+
+
+@router.callback_query(F.data.startswith("tickrate:"))
+async def ticket_rating_callback(callback: CallbackQuery) -> None:
+    if not callback.data or not callback.from_user:
+        return
+    parts = callback.data.split(":")
+    if len(parts) != 3:
+        return
+    ticket_id = int(parts[1])
+    try:
+        score = int(parts[2])
+    except ValueError:
+        return
+    if score < 1 or score > 5:
+        await callback.answer("Оценка от 1 до 5.", show_alert=True)
+        return
+    ticket = await get_open_ticket_by_id(ticket_id)
+    if not ticket:
+        await callback.answer("Тикет уже закрыт.", show_alert=True)
+        return
+    if ticket.user_id != callback.from_user.id:
+        await callback.answer("Это не твой тикет.", show_alert=True)
+        return
+    await record_support_rating(ticket_id, ticket.user_id, score)
+    try:
+        await callback.bot.send_message(
+            chat_id=SUPPORT_CHAT_ID,
+            message_thread_id=ticket.thread_id,
+            text=f"Пользователь оценил тикет #{ticket_id}: {score}/5",
+        )
+    except Exception:
+        pass
+    await close_ticket(ticket_id)
+    await _close_ticket_after_rating(
+        callback.bot,
+        ticket_id,
+        ticket.thread_id,
+        ticket.username,
+        ticket.user_id,
+    )
+    if callback.message:
+        await callback.message.edit_text(
+            f"Спасибо за оценку! Тикет закрыт ✅ ({score}/5)",
+            reply_markup=None,
+        )
+    await callback.answer("Спасибо!")

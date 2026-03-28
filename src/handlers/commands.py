@@ -3,11 +3,14 @@ from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from src.config import ADMIN_IDS, SUPPORT_BOT_USERNAME
+from src.antispam_state import reset_user_spam
 from src.database import (
     add_credits,
     clear_dialog_messages,
     ensure_user,
     get_credits,
+    get_user_admin_profile,
+    subscription_is_active,
     take_credits,
 )
 
@@ -37,11 +40,12 @@ async def cmd_help(message: Message) -> None:
         "Доступно сейчас:\n"
         "- /start — запуск\n"
         "- /help — помощь\n"
+        "- /faq — частые вопросы (шаблоны ответов)\n"
         "- /profile — баланс кредитов\n"
-        "- /newchat или /clear — полностью очистить память диалога\n"
-        "- /support — перейти в отдельный чат поддержки\n"
-        "- /myid — показать твой Telegram ID\n\n"
-        "Сейчас: 1 текстовый запрос = 1 кредит.\n"
+        "- /newchat (/clear) — очистить память диалога\n"
+        "- /support — отдельный чат поддержки\n"
+        "- /myid — твой Telegram ID\n\n"
+        "1 текстовый запрос = 1 кредит.\n"
         "Дальше подключим ИИ (Gemini через прокси)."
     )
 
@@ -56,7 +60,14 @@ async def cmd_profile(message: Message) -> None:
     if message.from_user.id in ADMIN_IDS:
         await message.answer("Твой текущий баланс: безлимит (режим админа).")
         return
-    await message.answer(f"Твой текущий баланс: {balance} кредитов.")
+    profile = await get_user_admin_profile(message.from_user.id)
+    sub_extra = ""
+    if profile and profile.subscription_ends_at:
+        if subscription_is_active(profile.subscription_ends_at):
+            sub_extra = f"\nПодписка активна до: {profile.subscription_ends_at}"
+        else:
+            sub_extra = f"\nПодписка (истекла): {profile.subscription_ends_at}"
+    await message.answer(f"Твой текущий баланс: {balance} кредитов.{sub_extra}")
 
 
 @router.message(Command("newchat"))
@@ -65,6 +76,7 @@ async def cmd_newchat(message: Message) -> None:
     if not message.from_user:
         return
     await clear_dialog_messages(message.from_user.id)
+    reset_user_spam(message.from_user.id)
     await message.answer(
         "Готово ✅ История этого диалога очищена.\n"
         "Можешь начать новую тему."
@@ -107,20 +119,6 @@ async def cmd_chatid(message: Message) -> None:
         await message.answer("Эта команда только для администраторов.")
         return
     await message.answer(f"ID этого чата: {message.chat.id}")
-
-
-@router.message(Command("adminhelp"))
-async def cmd_adminhelp(message: Message) -> None:
-    if not message.from_user or message.from_user.id not in ADMIN_IDS:
-        return
-    await message.answer(
-        "Админ-команды:\n"
-        "/admin\n"
-        "/addcredits <user_id> <amount>\n"
-        "/takecredits <user_id> <amount>\n"
-        "/myid\n"
-        "/chatid"
-    )
 
 
 @router.message(Command("addcredits"))
@@ -194,22 +192,5 @@ async def cmd_takecredits(message: Message) -> None:
     await message.answer(
         f"Готово ✅ У пользователя {target_user_id} списано {taken} кредитов.\n"
         f"Новый баланс: {new_balance}."
-    )
-
-
-@router.message(Command("admin"))
-async def cmd_admin(message: Message) -> None:
-    if not message.from_user:
-        return
-
-    user_id = message.from_user.id
-    if user_id not in ADMIN_IDS:
-        await message.answer("Эта команда только для администраторов.")
-        return
-
-    await message.answer(
-        "Админ-панель (MVP):\n"
-        "- Ты распознан как админ.\n"
-        "- Подсказки: /adminhelp"
     )
 

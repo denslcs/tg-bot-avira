@@ -1,6 +1,7 @@
 from aiogram import F, Router
 from aiogram.types import Message
 
+from src.antispam_state import check_spam_private_message
 from src.config import ADMIN_IDS, SUPPORT_CHAT_ID
 from src.database import (
     add_dialog_message,
@@ -9,7 +10,9 @@ from src.database import (
     get_last_dialog_messages,
     get_open_ticket_by_id,
     get_open_ticket_by_thread,
+    get_user_admin_profile,
     spend_one_credit,
+    subscription_is_active,
 )
 from src.support_state import (
     append_support_draft,
@@ -104,15 +107,25 @@ async def any_message(message: Message) -> None:
 
     is_admin = user_id in ADMIN_IDS
     if not is_admin:
-        is_spent = await spend_one_credit(user_id)
-        if not is_spent:
-            balance = await get_credits(user_id)
-            await message.answer(
-                "У тебя закончились кредиты 😔\n"
-                f"Текущий баланс: {balance}.\n"
-                "Скоро добавим пополнение."
-            )
+        blocked, spam_reply = check_spam_private_message(user_id, text)
+        if blocked:
+            if spam_reply:
+                await message.answer(spam_reply)
             return
+
+    if not is_admin:
+        profile = await get_user_admin_profile(user_id)
+        sub_free = profile is not None and subscription_is_active(profile.subscription_ends_at)
+        if not sub_free:
+            is_spent = await spend_one_credit(user_id)
+            if not is_spent:
+                balance = await get_credits(user_id)
+                await message.answer(
+                    "У тебя закончились кредиты 😔\n"
+                    f"Текущий баланс: {balance}.\n"
+                    "Скоро добавим пополнение."
+                )
+                return
 
     await add_dialog_message(user_id, "user", text)
     history = await get_last_dialog_messages(user_id, limit=10)
@@ -129,6 +142,10 @@ async def any_message(message: Message) -> None:
         await message.answer(f"{reply_text}\n\nРежим админа: безлимит кредитов.")
         return
 
+    profile = await get_user_admin_profile(user_id)
+    sub_note = ""
+    if profile and subscription_is_active(profile.subscription_ends_at):
+        sub_note = "\n(Запрос не списал кредит: активна подписка.)"
     balance = await get_credits(user_id)
-    await message.answer(f"{reply_text}\n\nОсталось кредитов: {balance}")
+    await message.answer(f"{reply_text}\n\nОсталось кредитов: {balance}{sub_note}")
 
