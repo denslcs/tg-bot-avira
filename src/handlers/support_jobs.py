@@ -91,6 +91,7 @@ async def _send_sla_reminder(bot: Bot) -> None:
         "/sla — полный список открытых тикетов"
     )
     try:
+        # General: SLA-дайджест. Тексты обращений пользователей — только в темах тикетов.
         await bot.send_message(chat_id=SUPPORT_CHAT_ID, text=text[:4000])
     except Exception:
         logger.exception("sla reminder failed")
@@ -103,7 +104,7 @@ async def run_support_background_jobs(bot: Bot) -> None:
         while True:
             try:
                 await _send_sla_reminder(bot)
-                await asyncio.sleep(max(60, SLA_ALERT_INTERVAL_MINUTES * 60))
+                await asyncio.sleep(SLA_ALERT_INTERVAL_MINUTES * 60)
             except asyncio.CancelledError:
                 raise
             except Exception:

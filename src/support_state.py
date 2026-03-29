@@ -12,8 +12,18 @@ _DRAFT_TICKET_IDS: dict[int, int] = {}
 # Timer session: bump when /support (or "continue") starts so old asyncio tasks exit.
 _DRAFT_TIMER_SEQ: dict[int, int] = {}
 
+# Оценка тикета: ждём текст отзыва в личке или показан превью с кнопками
+_FEEDBACK_AWAIT_TEXT: dict[int, tuple[int, int]] = {}
+_FEEDBACK_PREVIEW: dict[int, tuple[int, int, str]] = {}
+
+
+def clear_feedback_session(user_id: int) -> None:
+    _FEEDBACK_AWAIT_TEXT.pop(user_id, None)
+    _FEEDBACK_PREVIEW.pop(user_id, None)
+
 
 def start_support_draft(user_id: int, ticket_id: int) -> None:
+    clear_feedback_session(user_id)
     _SUPPORT_DRAFTS[user_id] = ""
     _DRAFT_TICKET_IDS[user_id] = ticket_id
 
@@ -39,6 +49,7 @@ def get_support_draft(user_id: int) -> str:
 
 
 def clear_support_draft(user_id: int) -> None:
+    clear_feedback_session(user_id)
     _SUPPORT_DRAFTS.pop(user_id, None)
     _DRAFT_TICKET_IDS.pop(user_id, None)
     clear_draft_timer_seq(user_id)
@@ -56,6 +67,43 @@ def bump_draft_timer_seq(user_id: int) -> int:
 
 def clear_draft_timer_seq(user_id: int) -> None:
     _DRAFT_TIMER_SEQ.pop(user_id, None)
+
+
+def start_feedback_await_text(user_id: int, ticket_id: int, score: int) -> None:
+    _FEEDBACK_PREVIEW.pop(user_id, None)
+    _FEEDBACK_AWAIT_TEXT[user_id] = (ticket_id, score)
+
+
+def in_feedback_await_text(user_id: int) -> bool:
+    return user_id in _FEEDBACK_AWAIT_TEXT
+
+
+def in_feedback_preview(user_id: int) -> bool:
+    return user_id in _FEEDBACK_PREVIEW
+
+
+def in_feedback_session(user_id: int) -> bool:
+    return in_feedback_await_text(user_id) or in_feedback_preview(user_id)
+
+
+def pop_feedback_await_text(user_id: int) -> tuple[int, int] | None:
+    return _FEEDBACK_AWAIT_TEXT.pop(user_id, None)
+
+
+def peek_feedback_await_text(user_id: int) -> tuple[int, int] | None:
+    return _FEEDBACK_AWAIT_TEXT.get(user_id)
+
+
+def set_feedback_preview(user_id: int, ticket_id: int, score: int, text: str) -> None:
+    _FEEDBACK_PREVIEW[user_id] = (ticket_id, score, text)
+
+
+def get_feedback_preview(user_id: int) -> tuple[int, int, str] | None:
+    return _FEEDBACK_PREVIEW.get(user_id)
+
+
+def clear_feedback_preview(user_id: int) -> None:
+    _FEEDBACK_PREVIEW.pop(user_id, None)
 
 
 async def run_support_draft_timers(bot, user_id: int, seq: int, ticket_id: int) -> None:

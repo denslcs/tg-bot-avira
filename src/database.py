@@ -62,6 +62,13 @@ async def _migrate_support_tickets(db: aiosqlite.Connection) -> None:
         await db.execute("ALTER TABLE support_tickets ADD COLUMN tag TEXT")
 
 
+async def _migrate_support_ratings_feedback(db: aiosqlite.Connection) -> None:
+    async with db.execute("PRAGMA table_info(support_ratings)") as cur:
+        cols = {row[1] for row in await cur.fetchall()}
+    if "feedback_text" not in cols:
+        await db.execute("ALTER TABLE support_ratings ADD COLUMN feedback_text TEXT")
+
+
 async def init_db() -> None:
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
@@ -142,6 +149,7 @@ async def init_db() -> None:
         )
         await _migrate_schema(db)
         await _migrate_support_tickets(db)
+        await _migrate_support_ratings_feedback(db)
         await db.commit()
 
 
@@ -675,17 +683,23 @@ async def get_user_admin_profile(user_id: int) -> UserAdminProfile | None:
     )
 
 
-async def record_support_rating(ticket_id: int, user_id: int, rating: int) -> None:
+async def record_support_rating(
+    ticket_id: int, user_id: int, rating: int, feedback_text: str | None = None
+) -> None:
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """
-            INSERT INTO support_ratings (ticket_id, user_id, rating)
-            VALUES (?, ?, ?)
+            INSERT INTO support_ratings (ticket_id, user_id, rating, feedback_text)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(ticket_id) DO UPDATE SET
                 rating = excluded.rating,
-                user_id = excluded.user_id
+                user_id = excluded.user_id,
+                feedback_text = CASE
+                    WHEN excluded.feedback_text IS NOT NULL THEN excluded.feedback_text
+                    ELSE support_ratings.feedback_text
+                END
             """,
-            (ticket_id, user_id, rating),
+            (ticket_id, user_id, rating, feedback_text),
         )
         await db.commit()
 

@@ -46,6 +46,8 @@ START_CREDITS: int = int(os.getenv("START_CREDITS", "20"))
 ADMIN_IDS: set[int] = _parse_admin_ids(os.getenv("ADMIN_IDS", ""))
 SUPPORT_USERNAME: str = os.getenv("SUPPORT_USERNAME", "").strip()
 SUPPORT_CHAT_ID: int = _parse_int(os.getenv("SUPPORT_CHAT_ID", "0"))
+# Тема «Отзывы» в группе поддержки: id ветки или 0 = создать при первом отзыве и сохранить в bot_meta
+SUPPORT_FEEDBACK_THREAD_ID: int = _parse_int(os.getenv("SUPPORT_FEEDBACK_THREAD_ID", "0"))
 
 # Если основной бот добавлен в админ-группу с топиками: по умолчанию НЕ дублируем ответы
 # из тем в личку (это делает support-бот). Включи 1 только если нужен старый режим одного бота.
@@ -60,8 +62,15 @@ FREE_DAILY_MESSAGE_LIMIT: int = _parse_int(os.getenv("FREE_DAILY_MESSAGE_LIMIT",
 
 # SLA: через сколько часов без первого ответа пользователю считать тикет «просроченным» (подсказки и фоновые алерты)
 SLA_WARNING_HOURS: float = float(os.getenv("SLA_WARNING_HOURS", "4"))
-# Как часто слать напоминание в админ-чат (если есть просроченные тикеты), минуты
-SLA_ALERT_INTERVAL_MINUTES: int = max(30, _parse_int(os.getenv("SLA_ALERT_INTERVAL_MINUTES", "120"), 120))
+# Интервал между SLA-напоминаниями в общий чат форума (без topic). Часы по умолчанию 8; либо явно минуты (приоритетнее).
+_sla_min_raw = os.getenv("SLA_ALERT_INTERVAL_MINUTES", "").strip()
+if _sla_min_raw:
+    SLA_ALERT_INTERVAL_MINUTES = max(60, _parse_int(_sla_min_raw, 480))
+else:
+    SLA_ALERT_INTERVAL_MINUTES = max(
+        60,
+        int(float(os.getenv("SLA_ALERT_INTERVAL_HOURS", "8")) * 60),
+    )
 
 # Еженедельная сводка: час UTC (0–23) и день недели (0=пн)
 WEEKLY_REPORT_HOUR_UTC: int = min(23, max(0, _parse_int(os.getenv("WEEKLY_REPORT_HOUR_UTC", "9"), 9)))
