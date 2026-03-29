@@ -77,7 +77,10 @@ def check_spam_private_message(
         st.streak = 1
 
     if 2 <= st.streak < duplicate_threshold:
-        return True, None
+        return True, (
+            "Ты отправляешь один и тот же текст подряд. "
+            "Слегка измени формулировку или подожди — иначе сработает более строгая проверка."
+        )
 
     if st.streak == duplicate_threshold:
         return True, (

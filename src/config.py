@@ -67,3 +67,7 @@ SLA_ALERT_INTERVAL_MINUTES: int = max(30, _parse_int(os.getenv("SLA_ALERT_INTERV
 WEEKLY_REPORT_HOUR_UTC: int = min(23, max(0, _parse_int(os.getenv("WEEKLY_REPORT_HOUR_UTC", "9"), 9)))
 WEEKLY_REPORT_WEEKDAY: int = min(6, max(0, _parse_int(os.getenv("WEEKLY_REPORT_WEEKDAY", "0"), 0)))
 
+# Личка основного бота: длина сообщения и черновика поддержки; антифлуд (сообщений за ~минуту)
+MAX_USER_MESSAGE_CHARS: int = max(500, min(32000, _parse_int(os.getenv("MAX_USER_MESSAGE_CHARS", "8000"), 8000)))
+MAX_SUPPORT_DRAFT_TOTAL_CHARS: int = max(2000, min(64000, _parse_int(os.getenv("MAX_SUPPORT_DRAFT_TOTAL_CHARS", "16000"), 16000)))
+PRIVATE_MESSAGES_PER_MINUTE: int = max(5, min(120, _parse_int(os.getenv("PRIVATE_MESSAGES_PER_MINUTE", "30"), 30)))

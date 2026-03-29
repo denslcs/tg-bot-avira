@@ -21,7 +21,7 @@ _USER_COMMANDS = [
 _ADMIN_COMMANDS = [
     BotCommand(command="admin", description="Панель админа: теги, заметки, SLA"),
     BotCommand(command="sla", description="Все открытые тикеты и SLA"),
-    BotCommand(command="report", description="Сводка за 7 дней"),
+    BotCommand(command="report", description="Тикеты и оценки поддержки за 7 дней"),
     BotCommand(command="ticket_status", description="Статус тикета (в теме)"),
     BotCommand(command="tag", description="Тег темы: bug / payment / general / clear"),
     BotCommand(command="note", description="Внутренняя заметка (не видит клиент)"),

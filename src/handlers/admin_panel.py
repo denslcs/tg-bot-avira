@@ -7,7 +7,10 @@ from src.database import (
     add_subscription_days,
     clear_dialog_messages,
     count_dialog_messages,
+    count_dialog_messages_total,
+    count_new_users_days,
     count_open_tickets,
+    count_users_active_subscription,
     count_users_total,
     ensure_user,
     get_open_ticket_by_user,
@@ -15,6 +18,7 @@ from src.database import (
     get_user_admin_profile,
     list_open_tickets_preview,
     subscription_is_active,
+    sum_users_credits,
 )
 
 router = Router(name="admin_panel")
@@ -25,7 +29,7 @@ def _main_kb() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(text="Открытые тикеты", callback_data="adm:tickets"),
-                InlineKeyboardButton(text="Статистика", callback_data="adm:stats"),
+                InlineKeyboardButton(text="Статистика бота", callback_data="adm:stats"),
             ],
             [
                 InlineKeyboardButton(text="Оценки поддержки", callback_data="adm:ratings"),
@@ -49,7 +53,8 @@ async def cmd_admin_panel(message: Message) -> None:
         "• /addcredits ID сумма — начислить кредиты\n"
         "• /takecredits ID сумма — списать кредиты\n"
         "• /setsub ID дни — продлить подписку на N дней\n"
-        "• /wipechat ID — очистить историю диалога у пользователя",
+        "• /wipechat ID — очистить историю диалога у пользователя\n"
+        "• /stats — сводка по пользователям, подпискам и кредитам",
         reply_markup=_main_kb(),
     )
 
@@ -61,6 +66,7 @@ async def adm_help(callback: CallbackQuery) -> None:
         return
     text = (
         "Команды:\n"
+        "/stats — пользователи, подписки, кредиты, объём диалогов\n"
         "/user 123 — кредиты, подписка, тикет, сообщения в диалоге\n"
         "/addcredits 123 50\n"
         "/takecredits 123 20\n"
@@ -88,23 +94,45 @@ async def adm_tickets(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
+async def _main_bot_stats_text() -> str:
+    users_n = await count_users_total()
+    new7 = await count_new_users_days(7)
+    sub_n = await count_users_active_subscription()
+    credits_sum = await sum_users_credits()
+    dialog_n = await count_dialog_messages_total()
+    tickets_n = await count_open_tickets()
+    return (
+        "📊 Статистика основного бота\n\n"
+        "Пользователи:\n"
+        f"• Всего в базе: {users_n}\n"
+        f"• Новых за 7 дней: {new7}\n"
+        f"• С активной подпиской сейчас: {sub_n}\n\n"
+        "Кредиты и диалоги:\n"
+        f"• Сумма кредитов у всех: {credits_sum}\n"
+        f"• Сообщений в историях диалогов (всего): {dialog_n}\n\n"
+        "Поддержка (срез):\n"
+        f"• Открытых тикетов сейчас: {tickets_n}\n\n"
+        "Оценки и SLA по тикетам — в чате support-бота: /report, /sla."
+    )
+
+
 @router.callback_query(F.data == "adm:stats")
 async def adm_stats(callback: CallbackQuery) -> None:
     if not callback.from_user or callback.from_user.id not in ADMIN_IDS:
         await callback.answer("Нет доступа.", show_alert=True)
         return
-    users_n = await count_users_total()
-    tickets_n = await count_open_tickets()
-    avg, rate_n = await get_support_rating_rollups()
-    avg_txt = f"{avg:.2f}" if avg is not None else "—"
-    text = (
-        f"Пользователей в базе: {users_n}\n"
-        f"Открытых тикетов: {tickets_n}\n"
-        f"Оценок поддержки: {rate_n} (средняя {avg_txt} из 5)"
-    )
+    text = await _main_bot_stats_text()
     if callback.message:
-        await callback.message.answer(text)
+        await callback.message.answer(text[:4000])
     await callback.answer()
+
+
+@router.message(Command("stats"))
+async def cmd_stats(message: Message) -> None:
+    if not message.from_user or message.from_user.id not in ADMIN_IDS:
+        await message.answer("Только для администраторов.")
+        return
+    await message.answer((await _main_bot_stats_text())[:4000])
 
 
 @router.callback_query(F.data == "adm:ratings")

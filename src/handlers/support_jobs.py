@@ -16,10 +16,13 @@ from src.config import (
     WEEKLY_REPORT_WEEKDAY,
 )
 from src.database import (
-    count_new_users_days,
     count_open_tickets,
+    count_open_tickets_by_tag,
+    count_tickets_closed_since_days,
+    count_tickets_created_since_days,
     get_meta,
-    get_support_rating_rollups,
+    get_rating_distribution_since_days,
+    get_support_rating_rollups_since_days,
     list_open_tickets_sla_rows,
     set_meta,
 )
@@ -55,17 +58,7 @@ async def _send_weekly_report(bot: Bot) -> None:
     if await get_meta("weekly_report_week") == week_key:
         return
 
-    new_u = await count_new_users_days(7)
-    open_n = await count_open_tickets()
-    avg, n_ratings = await get_support_rating_rollups()
-    avg_s = f"{avg:.2f}" if avg is not None else "—"
-    text = (
-        "📊 Еженедельная сводка Avira\n\n"
-        f"Новых пользователей за 7 дней: {new_u}\n"
-        f"Открытых тикетов сейчас: {open_n}\n"
-        f"Оценок поддержки всего: {n_ratings} (средняя {avg_s} / 5)\n\n"
-        f"Неделя (ISO): {week_key}"
-    )
+    text = await _format_support_report_text(week_key=week_key)
     try:
         await bot.send_message(chat_id=SUPPORT_CHAT_ID, text=text)
         await set_meta("weekly_report_week", week_key)
@@ -130,15 +123,51 @@ async def run_support_background_jobs(bot: Bot) -> None:
     asyncio.create_task(weekly_loop())
 
 
-async def build_weekly_report_text() -> str:
-    """Ручной вызов /report."""
-    new_u = await count_new_users_days(7)
+def _tag_label(tag: str | None) -> str:
+    if not tag:
+        return "без тега"
+    return tag
+
+
+async def _format_support_report_text(*, week_key: str | None = None) -> str:
+    """Сводка для support-бота: тикеты и оценки качества (окно 7 дней)."""
+    days = 7
+    created = await count_tickets_created_since_days(days)
+    closed_n = await count_tickets_closed_since_days(days)
     open_n = await count_open_tickets()
-    avg, n_ratings = await get_support_rating_rollups()
+    tag_rows = await count_open_tickets_by_tag()
+    avg, n_rate = await get_support_rating_rollups_since_days(days)
+    dist = await get_rating_distribution_since_days(days)
     avg_s = f"{avg:.2f}" if avg is not None else "—"
+
+    tag_lines = []
+    for tag, cnt in tag_rows:
+        tag_lines.append(f"• {_tag_label(tag)}: {cnt}")
+    tags_block = "\n".join(tag_lines) if tag_lines else "• (нет открытых)"
+
+    if dist:
+        dist_bits = [f"{r}★×{c}" for r, c in dist]
+        dist_s = ", ".join(dist_bits)
+    else:
+        dist_s = "—"
+
+    head = "📋 Сводка поддержки за 7 дней"
+    if week_key:
+        head += f"\nНеделя (ISO): {week_key}"
     return (
-        "📊 Сводка (сейчас)\n\n"
-        f"Новых пользователей за 7 дней: {new_u}\n"
-        f"Открытых тикетов: {open_n}\n"
-        f"Оценок поддержки: {n_ratings} (средняя {avg_s} / 5)"
+        f"{head}\n\n"
+        "Тикеты:\n"
+        f"• Новых обращений: {created}\n"
+        f"• Закрыто за период: {closed_n}\n"
+        f"• Сейчас открыто: {open_n}\n\n"
+        "Открытые по меткам (/tag):\n"
+        f"{tags_block}\n\n"
+        "Оценки после «вопрос решён» (за 7 дней):\n"
+        f"• Оценок: {n_rate}, средняя {avg_s} / 5\n"
+        f"• Распределение: {dist_s}"
     )
+
+
+async def build_weekly_report_text() -> str:
+    """Ручной вызов /report в support-боте."""
+    return await _format_support_report_text(week_key=None)

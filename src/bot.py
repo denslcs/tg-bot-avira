@@ -2,14 +2,51 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
-from aiogram.types import BotCommand
+from aiogram.types import BotCommand, BotCommandScopeChat, BotCommandScopeChatAdministrators, BotCommandScopeDefault
 
-from src.config import TELEGRAM_BOT_TOKEN
+from src.config import ADMIN_IDS, SUPPORT_CHAT_ID, TELEGRAM_BOT_TOKEN
 from src.database import init_db
 from src.handlers.admin_panel import router as admin_panel_router
 from src.handlers.commands import router as commands_router
 from src.handlers.faq_handlers import router as faq_router
 from src.handlers.messages import router as messages_router
+
+_USER_COMMANDS = [
+    BotCommand(command="start", description="Запуск"),
+    BotCommand(command="help", description="Помощь"),
+    BotCommand(command="faq", description="Частые вопросы"),
+    BotCommand(command="profile", description="Баланс кредитов"),
+    BotCommand(command="newchat", description="Очистить историю диалога"),
+    BotCommand(command="support", description="Открыть обращение в поддержку"),
+    BotCommand(command="resolved", description="Как закрыть тикет (ссылка в поддержку)"),
+    BotCommand(command="myid", description="Показать мой Telegram ID"),
+]
+
+_ADMIN_COMMANDS = [
+    BotCommand(command="admin", description="Админ-панель"),
+    BotCommand(command="stats", description="Статистика: пользователи и подписки"),
+    BotCommand(command="chatid", description="ID текущего чата (в группе)"),
+    BotCommand(command="user", description="Профиль пользователя по ID"),
+    BotCommand(command="addcredits", description="Начислить кредиты"),
+    BotCommand(command="takecredits", description="Списать кредиты"),
+    BotCommand(command="setsub", description="Продлить подписку (дни)"),
+    BotCommand(command="wipechat", description="Очистить диалог пользователя"),
+]
+
+
+async def _register_bot_commands(bot: Bot) -> None:
+    await bot.set_my_commands(_USER_COMMANDS, BotCommandScopeDefault())
+    merged = _USER_COMMANDS + _ADMIN_COMMANDS
+    if SUPPORT_CHAT_ID:
+        try:
+            await bot.set_my_commands(merged, BotCommandScopeChatAdministrators(chat_id=SUPPORT_CHAT_ID))
+        except Exception as exc:
+            logging.warning("Не удалось выставить команды админам группы (SUPPORT_CHAT_ID): %s", exc)
+    for aid in ADMIN_IDS:
+        try:
+            await bot.set_my_commands(merged, BotCommandScopeChat(chat_id=aid))
+        except Exception as exc:
+            logging.warning("Не удалось выставить команды админу в ЛС (id=%s): %s", aid, exc)
 
 
 async def main() -> None:
@@ -21,20 +58,7 @@ async def main() -> None:
     await init_db()
 
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
-    await bot.set_my_commands(
-        [
-            BotCommand(command="start", description="Запуск"),
-            BotCommand(command="help", description="Помощь"),
-            BotCommand(command="faq", description="Частые вопросы"),
-            BotCommand(command="profile", description="Баланс кредитов"),
-            BotCommand(command="newchat", description="Очистить историю диалога"),
-            BotCommand(command="support", description="Открыть обращение в поддержку"),
-            BotCommand(command="resolved", description="Отметить тикет как решенный"),
-            BotCommand(command="myid", description="Показать мой Telegram ID"),
-            BotCommand(command="chatid", description="Показать ID текущего чата"),
-            BotCommand(command="admin", description="Админ-панель"),
-        ]
-    )
+    await _register_bot_commands(bot)
     dp = Dispatcher()
 
     dp.include_router(commands_router)

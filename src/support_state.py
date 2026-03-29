@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from src.database import close_ticket
+from src.config import MAX_SUPPORT_DRAFT_TOTAL_CHARS
 
 # Simple in-memory draft state for MVP.
 # Key = user_id, value = accumulated support message text.
@@ -22,12 +22,16 @@ def in_support_draft(user_id: int) -> bool:
     return user_id in _SUPPORT_DRAFTS
 
 
-def append_support_draft(user_id: int, text: str) -> None:
+def append_support_draft(user_id: int, text: str) -> bool:
     old = _SUPPORT_DRAFTS.get(user_id, "")
     if old:
-        _SUPPORT_DRAFTS[user_id] = f"{old}\n{text}"
+        new = f"{old}\n{text}"
     else:
-        _SUPPORT_DRAFTS[user_id] = text
+        new = text
+    if len(new) > MAX_SUPPORT_DRAFT_TOTAL_CHARS:
+        return False
+    _SUPPORT_DRAFTS[user_id] = new
+    return True
 
 
 def get_support_draft(user_id: int) -> str:
@@ -71,14 +75,10 @@ async def run_support_draft_timers(bot, user_id: int, seq: int, ticket_id: int) 
     await asyncio.sleep(40)
     if _DRAFT_TIMER_SEQ.get(user_id) != seq or not in_support_draft(user_id):
         return
-    clear_admin_ticket_flow(ticket_id)
-    await close_ticket(ticket_id)
-    clear_support_draft(user_id)
-    clear_draft_timer_seq(user_id)
-    await bot.send_message(
-        chat_id=user_id,
-        text="Заявка автоматически закрыта из-за неактивности. Нажми /support, чтобы открыть снова.",
-    )
+    # Закрытие тикета и темы в Telegram — в отдельном модуле (без циклического импорта на уровне файла).
+    from src.handlers.support_inactivity import close_ticket_after_inactivity
+
+    await close_ticket_after_inactivity(bot, user_id, ticket_id)
 
 
 def schedule_support_draft_timers(bot, user_id: int, ticket_id: int) -> None:

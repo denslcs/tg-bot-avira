@@ -4,6 +4,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from src.config import ADMIN_IDS, SUPPORT_BOT_USERNAME
 from src.antispam_state import reset_user_spam
+from src.private_rate_limit import reset_private_rate
 from src.database import (
     add_credits,
     clear_dialog_messages,
@@ -44,6 +45,7 @@ async def cmd_help(message: Message) -> None:
         "- /profile — баланс кредитов\n"
         "- /newchat (/clear) — очистить память диалога\n"
         "- /support — отдельный чат поддержки\n"
+        "- /resolved — как закрыть тикет (ведёт в бот поддержки)\n"
         "- /myid — твой Telegram ID\n\n"
         "1 текстовый запрос = 1 кредит.\n"
         "Дальше подключим ИИ (Gemini через прокси)."
@@ -77,9 +79,34 @@ async def cmd_newchat(message: Message) -> None:
         return
     await clear_dialog_messages(message.from_user.id)
     reset_user_spam(message.from_user.id)
+    reset_private_rate(message.from_user.id)
     await message.answer(
         "Готово ✅ История этого диалога очищена.\n"
         "Можешь начать новую тему."
+    )
+
+
+@router.message(Command("resolved"))
+async def cmd_resolved_main(message: Message) -> None:
+    """В основном боте тикеты ведёт support-бот — направляем пользователя туда."""
+    if not SUPPORT_BOT_USERNAME:
+        await message.answer(
+            "Чат поддержки пока не подключен.\n"
+            "Админ должен задать SUPPORT_BOT_USERNAME в .env — тогда здесь будет ссылка на бот, "
+            "где можно закрыть тикет командой /resolved."
+        )
+        return
+    support_url = f"https://t.me/{SUPPORT_BOT_USERNAME}"
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Открыть поддержку и закрыть тикет", url=support_url)],
+        ]
+    )
+    await message.answer(
+        "Тикеты обрабатываются в отдельном чате поддержки.\n\n"
+        "Чтобы отметить проблему решённой, открой бот поддержки и отправь там команду /resolved "
+        "(в том же чате, где открывал обращение).",
+        reply_markup=keyboard,
     )
 
 
@@ -182,15 +209,20 @@ async def cmd_takecredits(message: Message) -> None:
 
     await ensure_user(target_user_id, None)
     before_balance = await get_credits(target_user_id)
+    if before_balance < amount:
+        await message.answer(
+            f"Недостаточно кредитов: у пользователя {target_user_id} сейчас {before_balance}, "
+            f"запрошено списать {amount}. Списание не выполнено."
+        )
+        return
     ok = await take_credits(target_user_id, amount)
     if not ok:
-        await message.answer("Не удалось списать кредиты.")
+        await message.answer("Не удалось списать кредиты (попробуй ещё раз).")
         return
 
     new_balance = await get_credits(target_user_id)
-    taken = before_balance - new_balance
     await message.answer(
-        f"Готово ✅ У пользователя {target_user_id} списано {taken} кредитов.\n"
+        f"Готово ✅ У пользователя {target_user_id} списано {amount} кредитов.\n"
         f"Новый баланс: {new_balance}."
     )
 

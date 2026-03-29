@@ -239,19 +239,17 @@ async def add_credits(user_id: int, amount: int) -> bool:
 
 
 async def take_credits(user_id: int, amount: int) -> bool:
+    """Списывает ровно amount, только если баланса хватает. Иначе баланс не меняется."""
     if amount <= 0:
         return False
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
             """
             UPDATE users
-            SET credits = CASE
-                WHEN credits >= ? THEN credits - ?
-                ELSE 0
-            END
-            WHERE user_id = ?
+            SET credits = credits - ?
+            WHERE user_id = ? AND credits >= ?
             """,
-            (amount, amount, user_id),
+            (amount, user_id, amount),
         )
         await db.commit()
         return cur.rowcount > 0
@@ -506,6 +504,113 @@ async def count_users_total() -> int:
         async with db.execute("SELECT COUNT(*) FROM users") as cur:
             row = await cur.fetchone()
     return int(row[0]) if row else 0
+
+
+async def count_users_active_subscription() -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT subscription_ends_at FROM users WHERE subscription_ends_at IS NOT NULL",
+        ) as cur:
+            rows = await cur.fetchall()
+    n = 0
+    for (ends,) in rows:
+        if subscription_is_active(str(ends) if ends else None):
+            n += 1
+    return n
+
+
+async def sum_users_credits() -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT COALESCE(SUM(credits), 0) FROM users") as cur:
+            row = await cur.fetchone()
+    return int(row[0]) if row else 0
+
+
+async def count_dialog_messages_total() -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT COUNT(*) FROM dialog_messages") as cur:
+            row = await cur.fetchone()
+    return int(row[0]) if row else 0
+
+
+async def count_tickets_created_since_days(days: int) -> int:
+    d = max(1, int(days))
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT COUNT(*) FROM support_tickets
+            WHERE datetime(created_at) >= datetime('now', ?)
+            """,
+            (f"-{d} days",),
+        ) as cur:
+            row = await cur.fetchone()
+    return int(row[0]) if row else 0
+
+
+async def count_tickets_closed_since_days(days: int) -> int:
+    d = max(1, int(days))
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT COUNT(*) FROM support_tickets
+            WHERE closed_at IS NOT NULL
+              AND datetime(closed_at) >= datetime('now', ?)
+            """,
+            (f"-{d} days",),
+        ) as cur:
+            row = await cur.fetchone()
+    return int(row[0]) if row else 0
+
+
+async def get_support_rating_rollups_since_days(days: int) -> tuple[float | None, int]:
+    d = max(1, int(days))
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT AVG(rating), COUNT(*) FROM support_ratings
+            WHERE datetime(created_at) >= datetime('now', ?)
+            """,
+            (f"-{d} days",),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row or row[1] == 0:
+        return None, 0
+    avg = float(row[0]) if row[0] is not None else None
+    return avg, int(row[1])
+
+
+async def get_rating_distribution_since_days(days: int) -> list[tuple[int, int]]:
+    d = max(1, int(days))
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT rating, COUNT(*) FROM support_ratings
+            WHERE datetime(created_at) >= datetime('now', ?)
+            GROUP BY rating
+            ORDER BY rating
+            """,
+            (f"-{d} days",),
+        ) as cur:
+            rows = await cur.fetchall()
+    return [(int(r[0]), int(r[1])) for r in rows]
+
+
+async def count_open_tickets_by_tag() -> list[tuple[str | None, int]]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT tag, COUNT(*) FROM support_tickets
+            WHERE status = 'open'
+            GROUP BY tag
+            ORDER BY COUNT(*) DESC
+            """,
+        ) as cur:
+            rows = await cur.fetchall()
+    out: list[tuple[str | None, int]] = []
+    for r in rows:
+        tag = r[0] if r[0] else None
+        out.append((tag, int(r[1])))
+    return out
 
 
 async def count_open_tickets() -> int:

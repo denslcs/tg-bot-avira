@@ -2,7 +2,7 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from aiogram.exceptions import TelegramBadRequest
 
-from src.config import ADMIN_IDS, SUPPORT_CHAT_ID
+from src.config import ADMIN_IDS, MAX_SUPPORT_DRAFT_TOTAL_CHARS, SUPPORT_CHAT_ID
 from src.database import (
     close_ticket,
     get_open_ticket_by_id,
@@ -279,7 +279,12 @@ async def support_private_messages(message: Message) -> None:
         await message.answer("Отправили в поддержку. Ожидай ответ здесь.")
         return
 
-    append_support_draft(user_id, text)
+    if not append_support_draft(user_id, text):
+        await message.answer(
+            f"Слишком длинное описание (не больше {MAX_SUPPORT_DRAFT_TOTAL_CHARS} символов всего). "
+            "Сократи текст или отправь: готово"
+        )
+        return
     await message.answer("Добавил в заявку. Когда закончишь, отправь: готово")
 
 
