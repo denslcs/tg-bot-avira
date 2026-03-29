@@ -51,19 +51,17 @@ async def cmd_start(message: Message) -> None:
 
 @router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
-    await message.answer(
+    text = (
         "Команды поддержки:\n"
         "- /support — открыть тикет\n"
-        "- /resolved — закрыть тикет (пользователь)\n"
-        "- /ticket_status — статус тикета (админ, в теме)\n\n"
-        "Админ в теме тикета:\n"
-        "- /tag bug|payment|general|clear — тег темы\n"
-        "- /note текст — внутренняя заметка (не видит пользователь)\n"
-        "- /notes — список заметок\n\n"
-        "Админ в группе поддержки:\n"
-        "- /sla — все открытые тикеты и SLA\n"
-        "- /report — сводка за 7 дней (как еженедельная)"
+        "- /resolved — закрыть тикет (клиент)\n"
+        "- /help — эта справка\n\n"
+        "Сотрудникам с доступом админа: в меню бота есть /admin и остальные команды; "
+        "в панели — кнопки с подробными пояснениями."
     )
+    if message.from_user and message.from_user.id in ADMIN_IDS:
+        text += "\n\nОткройте /admin для панели (теги, заметки, SLA, отчёт)."
+    await message.answer(text)
 
 
 @router.message(Command("support"))
