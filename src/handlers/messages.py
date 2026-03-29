@@ -2,15 +2,17 @@ from aiogram import F, Router
 from aiogram.types import Message
 
 from src.antispam_state import check_spam_private_message
-from src.config import ADMIN_IDS, MAIN_BOT_RELAY_SUPPORT_TOPICS, SUPPORT_CHAT_ID
+from src.config import ADMIN_IDS, FREE_DAILY_MESSAGE_LIMIT, MAIN_BOT_RELAY_SUPPORT_TOPICS, SUPPORT_CHAT_ID
 from src.database import (
     add_dialog_message,
     ensure_user,
     get_credits,
+    get_daily_user_messages,
     get_last_dialog_messages,
     get_open_ticket_by_id,
     get_open_ticket_by_thread,
     get_user_admin_profile,
+    increment_daily_user_messages,
     spend_one_credit,
     subscription_is_active,
 )
@@ -108,6 +110,7 @@ async def any_message(message: Message) -> None:
         return
 
     is_admin = user_id in ADMIN_IDS
+    profile_for_balance = await get_user_admin_profile(user_id) if not is_admin else None
     if not is_admin:
         blocked, spam_reply = check_spam_private_message(user_id, text)
         if blocked:
@@ -116,9 +119,18 @@ async def any_message(message: Message) -> None:
             return
 
     if not is_admin:
-        profile = await get_user_admin_profile(user_id)
-        sub_free = profile is not None and subscription_is_active(profile.subscription_ends_at)
+        sub_free = profile_for_balance is not None and subscription_is_active(
+            profile_for_balance.subscription_ends_at
+        )
         if not sub_free:
+            if FREE_DAILY_MESSAGE_LIMIT > 0:
+                cur_day = await get_daily_user_messages(user_id)
+                if cur_day >= FREE_DAILY_MESSAGE_LIMIT:
+                    await message.answer(
+                        f"Достигнут дневной лимит сообщений ({FREE_DAILY_MESSAGE_LIMIT} в сутки по UTC). "
+                        "Завтра лимит обнулится. С подпиской лимит не действует."
+                    )
+                    return
             is_spent = await spend_one_credit(user_id)
             if not is_spent:
                 balance = await get_credits(user_id)
@@ -128,6 +140,8 @@ async def any_message(message: Message) -> None:
                     "Скоро добавим пополнение."
                 )
                 return
+            if FREE_DAILY_MESSAGE_LIMIT > 0:
+                await increment_daily_user_messages(user_id)
 
     await add_dialog_message(user_id, "user", text)
     history = await get_last_dialog_messages(user_id, limit=10)
@@ -144,9 +158,8 @@ async def any_message(message: Message) -> None:
         await message.answer(f"{reply_text}\n\nРежим админа: безлимит кредитов.")
         return
 
-    profile = await get_user_admin_profile(user_id)
     sub_note = ""
-    if profile and subscription_is_active(profile.subscription_ends_at):
+    if profile_for_balance and subscription_is_active(profile_for_balance.subscription_ends_at):
         sub_note = "\n(Запрос не списал кредит: активна подписка.)"
     balance = await get_credits(user_id)
     await message.answer(f"{reply_text}\n\nОсталось кредитов: {balance}{sub_note}")

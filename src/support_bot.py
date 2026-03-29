@@ -7,6 +7,7 @@ from aiogram.types import BotCommand
 from src.config import SUPPORT_BOT_TOKEN
 from src.database import init_db
 from src.handlers.support_commands import router as support_commands_router
+from src.handlers.support_jobs import run_support_background_jobs
 from src.handlers.support_messages import router as support_messages_router
 
 
@@ -29,6 +30,8 @@ async def main() -> None:
             BotCommand(command="help", description="Помощь"),
         ]
     )
+
+    asyncio.create_task(run_support_background_jobs(bot))
 
     dp = Dispatcher()
     dp.include_router(support_commands_router)

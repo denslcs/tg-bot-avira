@@ -7,9 +7,12 @@ from src.database import (
     close_ticket,
     get_open_ticket_by_id,
     get_open_ticket_by_thread,
+    get_ticket_detail_by_id,
+    mark_first_reply_to_user,
     record_support_rating,
     update_ticket_thread,
 )
+from src.support_topic_naming import topic_title
 from src.support_state import (
     admin_outbox_append,
     admin_outbox_join,
@@ -30,10 +33,6 @@ from src.support_state import (
 
 
 router = Router(name="support_messages")
-
-
-def _topic_name(ticket_id: int, username: str, status: str = "OPEN") -> str:
-    return f"[{status}] Тикет #{ticket_id} | {username}"[:120]
 
 
 def _resolution_keyboard(ticket_id: int) -> InlineKeyboardMarkup:
@@ -202,6 +201,7 @@ async def admin_finish_reply(callback: CallbackQuery) -> None:
         await callback.answer("Тикет закрыт.", show_alert=True)
         return
     body = admin_outbox_join(ticket_id).strip()
+    await mark_first_reply_to_user(ticket_id)
     await callback.bot.send_message(
         chat_id=ticket.user_id,
         text=f"Ответ поддержки:\n{body}",
@@ -267,7 +267,7 @@ async def support_private_messages(message: Message) -> None:
         except TelegramBadRequest:
             topic = await message.bot.create_forum_topic(
                 chat_id=SUPPORT_CHAT_ID,
-                name=_topic_name(ticket.ticket_id, username, "OPEN"),
+                name=topic_title(ticket.ticket_id, username, "OPEN", None),
             )
             await update_ticket_thread(ticket.ticket_id, topic.message_thread_id, username)
             await message.bot.send_message(
@@ -324,11 +324,13 @@ async def _close_ticket_after_rating(
     user_id: int,
 ) -> None:
     clear_admin_ticket_flow(ticket_id)
+    detail = await get_ticket_detail_by_id(ticket_id)
+    tname = topic_title(ticket_id, username, "CLOSED", detail.tag if detail else None)
     try:
         await bot.edit_forum_topic(
             chat_id=SUPPORT_CHAT_ID,
             message_thread_id=thread_id,
-            name=_topic_name(ticket_id, username, "CLOSED"),
+            name=tname,
         )
     except Exception:
         pass

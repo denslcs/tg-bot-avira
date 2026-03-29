@@ -32,6 +32,18 @@ class UserAdminProfile:
     subscription_ends_at: str | None
 
 
+@dataclass
+class SupportTicketDetail:
+    ticket_id: int
+    user_id: int
+    username: str
+    thread_id: int
+    status: str
+    created_at: str
+    first_admin_reply_at: str | None
+    tag: str | None
+
+
 async def _migrate_schema(db: aiosqlite.Connection) -> None:
     async with db.execute("PRAGMA table_info(users)") as cur:
         cols = {row[1] for row in await cur.fetchall()}
@@ -39,6 +51,15 @@ async def _migrate_schema(db: aiosqlite.Connection) -> None:
         await db.execute(
             "ALTER TABLE users ADD COLUMN subscription_ends_at TEXT",
         )
+
+
+async def _migrate_support_tickets(db: aiosqlite.Connection) -> None:
+    async with db.execute("PRAGMA table_info(support_tickets)") as cur:
+        cols = {row[1] for row in await cur.fetchall()}
+    if "first_admin_reply_at" not in cols:
+        await db.execute("ALTER TABLE support_tickets ADD COLUMN first_admin_reply_at TEXT")
+    if "tag" not in cols:
+        await db.execute("ALTER TABLE support_tickets ADD COLUMN tag TEXT")
 
 
 async def init_db() -> None:
@@ -89,7 +110,38 @@ async def init_db() -> None:
             )
             """
         )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS support_ticket_notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticket_id INTEGER NOT NULL,
+                admin_id INTEGER NOT NULL,
+                body TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (ticket_id) REFERENCES support_tickets(ticket_id)
+            )
+            """
+        )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_daily_usage (
+                user_id INTEGER NOT NULL,
+                day_utc TEXT NOT NULL,
+                msg_count INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (user_id, day_utc)
+            )
+            """
+        )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bot_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+            """
+        )
         await _migrate_schema(db)
+        await _migrate_support_tickets(db)
         await db.commit()
 
 
@@ -356,7 +408,8 @@ async def reopen_ticket(ticket_id: int) -> None:
             """
             UPDATE support_tickets
             SET status = 'open',
-                closed_at = NULL
+                closed_at = NULL,
+                first_admin_reply_at = NULL
             WHERE ticket_id = ?
             """,
             (ticket_id,),
@@ -544,4 +597,205 @@ async def get_support_rating_rollups() -> tuple[float | None, int]:
         return None, 0
     avg = float(row[0]) if row[0] is not None else None
     return avg, int(row[1])
+
+
+async def get_ticket_detail_by_id(ticket_id: int) -> SupportTicketDetail | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT ticket_id, user_id, username, thread_id, status, created_at,
+                   first_admin_reply_at, tag
+            FROM support_tickets
+            WHERE ticket_id = ?
+            LIMIT 1
+            """,
+            (ticket_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return None
+    return SupportTicketDetail(
+        ticket_id=int(row[0]),
+        user_id=int(row[1]),
+        username=str(row[2]),
+        thread_id=int(row[3]),
+        status=str(row[4]),
+        created_at=str(row[5]),
+        first_admin_reply_at=row[6] if row[6] else None,
+        tag=row[7] if row[7] else None,
+    )
+
+
+async def get_ticket_detail_by_thread(thread_id: int) -> SupportTicketDetail | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT ticket_id, user_id, username, thread_id, status, created_at,
+                   first_admin_reply_at, tag
+            FROM support_tickets
+            WHERE thread_id = ?
+            LIMIT 1
+            """,
+            (thread_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return None
+    return SupportTicketDetail(
+        ticket_id=int(row[0]),
+        user_id=int(row[1]),
+        username=str(row[2]),
+        thread_id=int(row[3]),
+        status=str(row[4]),
+        created_at=str(row[5]),
+        first_admin_reply_at=row[6] if row[6] else None,
+        tag=row[7] if row[7] else None,
+    )
+
+
+async def mark_first_reply_to_user(ticket_id: int) -> None:
+    now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            UPDATE support_tickets
+            SET first_admin_reply_at = COALESCE(first_admin_reply_at, ?)
+            WHERE ticket_id = ?
+            """,
+            (now, ticket_id),
+        )
+        await db.commit()
+
+
+async def set_ticket_tag(ticket_id: int, tag: str | None) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE support_tickets SET tag = ? WHERE ticket_id = ?",
+            (tag, ticket_id),
+        )
+        await db.commit()
+
+
+async def add_support_ticket_note(ticket_id: int, admin_id: int, body: str) -> None:
+    text = body.strip()
+    if not text:
+        return
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO support_ticket_notes (ticket_id, admin_id, body)
+            VALUES (?, ?, ?)
+            """,
+            (ticket_id, admin_id, text),
+        )
+        await db.commit()
+
+
+async def list_support_ticket_notes(ticket_id: int, *, limit: int = 30) -> list[tuple[int, int, str, str]]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT id, admin_id, body, created_at
+            FROM support_ticket_notes
+            WHERE ticket_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (ticket_id, limit),
+        ) as cur:
+            rows = await cur.fetchall()
+    return [(int(r[0]), int(r[1]), str(r[2]), str(r[3])) for r in rows]
+
+
+async def get_meta(key: str) -> str | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT value FROM bot_meta WHERE key = ?", (key,)) as cur:
+            row = await cur.fetchone()
+    return str(row[0]) if row else None
+
+
+async def set_meta(key: str, value: str) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO bot_meta (key, value) VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            """,
+            (key, value),
+        )
+        await db.commit()
+
+
+async def count_new_users_days(days: int) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT COUNT(*) FROM users
+            WHERE datetime(created_at) >= datetime('now', ?)
+            """,
+            (f"-{int(days)} days",),
+        ) as cur:
+            row = await cur.fetchone()
+    return int(row[0]) if row else 0
+
+
+async def list_open_tickets_sla_rows() -> list[SupportTicketDetail]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT ticket_id, user_id, username, thread_id, status, created_at,
+                   first_admin_reply_at, tag
+            FROM support_tickets
+            WHERE status = 'open'
+            ORDER BY ticket_id ASC
+            """,
+        ) as cur:
+            rows = await cur.fetchall()
+    out: list[SupportTicketDetail] = []
+    for row in rows:
+        out.append(
+            SupportTicketDetail(
+                ticket_id=int(row[0]),
+                user_id=int(row[1]),
+                username=str(row[2]),
+                thread_id=int(row[3]),
+                status=str(row[4]),
+                created_at=str(row[5]),
+                first_admin_reply_at=row[6] if row[6] else None,
+                tag=row[7] if row[7] else None,
+            )
+        )
+    return out
+
+
+async def increment_daily_user_messages(user_id: int) -> int:
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO user_daily_usage (user_id, day_utc, msg_count)
+            VALUES (?, ?, 1)
+            ON CONFLICT(user_id, day_utc) DO UPDATE SET
+                msg_count = msg_count + 1
+            """,
+            (user_id, day),
+        )
+        await db.commit()
+        async with db.execute(
+            "SELECT msg_count FROM user_daily_usage WHERE user_id = ? AND day_utc = ?",
+            (user_id, day),
+        ) as cur:
+            row = await cur.fetchone()
+    return int(row[0]) if row else 1
+
+
+async def get_daily_user_messages(user_id: int) -> int:
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT msg_count FROM user_daily_usage WHERE user_id = ? AND day_utc = ?",
+            (user_id, day),
+        ) as cur:
+            row = await cur.fetchone()
+    return int(row[0]) if row else 0
 
