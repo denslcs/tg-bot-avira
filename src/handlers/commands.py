@@ -1,9 +1,11 @@
+from pathlib import Path
+
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from src.config import ADMIN_IDS, SUPPORT_BOT_USERNAME
+from src.config import ADMIN_IDS, PROJECT_ROOT, SUPPORT_BOT_USERNAME
 from src.antispam_state import reset_user_spam
 from src.private_rate_limit import reset_private_rate
 from src.database import (
@@ -19,7 +21,7 @@ from src.database import (
     take_credits,
 )
 from src.subscription_catalog import PLANS
-from src.handlers.img_commands import CB_CREATE_IMAGE, CB_READY_IDEAS
+from src.handlers.img_commands import CB_CREATE_IMAGE, CB_MENU_BACK_START, CB_READY_IDEAS
 
 
 router = Router(name="commands")
@@ -42,6 +44,28 @@ def _start_menu_kb() -> InlineKeyboardMarkup:
             ],
         ]
     )
+
+
+_BACK_TO_MENU_ROW = [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)]
+
+
+def _back_to_main_menu_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[_BACK_TO_MENU_ROW])
+
+
+def _main_screen_text(balance: int, bonus_note: str = "") -> str:
+    return (
+        "🖼 Измени фото или создай новое изображение с ИИ.\n\n"
+        "Главное: 🎨 «Создать картинку» и 💡 «Готовые идеи».\n"
+        "Остальные кнопки — оплата, поддержка и справка.\n"
+        f"💰 Баланс: {balance} кредитов.{bonus_note}"
+    )
+
+
+def _start_banner_path() -> Path | None:
+    """Один баннер на /start (картинка «ДО/ПОСЛЕ»). Файл: assets/start/start_banner.png"""
+    p = PROJECT_ROOT / "assets" / "start" / "start_banner.png"
+    return p if p.is_file() else None
 
 
 def _parse_ref_payload(raw_text: str) -> int | None:
@@ -72,11 +96,28 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
             bonus_note = "\n🎉 Реферальный бонус: тебе +5 кредитов."
     balance = await get_credits(user_id)
 
+    banner = _start_banner_path()
+    if banner:
+        await message.answer_photo(FSInputFile(banner))
+
     await message.answer(
-        "🖼 Измени фото или создай новое изображение с ИИ.\n\n"
-        "Главное: 🎨 «Создать картинку» и 💡 «Готовые идеи».\n"
-        "Остальные кнопки — оплата, поддержка и справка.\n"
-        f"💰 Баланс: {balance} кредитов.{bonus_note}",
+        _main_screen_text(balance, bonus_note),
+        reply_markup=_start_menu_kb(),
+    )
+
+
+@router.callback_query(F.data == CB_MENU_BACK_START)
+async def menu_back_start(callback: CallbackQuery, state: FSMContext) -> None:
+    if not callback.from_user or not callback.message:
+        await callback.answer()
+        return
+    await state.clear()
+    user_id = callback.from_user.id
+    await ensure_user(user_id, callback.from_user.username)
+    balance = await get_credits(user_id)
+    await callback.answer()
+    await callback.message.answer(
+        _main_screen_text(balance, ""),
         reply_markup=_start_menu_kb(),
     )
 
@@ -107,7 +148,8 @@ async def menu_about(callback: CallbackQuery) -> None:
         "• Сгенерировать картинку из текста.\n"
         "• Изменить картинку по фото + тексту.\n"
         "• Применить готовые промпты к фото.\n"
-        "• Использовать разные ИИ-модели для генерации."
+        "• Использовать разные ИИ-модели для генерации.",
+        reply_markup=_back_to_main_menu_kb(),
     )
 
 
@@ -118,11 +160,17 @@ async def menu_support(callback: CallbackQuery) -> None:
         return
     await callback.answer()
     if not SUPPORT_BOT_USERNAME:
-        await callback.message.answer("Поддержка пока не настроена (пустой SUPPORT_BOT_USERNAME).")
+        await callback.message.answer(
+            "Поддержка пока не настроена (пустой SUPPORT_BOT_USERNAME).",
+            reply_markup=_back_to_main_menu_kb(),
+        )
         return
     support_url = f"https://t.me/{SUPPORT_BOT_USERNAME}?start=from_avira"
     keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="Открыть поддержку", url=support_url)]]
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Открыть поддержку", url=support_url)],
+            _BACK_TO_MENU_ROW,
+        ]
     )
     await callback.message.answer("Нажми кнопку, чтобы написать в поддержку:", reply_markup=keyboard)
 
@@ -152,11 +200,11 @@ async def menu_ref(callback: CallbackQuery) -> None:
     )
     try:
         if callback.message:
-            await callback.message.answer(text)
+            await callback.message.answer(text, reply_markup=_back_to_main_menu_kb())
         else:
-            await callback.bot.send_message(user_id, text)
+            await callback.bot.send_message(user_id, text, reply_markup=_back_to_main_menu_kb())
     except Exception:
-        await callback.bot.send_message(user_id, text)
+        await callback.bot.send_message(user_id, text, reply_markup=_back_to_main_menu_kb())
 
 
 @router.message(Command("profile"))
@@ -211,6 +259,7 @@ async def cmd_resolved_main(message: Message) -> None:
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="Открыть поддержку и закрыть тикет", url=support_url)],
+            _BACK_TO_MENU_ROW,
         ]
     )
     await message.answer(
@@ -232,7 +281,8 @@ async def cmd_support(message: Message) -> None:
     support_url = f"https://t.me/{SUPPORT_BOT_USERNAME}?start=from_avira"
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Открыть чат поддержки", url=support_url)]
+            [InlineKeyboardButton(text="Открыть чат поддержки", url=support_url)],
+            _BACK_TO_MENU_ROW,
         ]
     )
     await message.answer(

@@ -43,6 +43,8 @@ _GEMINI_MISSING_TEXT = (
 )
 
 CB_CREATE_IMAGE = "menu:create_image"
+CB_MENU_BACK_START = "menu:back_start"
+CB_BACK_IMAGE_MODELS = "img:back_models"
 CB_GEN_TEXT = "img:mode:text"
 CB_GEN_EDIT = "img:mode:edit"
 CB_PICK_NANO = "img:pick_nano"
@@ -50,6 +52,13 @@ CB_PICK_NANO_2 = "img:pick_nano2"
 CB_READY_IDEAS = "menu:ready_ideas"
 CB_APPLY_READY_PREFIX = "img:idea:"
 CB_REGEN = "img:regen"
+
+_BACK_MAIN = [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)]
+_BACK_MODELS = [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_BACK_IMAGE_MODELS)]
+
+
+def _gemini_missing_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[_BACK_MAIN])
 
 
 class ImageGenState(StatesGroup):
@@ -64,6 +73,7 @@ def image_menu_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text=f"Nano Banana — {GEMINI_NANO_COST_CREDITS} кредит", callback_data=CB_PICK_NANO)],
             [InlineKeyboardButton(text=f"Nano Banana 2 — {GEMINI_IMAGE_COST_CREDITS} кредита", callback_data=CB_PICK_NANO_2)],
+            _BACK_MAIN,
         ]
     )
 
@@ -73,6 +83,7 @@ def mode_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="Сгенерировать картинку текстом", callback_data=CB_GEN_TEXT)],
             [InlineKeyboardButton(text="Изменить картинку (фото + текст)", callback_data=CB_GEN_EDIT)],
+            _BACK_MODELS,
         ]
     )
 
@@ -125,7 +136,10 @@ async def _prepare_image_charge_and_monthly_slot(
 
 def _regen_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="🔄 Ещё раз", callback_data=CB_REGEN)]],
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 Ещё раз", callback_data=CB_REGEN)],
+            _BACK_MAIN,
+        ],
     )
 
 
@@ -190,7 +204,7 @@ async def _execute_text_generation(
 ) -> None:
     await ensure_user(user_id, username)
     if not is_gemini_configured():
-        await message.answer(_GEMINI_MISSING_TEXT)
+        await message.answer(_GEMINI_MISSING_TEXT, reply_markup=_gemini_missing_kb())
         return
     is_admin = user_id in ADMIN_IDS
     profile = await get_user_admin_profile(user_id) if not is_admin else None
@@ -244,7 +258,7 @@ async def _execute_edit_generation(
 ) -> None:
     await ensure_user(user_id, username)
     if not is_gemini_configured():
-        await message.answer(_GEMINI_MISSING_TEXT)
+        await message.answer(_GEMINI_MISSING_TEXT, reply_markup=_gemini_missing_kb())
         return
     is_admin = user_id in ADMIN_IDS
     profile = await get_user_admin_profile(user_id) if not is_admin else None
@@ -302,7 +316,26 @@ def ready_ideas_keyboard() -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for idx, (title, _) in enumerate(READY_IDEAS):
         rows.append([InlineKeyboardButton(text=title, callback_data=f"{CB_APPLY_READY_PREFIX}{idx}")])
+    rows.append(_BACK_MAIN)
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+@router.callback_query(F.data == CB_BACK_IMAGE_MODELS)
+async def back_to_image_models(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.from_user is None:
+        await callback.answer("Ошибка запроса.", show_alert=True)
+        return
+    if callback.message is None:
+        await callback.answer("Сообщение недоступно.", show_alert=True)
+        return
+    if not is_gemini_configured():
+        await callback.answer()
+        await callback.message.answer(_GEMINI_MISSING_TEXT, reply_markup=_gemini_missing_kb())
+        return
+    await ensure_user(callback.from_user.id, callback.from_user.username)
+    await state.clear()
+    await callback.message.answer("Выбери ИИ для генерации:", reply_markup=image_menu_keyboard())
+    await callback.answer()
 
 
 @router.callback_query(F.data == CB_CREATE_IMAGE)
@@ -315,7 +348,7 @@ async def open_image_menu(callback: CallbackQuery, state: FSMContext) -> None:
         return
     if not is_gemini_configured():
         await callback.answer()
-        await callback.message.answer(_GEMINI_MISSING_TEXT)
+        await callback.message.answer(_GEMINI_MISSING_TEXT, reply_markup=_gemini_missing_kb())
         return
     await ensure_user(callback.from_user.id, callback.from_user.username)
     await state.clear()
@@ -333,7 +366,7 @@ async def pick_nano(callback: CallbackQuery, state: FSMContext) -> None:
         return
     if not is_gemini_configured():
         await callback.answer()
-        await callback.message.answer(_GEMINI_MISSING_TEXT)
+        await callback.message.answer(_GEMINI_MISSING_TEXT, reply_markup=_gemini_missing_kb())
         return
     await ensure_user(callback.from_user.id, callback.from_user.username)
     await state.update_data(
@@ -356,7 +389,7 @@ async def pick_nano_2(callback: CallbackQuery, state: FSMContext) -> None:
         return
     if not is_gemini_configured():
         await callback.answer()
-        await callback.message.answer(_GEMINI_MISSING_TEXT)
+        await callback.message.answer(_GEMINI_MISSING_TEXT, reply_markup=_gemini_missing_kb())
         return
     await ensure_user(callback.from_user.id, callback.from_user.username)
     await state.update_data(
@@ -406,7 +439,7 @@ async def apply_ready_idea(callback: CallbackQuery, state: FSMContext) -> None:
         return
     if not is_gemini_configured():
         await callback.answer()
-        await callback.message.answer(_GEMINI_MISSING_TEXT)
+        await callback.message.answer(_GEMINI_MISSING_TEXT, reply_markup=_gemini_missing_kb())
         return
     try:
         idx = int(callback.data.replace(CB_APPLY_READY_PREFIX, ""))

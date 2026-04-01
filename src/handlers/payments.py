@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from aiogram import F, Router
 from aiogram.types import (
     CallbackQuery,
+    FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     LabeledPrice,
@@ -11,7 +14,7 @@ from aiogram.types import (
 )
 from aiogram.enums import ContentType
 
-from src.config import PAY_URL_CARD_INTL, PAY_URL_CARD_RU, PAY_URL_CRYPTO, SUPPORT_BOT_USERNAME
+from src.config import PAY_URL_CARD_INTL, PAY_URL_CARD_RU, PAY_URL_CRYPTO, PROJECT_ROOT, SUPPORT_BOT_USERNAME
 from src.database import (
     add_credits,
     ensure_user,
@@ -19,6 +22,7 @@ from src.database import (
     release_star_payment_claim,
     try_claim_star_payment,
 )
+from src.handlers.img_commands import CB_MENU_BACK_START
 from src.subscription_catalog import (
     FREE_MONTHLY_IMAGE_GENERATIONS,
     PLANS,
@@ -36,6 +40,19 @@ CB_PAY_INTL_PREFIX = "pay:i:"
 CB_PAY_CRYPTO_PREFIX = "pay:c:"
 
 
+def _subscriptions_pricing_image_path() -> Path | None:
+    p = PROJECT_ROOT / "assets" / "pay" / "subscriptions_pricing.png"
+    return p if p.is_file() else None
+
+
+def _plans_menu_caption() -> str:
+    return (
+        "Тарифы — месячный лимит генераций изображений (1 генерация = 1 слот в месяце, UTC), "
+        "даже если на балансе много кредитов.\n\n"
+        f"Без подписки доступно {FREE_MONTHLY_IMAGE_GENERATIONS} генераций в месяц."
+    )
+
+
 def _plans_keyboard() -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for pid in PLANS_ORDER:
@@ -48,6 +65,7 @@ def _plans_keyboard() -> InlineKeyboardMarkup:
                 )
             ]
         )
+    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -76,7 +94,7 @@ def _methods_keyboard(plan_id: str) -> InlineKeyboardMarkup:
                     callback_data=f"{CB_PAY_CRYPTO_PREFIX}{plan_id}",
                 )
             ],
-            [InlineKeyboardButton(text="⬅ Назад к тарифам", callback_data=CB_PAY_MENU)],
+            [InlineKeyboardButton(text="⬅️ Назад к тарифам", callback_data=CB_PAY_MENU)],
         ]
     )
 
@@ -99,12 +117,17 @@ async def menu_pay(callback: CallbackQuery) -> None:
         await callback.answer()
         return
     await ensure_user(callback.from_user.id, callback.from_user.username)
-    await callback.message.answer(
-        "Тарифы — месячный лимит генераций изображений (1 генерация = 1 слот в месяце, UTC), "
-        "даже если на балансе много кредитов.\n\n"
-        f"Без подписки доступно {FREE_MONTHLY_IMAGE_GENERATIONS} генераций в месяц.",
-        reply_markup=_plans_keyboard(),
-    )
+    caption = _plans_menu_caption()
+    kb = _plans_keyboard()
+    pricing_img = _subscriptions_pricing_image_path()
+    if pricing_img:
+        await callback.message.answer_photo(
+            FSInputFile(pricing_img),
+            caption=caption,
+            reply_markup=kb,
+        )
+    else:
+        await callback.message.answer(caption, reply_markup=kb)
     await callback.answer()
 
 
@@ -113,10 +136,17 @@ async def pay_back_plans(callback: CallbackQuery) -> None:
     if callback.message is None:
         await callback.answer()
         return
-    await callback.message.answer(
-        "Выбери тариф:",
-        reply_markup=_plans_keyboard(),
-    )
+    caption = _plans_menu_caption()
+    kb = _plans_keyboard()
+    pricing_img = _subscriptions_pricing_image_path()
+    if pricing_img:
+        await callback.message.answer_photo(
+            FSInputFile(pricing_img),
+            caption=caption,
+            reply_markup=kb,
+        )
+    else:
+        await callback.message.answer("Выбери тариф:", reply_markup=kb)
     await callback.answer()
 
 
@@ -139,7 +169,15 @@ async def pay_pick_plan(callback: CallbackQuery) -> None:
 async def _external_pay_hint(callback: CallbackQuery, plan_id: str, label: str, url: str | None) -> None:
     if url:
         keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text=f"Перейти к оплате ({label})", url=url)]]
+            inline_keyboard=[
+                [InlineKeyboardButton(text=f"Перейти к оплате ({label})", url=url)],
+                [
+                    InlineKeyboardButton(
+                        text="⬅️ Назад",
+                        callback_data=f"{CB_PAY_PLAN_PREFIX}{plan_id}",
+                    )
+                ],
+            ]
         )
         if callback.message:
             await callback.message.answer(
@@ -154,9 +192,13 @@ async def _external_pay_hint(callback: CallbackQuery, plan_id: str, label: str, 
         else f"Напиши в поддержку (бот в настройках проекта) с текстом тарифа «{PLANS[plan_id].title}» ({PLANS[plan_id].price_rub} ₽)."
     )
     if callback.message:
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_PAY_MENU)]]
+        )
         await callback.message.answer(
             f"Оплата «{label}» пока подключается.\n{support_line} "
-            "Мы выставим счёт или дадим ссылку."
+            "Мы выставим счёт или дадим ссылку.",
+            reply_markup=kb,
         )
     await callback.answer()
 

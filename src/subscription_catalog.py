@@ -60,28 +60,28 @@ PLANS_ORDER: tuple[str, ...] = ("nova", "supernova", "galaxy", "universe")
 PLANS: dict[str, SubscriptionPlan] = {
     "nova": SubscriptionPlan(
         id="nova",
-        title="Nova",
+        title="✨ Nova",
         monthly_generations=20,
         price_rub=159,
         bonus_credits=90,
     ),
     "supernova": SubscriptionPlan(
         id="supernova",
-        title="SuperNova",
+        title="🌟 SuperNova",
         monthly_generations=40,
         price_rub=399,
         bonus_credits=220,
     ),
     "galaxy": SubscriptionPlan(
         id="galaxy",
-        title="Galaxy",
+        title="🌌 galaxy",
         monthly_generations=90,
         price_rub=699,
         bonus_credits=500,
     ),
     "universe": SubscriptionPlan(
         id="universe",
-        title="Universe",
+        title="👾 Universe",
         monthly_generations=270,
         price_rub=1399,
         bonus_credits=1050,

@@ -2,6 +2,8 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from src.handlers.img_commands import CB_MENU_BACK_START
+
 router = Router(name="faq")
 
 _FAQ: list[tuple[str, str, str]] = [
@@ -46,6 +48,7 @@ def _faq_keyboard() -> InlineKeyboardMarkup:
             row = []
     if row:
         rows.append(row)
+    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
