@@ -2,6 +2,7 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from src.formatting import HTML, esc
 from src.handlers.img_commands import CB_MENU_BACK_START
 
 router = Router(name="faq")
@@ -55,8 +56,10 @@ def _faq_keyboard() -> InlineKeyboardMarkup:
 @router.message(Command("faq"))
 async def cmd_faq(message: Message) -> None:
     await message.answer(
-        "Выбери тему — пришлю короткий ответ:",
+        "<b>Частые вопросы</b>\n"
+        "<blockquote><i>Выбери тему — пришлю короткий ответ.</i></blockquote>",
         reply_markup=_faq_keyboard(),
+        parse_mode=HTML,
     )
 
 
@@ -73,10 +76,10 @@ async def faq_callback(callback: CallbackQuery) -> None:
         await callback.answer("Нет такого раздела.", show_alert=True)
         return
     _, title, body = _FAQ[idx]
-    text = f"{title}\n\n{body}"
+    text = f"<b>{esc(title)}</b>\n\n<blockquote>{esc(body)}</blockquote>"
     if callback.message:
         try:
-            await callback.message.edit_text(text, reply_markup=_faq_keyboard())
+            await callback.message.edit_text(text, reply_markup=_faq_keyboard(), parse_mode=HTML)
         except Exception:
-            await callback.message.answer(text)
+            await callback.message.answer(text, parse_mode=HTML)
     await callback.answer()

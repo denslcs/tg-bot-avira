@@ -22,6 +22,7 @@ from src.database import (
     release_star_payment_claim,
     try_claim_star_payment,
 )
+from src.formatting import HTML, esc
 from src.handlers.img_commands import CB_MENU_BACK_START
 from src.subscription_catalog import (
     FREE_MONTHLY_IMAGE_GENERATIONS,
@@ -47,9 +48,10 @@ def _subscriptions_pricing_image_path() -> Path | None:
 
 def _plans_menu_caption() -> str:
     return (
-        "Тарифы — месячный лимит генераций изображений (1 генерация = 1 слот в месяце, UTC), "
-        "даже если на балансе много кредитов.\n\n"
-        f"Без подписки доступно {FREE_MONTHLY_IMAGE_GENERATIONS} генераций в месяц."
+        "<b>Тарифы</b> — месячный лимит генераций картинок "
+        "<i>(1 генерация = 1 слот в месяце UTC)</i>, даже если на балансе много кредитов.\n\n"
+        f"<blockquote><i>Без подписки доступно</i> <b>{esc(FREE_MONTHLY_IMAGE_GENERATIONS)}</b> "
+        "<i>генераций в месяц.</i></blockquote>"
     )
 
 
@@ -101,13 +103,15 @@ def _methods_keyboard(plan_id: str) -> InlineKeyboardMarkup:
 
 def _pay_methods_text(plan_id: str) -> str:
     p = PLANS[plan_id]
+    title = esc(p.title)
     return (
-        "💳 Выбери способ оплаты\n\n"
-        f"🎁 Подписка: {p.title} ({p.monthly_generations} генераций картинок в месяц, UTC)\n"
-        f"Срок после оплаты: ровно {SUBSCRIPTION_PERIOD_DAYS} дней к подписке.\n"
-        f"Бонус на баланс при оплате: +{p.bonus_credits} кредитов.\n\n"
-        "Оформляя оплату, ты соглашаешься с условиями сервиса и политикой возврата "
-        "(подробности — в поддержке / на странице оплаты)."
+        "<b>💳 Выбери способ оплаты</b>\n\n"
+        f"🎁 <b>Подписка:</b> {title}\n"
+        f"<i>{esc(p.monthly_generations)} генераций картинок в месяц (UTC)</i>\n"
+        f"Срок: <b>{esc(SUBSCRIPTION_PERIOD_DAYS)}</b> дн. к подписке.\n"
+        f"<blockquote><i>Бонус на баланс при оплате:</i> <b>+{esc(p.bonus_credits)}</b> кредитов.</blockquote>\n\n"
+        "<i>Оформляя оплату, ты соглашаешься с условиями сервиса и политикой возврата "
+        "(подробности — в поддержке или на странице оплаты).</i>"
     )
 
 
@@ -125,9 +129,10 @@ async def menu_pay(callback: CallbackQuery) -> None:
             FSInputFile(pricing_img),
             caption=caption,
             reply_markup=kb,
+            parse_mode=HTML,
         )
     else:
-        await callback.message.answer(caption, reply_markup=kb)
+        await callback.message.answer(caption, reply_markup=kb, parse_mode=HTML)
     await callback.answer()
 
 
@@ -144,9 +149,14 @@ async def pay_back_plans(callback: CallbackQuery) -> None:
             FSInputFile(pricing_img),
             caption=caption,
             reply_markup=kb,
+            parse_mode=HTML,
         )
     else:
-        await callback.message.answer("Выбери тариф:", reply_markup=kb)
+        await callback.message.answer(
+            "<blockquote><i>Выбери тариф ниже.</i></blockquote>",
+            reply_markup=kb,
+            parse_mode=HTML,
+        )
     await callback.answer()
 
 
@@ -162,6 +172,7 @@ async def pay_pick_plan(callback: CallbackQuery) -> None:
     await callback.message.answer(
         _pay_methods_text(plan_id),
         reply_markup=_methods_keyboard(plan_id),
+        parse_mode=HTML,
     )
     await callback.answer()
 
@@ -181,8 +192,10 @@ async def _external_pay_hint(callback: CallbackQuery, plan_id: str, label: str, 
         )
         if callback.message:
             await callback.message.answer(
-                f"Открой страницу оплаты и выбери тариф «{PLANS[plan_id].title}», если на кассе есть выбор.",
+                "<blockquote><i>Открой страницу оплаты.</i> Если на кассе есть выбор тарифа — "
+                f"укажи: <b>{esc(PLANS[plan_id].title)}</b>.</blockquote>",
                 reply_markup=keyboard,
+                parse_mode=HTML,
             )
         await callback.answer()
         return
@@ -196,9 +209,10 @@ async def _external_pay_hint(callback: CallbackQuery, plan_id: str, label: str, 
             inline_keyboard=[[InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_PAY_MENU)]]
         )
         await callback.message.answer(
-            f"Оплата «{label}» пока подключается.\n{support_line} "
-            "Мы выставим счёт или дадим ссылку.",
+            f"<b>Оплата «{esc(label)}»</b> пока подключается.\n"
+            f"<blockquote>{esc(support_line)} Мы выставим счёт или дадим ссылку.</blockquote>",
             reply_markup=kb,
+            parse_mode=HTML,
         )
     await callback.answer()
 
@@ -324,10 +338,12 @@ async def successful_payment(message: Message) -> None:
             "напиши в поддержку, начислим вручную."
         )
     )
+    bonus_html = esc(bonus_line)
     await message.answer(
-        f"Оплата прошла ✅\n"
-        f"Тариф: {p.title} — до {p.monthly_generations} генераций картинок в месяц (UTC).\n"
-        f"Подписка: +{SUBSCRIPTION_PERIOD_DAYS} дн., активна до (UTC): {new_end}\n"
-        f"{bonus_line}\n\n"
-        "Можно снова нажать «Создать картинку» в /start."
+        "<b>Оплата прошла ✅</b>\n"
+        f"Тариф: <b>{esc(p.title)}</b> — до <b>{esc(p.monthly_generations)}</b> генераций картинок в месяц (UTC).\n"
+        f"<blockquote><i>Подписка:</i> +{esc(SUBSCRIPTION_PERIOD_DAYS)} дн., активна до (UTC): <b>{esc(new_end)}</b>\n"
+        f"{bonus_html}</blockquote>\n\n"
+        "<i>Можно снова открыть «Создать картинку» в</i> <code>/start</code>.",
+        parse_mode=HTML,
     )

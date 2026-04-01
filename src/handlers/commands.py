@@ -22,6 +22,7 @@ from src.database import (
     take_credits,
 )
 from src.subscription_catalog import PLANS
+from src.formatting import HTML, esc
 from src.handlers.img_commands import CB_CREATE_IMAGE, CB_MENU_BACK_START, CB_READY_IDEAS
 
 # Короткий callback_data (старые кнопки с «menu:ref» всё ещё обрабатываются в handler)
@@ -57,11 +58,12 @@ def _back_to_main_menu_kb() -> InlineKeyboardMarkup:
 
 
 def _main_screen_text(balance: int, bonus_note: str = "") -> str:
+    bonus_html = esc(bonus_note) if bonus_note else ""
     return (
-        "🖼 Измени фото или создай новое изображение с ИИ.\n\n"
-        "Главное: 🎨 «Создать картинку» и 💡 «Готовые идеи».\n"
-        "Остальные кнопки — оплата, поддержка и справка.\n"
-        f"💰 Баланс: {balance} кредитов.{bonus_note}"
+        "🖼 <b>Создай или измени фото</b> с помощью ИИ.\n\n"
+        "<b>Главное:</b> 🎨 <i>Создать картинку</i> и 💡 <i>Готовые идеи</i>.\n"
+        "<i>Остальное — оплата, поддержка и справка.</i>\n\n"
+        f"<blockquote><i>💰 Баланс: {esc(balance)} кредитов.</i>{bonus_html}</blockquote>"
     )
 
 
@@ -107,9 +109,10 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
             FSInputFile(banner),
             caption=text,
             reply_markup=kb,
+            parse_mode=HTML,
         )
     else:
-        await message.answer(text, reply_markup=kb)
+        await message.answer(text, reply_markup=kb, parse_mode=HTML)
 
 
 @router.callback_query(F.data == CB_MENU_BACK_START)
@@ -130,23 +133,25 @@ async def menu_back_start(callback: CallbackQuery, state: FSMContext) -> None:
             FSInputFile(banner),
             caption=text,
             reply_markup=kb,
+            parse_mode=HTML,
         )
     else:
-        await callback.message.answer(text, reply_markup=kb)
+        await callback.message.answer(text, reply_markup=kb, parse_mode=HTML)
 
 
 @router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
     await message.answer(
-        "📌 Что доступно:\n\n"
-        "🏠 /start — главное меню, баланс и картинки\n"
-        "❓ /help — этот список\n"
-        "📋 /faq — частые вопросы и шаблоны ответов\n"
-        "🔄 /newchat или /clear — очистить память диалога\n"
-        "💬 /support — открыть обращение в поддержку\n"
-        "✅ /resolved — как закрыть тикет (в боте поддержки)\n"
-        "🆔 /myid — твой Telegram ID\n\n"
-        "🎨 Картинки — кнопки в /start («Создать картинку», «Готовые идеи»)."
+        "📌 <b>Что доступно</b>\n\n"
+        "🏠 <code>/start</code> — <i>главное меню, баланс и картинки</i>\n"
+        "❓ <code>/help</code> — <i>этот список</i>\n"
+        "📋 <code>/faq</code> — <i>частые вопросы</i>\n"
+        "🔄 <code>/newchat</code> или <code>/clear</code> — <i>очистить память диалога</i>\n"
+        "💬 <code>/support</code> — <i>обращение в поддержку</i>\n"
+        "✅ <code>/resolved</code> — <i>закрыть тикет (в боте поддержки)</i>\n"
+        "🆔 <code>/myid</code> — <i>твой Telegram ID</i>\n\n"
+        "<blockquote>🎨 Картинки — через кнопки в <code>/start</code>.</blockquote>",
+        parse_mode=HTML,
     )
 
 
@@ -157,12 +162,15 @@ async def menu_about(callback: CallbackQuery) -> None:
         return
     await callback.answer()
     await callback.message.answer(
-        "Что умеет бот:\n"
+        "<b>Что умеет бот</b>\n"
+        "<blockquote>"
         "• Сгенерировать картинку из текста.\n"
         "• Изменить картинку по фото + тексту.\n"
-        "• Применить готовые промпты к фото.\n"
-        "• Использовать разные ИИ-модели для генерации.",
+        "• Готовые промпты к фото.\n"
+        "• Разные <i>ИИ-модели</i> для генерации."
+        "</blockquote>",
         reply_markup=_back_to_main_menu_kb(),
+        parse_mode=HTML,
     )
 
 
@@ -174,8 +182,10 @@ async def menu_support(callback: CallbackQuery) -> None:
     await callback.answer()
     if not SUPPORT_BOT_USERNAME:
         await callback.message.answer(
-            "Поддержка пока не настроена (пустой SUPPORT_BOT_USERNAME).",
+            "<blockquote><i>Поддержка пока не настроена</i> "
+            "(пустой <code>SUPPORT_BOT_USERNAME</code>).</blockquote>",
             reply_markup=_back_to_main_menu_kb(),
+            parse_mode=HTML,
         )
         return
     support_url = f"https://t.me/{SUPPORT_BOT_USERNAME}?start=from_avira"
@@ -185,17 +195,19 @@ async def menu_support(callback: CallbackQuery) -> None:
             _BACK_TO_MENU_ROW,
         ]
     )
-    await callback.message.answer("Нажми кнопку, чтобы написать в поддержку:", reply_markup=keyboard)
+    await callback.message.answer(
+        "<b>Поддержка</b>\n<i>Нажми кнопку ниже,</i> чтобы открыть чат.",
+        reply_markup=keyboard,
+        parse_mode=HTML,
+    )
 
 
-@router.callback_query(F.data.in_({CB_MENU_REF, "menu:ref"}))
+@router.callback_query((F.data == CB_MENU_REF) | (F.data == "menu:ref"))
 async def menu_ref(callback: CallbackQuery) -> None:
-    # Сразу снимаем «часики» в Telegram; иначе при медленной БД или сбое отправки кажется, что кнопка мёртвая
-    await callback.answer()
     if not callback.from_user:
+        await callback.answer("Не удалось определить пользователя.", show_alert=True)
         return
     user_id = callback.from_user.id
-    chat_id = callback.message.chat.id if callback.message else user_id
     try:
         invited = await get_referral_count(user_id)
     except Exception:
@@ -205,21 +217,48 @@ async def menu_ref(callback: CallbackQuery) -> None:
         if callback.bot.username
         else f"/start ref_{user_id}"
     )
-    text = (
-        "Реферальная система:\n"
-        f"• Приглашено друзей: {invited}\n"
-        "• За каждого друга тебе +10 кредитов.\n"
-        "• Другу при старте по ссылке +5 кредитов.\n\n"
-        f"Твоя ссылка:\n{ref_link}"
-    )
-    try:
-        await callback.bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            reply_markup=_back_to_main_menu_kb(),
+    if callback.bot.username:
+        link_block = (
+            f'<blockquote><i>Твоя ссылка:</i>\n'
+            f'<a href="{esc(ref_link)}">{esc(ref_link)}</a></blockquote>'
         )
+    else:
+        link_block = f"<blockquote><code>{esc(ref_link)}</code></blockquote>"
+    text = (
+        "<b>Реферальная система</b>\n"
+        f"• Приглашено друзей: <b>{esc(invited)}</b>\n"
+        "• <i>За каждого приглашённого — <b>+10</b> кредитов тебе.</i>\n"
+        "• <i>Другу по ссылке при старте — <b>+5</b> кредитов.</i>\n\n"
+        f"{link_block}"
+    )
+    kb = _back_to_main_menu_kb()
+    try:
+        # Сначала текст в чат, потом answer — иначе при сбое отправки «часики» пропадают, а сообщения нет
+        if callback.message:
+            await callback.message.answer(
+                text,
+                reply_markup=kb,
+                disable_web_page_preview=True,
+                parse_mode=HTML,
+            )
+        else:
+            await callback.bot.send_message(
+                chat_id=user_id,
+                text=text,
+                reply_markup=kb,
+                disable_web_page_preview=True,
+                parse_mode=HTML,
+            )
+        await callback.answer()
     except Exception:
         logging.exception("menu_ref: не удалось отправить сообщение с реферальной ссылкой")
+        try:
+            await callback.answer(
+                "Не удалось отправить текст. Нажми /start и попробуй снова.",
+                show_alert=True,
+            )
+        except Exception:
+            logging.exception("menu_ref: answer после ошибки отправки")
 
 
 @router.message(Command("profile"))
@@ -230,20 +269,27 @@ async def cmd_profile(message: Message) -> None:
     await ensure_user(message.from_user.id, message.from_user.username)
     balance = await get_credits(message.from_user.id)
     if message.from_user.id in ADMIN_IDS:
-        await message.answer("Твой текущий баланс: безлимит (режим админа).")
+        await message.answer(
+            "<blockquote><b>Режим админа</b> — безлимит по кредитам.</blockquote>",
+            parse_mode=HTML,
+        )
         return
     profile = await get_user_admin_profile(message.from_user.id)
     sub_extra = ""
     if profile and profile.subscription_ends_at:
         if subscription_is_active(profile.subscription_ends_at):
-            sub_extra = f"\nПодписка активна до: {profile.subscription_ends_at}"
+            sub_extra = f"\nПодписка активна до: {esc(profile.subscription_ends_at)}"
         else:
-            sub_extra = f"\nПодписка (истекла): {profile.subscription_ends_at}"
+            sub_extra = f"\nПодписка (истекла): {esc(profile.subscription_ends_at)}"
     if profile and profile.subscription_plan and profile.subscription_plan in PLANS:
-        sub_extra += f"\nТариф: {PLANS[profile.subscription_plan].title}."
+        sub_extra += f"\nТариф: {esc(PLANS[profile.subscription_plan].title)}."
     used_m, limit_m = await get_monthly_image_generation_usage(message.from_user.id)
-    sub_extra += f"\nГенераций картинок в этом месяце (UTC): {used_m}/{limit_m}."
-    await message.answer(f"Твой текущий баланс: {balance} кредитов.{sub_extra}")
+    sub_extra += f"\nГенераций картинок в этом месяце (UTC): {esc(used_m)}/{esc(limit_m)}."
+    await message.answer(
+        "<b>Профиль</b>\n"
+        f"<blockquote><i>💰 Баланс:</i> <b>{esc(balance)}</b> кредитов{sub_extra}</blockquote>",
+        parse_mode=HTML,
+    )
 
 
 @router.message(Command("newchat"))
@@ -255,8 +301,9 @@ async def cmd_newchat(message: Message) -> None:
     reset_user_spam(message.from_user.id)
     reset_private_rate(message.from_user.id)
     await message.answer(
-        "Готово ✅ История этого диалога очищена.\n"
-        "Можешь начать новую тему."
+        "<b>Готово ✅</b>\n"
+        "<blockquote><i>История этого диалога очищена.</i> Можно начать новую тему.</blockquote>",
+        parse_mode=HTML,
     )
 
 
@@ -265,9 +312,9 @@ async def cmd_resolved_main(message: Message) -> None:
     """В основном боте тикеты ведёт support-бот — направляем пользователя туда."""
     if not SUPPORT_BOT_USERNAME:
         await message.answer(
-            "Чат поддержки пока не подключен.\n"
-            "Админ должен задать SUPPORT_BOT_USERNAME в .env — тогда здесь будет ссылка на бот, "
-            "где можно закрыть тикет командой /resolved."
+            "<blockquote><i>Чат поддержки не подключён.</i> Нужен "
+            "<code>SUPPORT_BOT_USERNAME</code> в <code>.env</code>.</blockquote>",
+            parse_mode=HTML,
         )
         return
     support_url = f"https://t.me/{SUPPORT_BOT_USERNAME}"
@@ -278,10 +325,11 @@ async def cmd_resolved_main(message: Message) -> None:
         ]
     )
     await message.answer(
-        "Тикеты обрабатываются в отдельном чате поддержки.\n\n"
-        "Чтобы отметить проблему решённой, открой бот поддержки и отправь там команду /resolved "
-        "(в том же чате, где открывал обращение).",
+        "<b>Закрытие тикета</b>\n"
+        "<blockquote>Тикеты ведутся в <i>отдельном боте поддержки</i>. "
+        "Команду <code>/resolved</code> отправь там, где открывал обращение.</blockquote>",
         reply_markup=keyboard,
+        parse_mode=HTML,
     )
 
 
@@ -289,8 +337,8 @@ async def cmd_resolved_main(message: Message) -> None:
 async def cmd_support(message: Message) -> None:
     if not SUPPORT_BOT_USERNAME:
         await message.answer(
-            "Чат поддержки пока не подключен.\n"
-            "Админ должен заполнить SUPPORT_BOT_USERNAME в .env"
+            "<blockquote><i>Поддержка не подключена</i> — проверь <code>SUPPORT_BOT_USERNAME</code> в <code>.env</code>.</blockquote>",
+            parse_mode=HTML,
         )
         return
     support_url = f"https://t.me/{SUPPORT_BOT_USERNAME}?start=from_avira"
@@ -301,9 +349,10 @@ async def cmd_support(message: Message) -> None:
         ]
     )
     await message.answer(
-        "Для обращений используй отдельный чат поддержки.\n"
-        "Нажми кнопку ниже:",
+        "<b>Поддержка</b>\n"
+        "<blockquote><i>Отдельный чат для тикетов.</i> Нажми кнопку ниже.</blockquote>",
         reply_markup=keyboard,
+        parse_mode=HTML,
     )
 
 
@@ -311,7 +360,10 @@ async def cmd_support(message: Message) -> None:
 async def cmd_myid(message: Message) -> None:
     if not message.from_user:
         return
-    await message.answer(f"Твой Telegram ID: {message.from_user.id}")
+    await message.answer(
+        f"<blockquote><code>{esc(message.from_user.id)}</code> — <i>твой Telegram ID</i></blockquote>",
+        parse_mode=HTML,
+    )
 
 
 @router.message(Command("chatid"))
