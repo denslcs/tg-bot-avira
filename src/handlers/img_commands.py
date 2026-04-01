@@ -35,6 +35,13 @@ from src.gemini_image import edit_image_png, generate_image_png, is_gemini_confi
 
 router = Router(name="img_commands")
 
+_GEMINI_MISSING_TEXT = (
+    "Генерация картинок выключена: нет ключа GEMINI_API_KEY.\n\n"
+    "Создай ключ в Google AI Studio и добавь на сервер в файл .env строку:\n"
+    "GEMINI_API_KEY=твой_ключ\n\n"
+    "Перезапусти бота (systemctl restart). Подробности в .env.example."
+)
+
 CB_CREATE_IMAGE = "menu:create_image"
 CB_GEN_TEXT = "img:mode:text"
 CB_GEN_EDIT = "img:mode:edit"
@@ -183,7 +190,7 @@ async def _execute_text_generation(
 ) -> None:
     await ensure_user(user_id, username)
     if not is_gemini_configured():
-        await message.answer("Генерация не настроена: задай GEMINI_API_KEY в окружении.")
+        await message.answer(_GEMINI_MISSING_TEXT)
         return
     is_admin = user_id in ADMIN_IDS
     profile = await get_user_admin_profile(user_id) if not is_admin else None
@@ -237,7 +244,7 @@ async def _execute_edit_generation(
 ) -> None:
     await ensure_user(user_id, username)
     if not is_gemini_configured():
-        await message.answer("Генерация не настроена: задай GEMINI_API_KEY в окружении.")
+        await message.answer(_GEMINI_MISSING_TEXT)
         return
     is_admin = user_id in ADMIN_IDS
     profile = await get_user_admin_profile(user_id) if not is_admin else None
@@ -300,10 +307,15 @@ def ready_ideas_keyboard() -> InlineKeyboardMarkup:
 
 @router.callback_query(F.data == CB_CREATE_IMAGE)
 async def open_image_menu(callback: CallbackQuery, state: FSMContext) -> None:
-    if callback.message is None or callback.from_user is None:
+    if callback.from_user is None:
+        await callback.answer("Ошибка запроса.", show_alert=True)
+        return
+    if callback.message is None:
+        await callback.answer("Сообщение недоступно.", show_alert=True)
         return
     if not is_gemini_configured():
-        await callback.answer("Генерация не настроена (GEMINI_API_KEY).", show_alert=True)
+        await callback.answer()
+        await callback.message.answer(_GEMINI_MISSING_TEXT)
         return
     await ensure_user(callback.from_user.id, callback.from_user.username)
     await state.clear()
@@ -313,10 +325,15 @@ async def open_image_menu(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == CB_PICK_NANO)
 async def pick_nano(callback: CallbackQuery, state: FSMContext) -> None:
-    if callback.message is None or callback.from_user is None:
+    if callback.from_user is None:
+        await callback.answer("Ошибка запроса.", show_alert=True)
+        return
+    if callback.message is None:
+        await callback.answer("Сообщение недоступно.", show_alert=True)
         return
     if not is_gemini_configured():
-        await callback.answer("Генерация не настроена (GEMINI_API_KEY).", show_alert=True)
+        await callback.answer()
+        await callback.message.answer(_GEMINI_MISSING_TEXT)
         return
     await ensure_user(callback.from_user.id, callback.from_user.username)
     await state.update_data(
@@ -331,10 +348,15 @@ async def pick_nano(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == CB_PICK_NANO_2)
 async def pick_nano_2(callback: CallbackQuery, state: FSMContext) -> None:
-    if callback.message is None or callback.from_user is None:
+    if callback.from_user is None:
+        await callback.answer("Ошибка запроса.", show_alert=True)
+        return
+    if callback.message is None:
+        await callback.answer("Сообщение недоступно.", show_alert=True)
         return
     if not is_gemini_configured():
-        await callback.answer("Генерация не настроена (GEMINI_API_KEY).", show_alert=True)
+        await callback.answer()
+        await callback.message.answer(_GEMINI_MISSING_TEXT)
         return
     await ensure_user(callback.from_user.id, callback.from_user.username)
     await state.update_data(
@@ -350,36 +372,41 @@ async def pick_nano_2(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(ImageGenState.waiting_mode, F.data == CB_GEN_TEXT)
 async def mode_text(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.message is None:
+        await callback.answer("Сообщение недоступно.", show_alert=True)
         return
+    await callback.answer()
     await state.set_state(ImageGenState.waiting_prompt)
     await callback.message.answer("Напишите свой текст для генерации картинки")
-    await callback.answer()
 
 
 @router.callback_query(ImageGenState.waiting_mode, F.data == CB_GEN_EDIT)
 async def mode_edit(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.message is None:
+        await callback.answer("Сообщение недоступно.", show_alert=True)
         return
+    await callback.answer()
     await state.set_state(ImageGenState.waiting_photo_for_edit)
     await callback.message.answer("Отправьте фото и текст в одном сообщении (подпись к фото).")
-    await callback.answer()
 
 
 @router.callback_query(F.data == CB_READY_IDEAS)
 async def open_ready_ideas(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.message is None:
+        await callback.answer("Сообщение недоступно.", show_alert=True)
         return
+    await callback.answer()
     await state.clear()
     await callback.message.answer("Готовые идеи — выбери промпт:", reply_markup=ready_ideas_keyboard())
-    await callback.answer()
 
 
 @router.callback_query(F.data.startswith(CB_APPLY_READY_PREFIX))
 async def apply_ready_idea(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.message is None or not callback.data:
+        await callback.answer("Ошибка запроса.", show_alert=True)
         return
     if not is_gemini_configured():
-        await callback.answer("Генерация не настроена (GEMINI_API_KEY).", show_alert=True)
+        await callback.answer()
+        await callback.message.answer(_GEMINI_MISSING_TEXT)
         return
     try:
         idx = int(callback.data.replace(CB_APPLY_READY_PREFIX, ""))
@@ -387,6 +414,7 @@ async def apply_ready_idea(callback: CallbackQuery, state: FSMContext) -> None:
     except Exception:
         await callback.answer("Некорректный промпт", show_alert=True)
         return
+    await callback.answer()
     await state.update_data(
         selected_model=GEMINI_IMAGE_MODEL,
         selected_name="Nano Banana 2",
@@ -398,7 +426,6 @@ async def apply_ready_idea(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.message.answer(
         "Промпт применен.\nОтправьте фото без текста — следующая генерация выполнится с этим промптом."
     )
-    await callback.answer()
 
 
 @router.message(ImageGenState.waiting_mode)

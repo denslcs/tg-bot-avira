@@ -1,4 +1,4 @@
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
@@ -98,10 +98,12 @@ async def cmd_help(message: Message) -> None:
     )
 
 
-@router.callback_query(lambda c: c.data == "menu:about")
+@router.callback_query(F.data == "menu:about")
 async def menu_about(callback: CallbackQuery) -> None:
     if not callback.message:
+        await callback.answer("Сообщение недоступно.", show_alert=True)
         return
+    await callback.answer()
     await callback.message.answer(
         "Что умеет бот:\n"
         "• Сгенерировать картинку из текста.\n"
@@ -109,44 +111,54 @@ async def menu_about(callback: CallbackQuery) -> None:
         "• Применить готовые промпты к фото.\n"
         "• Использовать разные ИИ-модели для генерации."
     )
-    await callback.answer()
 
 
-@router.callback_query(lambda c: c.data == "menu:support")
+@router.callback_query(F.data == "menu:support")
 async def menu_support(callback: CallbackQuery) -> None:
     if not callback.message:
+        await callback.answer("Сообщение недоступно.", show_alert=True)
         return
+    await callback.answer()
     if not SUPPORT_BOT_USERNAME:
         await callback.message.answer("Поддержка пока не настроена (пустой SUPPORT_BOT_USERNAME).")
-        await callback.answer()
         return
     support_url = f"https://t.me/{SUPPORT_BOT_USERNAME}?start=from_avira"
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text="Открыть поддержку", url=support_url)]]
     )
     await callback.message.answer("Нажми кнопку, чтобы написать в поддержку:", reply_markup=keyboard)
-    await callback.answer()
 
 
-@router.callback_query(lambda c: c.data == "menu:ref")
+@router.callback_query(F.data == "menu:ref")
 async def menu_ref(callback: CallbackQuery) -> None:
-    if not callback.message or not callback.from_user:
+    if not callback.from_user:
+        await callback.answer("Не удалось определить пользователя.", show_alert=True)
         return
+    await callback.answer()
     user_id = callback.from_user.id
-    invited = await get_referral_count(user_id)
+    try:
+        invited = await get_referral_count(user_id)
+    except Exception:
+        invited = 0
     ref_link = (
         f"https://t.me/{callback.bot.username}?start=ref_{user_id}"
         if callback.bot.username
         else f"/start ref_{user_id}"
     )
-    await callback.message.answer(
+    text = (
         "Реферальная система:\n"
         f"• Приглашено друзей: {invited}\n"
         "• За каждого друга тебе +10 кредитов.\n"
         "• Другу при старте по ссылке +5 кредитов.\n\n"
         f"Твоя ссылка:\n{ref_link}"
     )
-    await callback.answer()
+    try:
+        if callback.message:
+            await callback.message.answer(text)
+        else:
+            await callback.bot.send_message(user_id, text)
+    except Exception:
+        await callback.bot.send_message(user_id, text)
 
 
 @router.message(Command("profile"))
