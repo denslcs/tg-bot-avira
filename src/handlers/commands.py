@@ -96,6 +96,8 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     referrer_id = _parse_ref_payload((message.text or "").strip())
     bonus_note = ""
     if referrer_id:
+        # Пригласитель должен быть в БД, иначе apply_referral тихо вернёт False
+        await ensure_user(referrer_id, None)
         applied = await apply_referral(invitee_user_id=user_id, inviter_user_id=referrer_id)
         if applied:
             bonus_note = "\n🎉 Реферальный бонус: тебе +5 кредитов."
@@ -208,6 +210,7 @@ async def menu_ref(callback: CallbackQuery) -> None:
         await callback.answer("Не удалось определить пользователя.", show_alert=True)
         return
     user_id = callback.from_user.id
+    await ensure_user(user_id, callback.from_user.username)
     try:
         invited = await get_referral_count(user_id)
     except Exception:
@@ -217,29 +220,21 @@ async def menu_ref(callback: CallbackQuery) -> None:
         if callback.bot.username
         else f"/start ref_{user_id}"
     )
-    if callback.bot.username:
-        link_block = (
-            f'<blockquote><i>Твоя ссылка:</i>\n'
-            f'<a href="{esc(ref_link)}">{esc(ref_link)}</a></blockquote>'
-        )
-    else:
-        link_block = f"<blockquote><code>{esc(ref_link)}</code></blockquote>"
+    # Без HTML: разметка цитат/вложенных тегов у части клиентов ломала отправку (parse entities)
     text = (
-        "<b>Реферальная система</b>\n"
-        f"• Приглашено друзей: <b>{esc(invited)}</b>\n"
-        "• <i>За каждого приглашённого — <b>+10</b> кредитов тебе.</i>\n"
-        "• <i>Другу по ссылке при старте — <b>+5</b> кредитов.</i>\n\n"
-        f"{link_block}"
+        "📣 Реферальная система\n\n"
+        f"• Приглашено друзей: {invited}\n"
+        "• За каждого приглашённого тебе +10 кредитов.\n"
+        "• Другу по твоей ссылке при первом /start +5 кредитов.\n\n"
+        f"Твоя ссылка (отправь другу):\n{ref_link}"
     )
     kb = _back_to_main_menu_kb()
     try:
-        # Сначала текст в чат, потом answer — иначе при сбое отправки «часики» пропадают, а сообщения нет
         if callback.message:
             await callback.message.answer(
                 text,
                 reply_markup=kb,
                 disable_web_page_preview=True,
-                parse_mode=HTML,
             )
         else:
             await callback.bot.send_message(
@@ -247,7 +242,6 @@ async def menu_ref(callback: CallbackQuery) -> None:
                 text=text,
                 reply_markup=kb,
                 disable_web_page_preview=True,
-                parse_mode=HTML,
             )
         await callback.answer()
     except Exception:
