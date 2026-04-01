@@ -240,7 +240,12 @@ def _referral_share_url(bot_username: str | None, user_id: int) -> str:
     return "https://t.me/share/url?" + urllib.parse.urlencode({"text": f"{text_share}\n{ref_plain}"})
 
 
-async def _build_referral_message(bot: Bot, user_id: int, username: str | None) -> tuple[str, InlineKeyboardMarkup]:
+async def _build_referral_message(
+    user_id: int,
+    username: str | None,
+    bot_username: str | None,
+) -> tuple[str, InlineKeyboardMarkup]:
+    """bot_username — из await bot.me(); у aiogram.Bot нет атрибута .username."""
     await ensure_user(user_id, username)
     try:
         invited = await get_referral_count(user_id)
@@ -251,7 +256,9 @@ async def _build_referral_message(bot: Bot, user_id: int, username: str | None) 
     except Exception:
         balance = 0
     ref_link = (
-        f"https://t.me/{bot.username}?start=ref_{user_id}" if bot.username else f"/start ref_{user_id}"
+        f"https://t.me/{bot_username}?start=ref_{user_id}"
+        if bot_username
+        else f"/start ref_{user_id}"
     )
     uname_line = f"@{username}" if username else "без username"
     # Без HTML: разметка цитат/вложенных тегов у части клиентов ломала отправку (parse entities)
@@ -264,7 +271,7 @@ async def _build_referral_message(bot: Bot, user_id: int, username: str | None) 
         "Другу по твоей ссылке при первом /start — +5 кредитов.\n\n"
         f"Твоя реферальная ссылка:\n{ref_link}"
     )
-    share_url = _referral_share_url(bot.username, user_id)
+    share_url = _referral_share_url(bot_username, user_id)
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="📩 Пригласить", url=share_url)],
@@ -276,7 +283,8 @@ async def _build_referral_message(bot: Bot, user_id: int, username: str | None) 
 
 async def deliver_referral_screen(bot: Bot, user_id: int, username: str | None, reply_via: Message | None) -> None:
     """Отправить экран рефералки (callback или команда /ref)."""
-    text, kb = await _build_referral_message(bot, user_id, username)
+    me = await bot.me()
+    text, kb = await _build_referral_message(user_id, username, me.username)
     try:
         if reply_via:
             await reply_via.answer(text, reply_markup=kb, disable_web_page_preview=True)
