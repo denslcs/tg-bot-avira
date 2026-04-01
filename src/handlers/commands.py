@@ -63,7 +63,7 @@ def _main_screen_text(balance: int, bonus_note: str = "") -> str:
 
 
 def _start_banner_path() -> Path | None:
-    """Один баннер на /start (картинка «ДО/ПОСЛЕ»). Файл: assets/start/start_banner.png"""
+    """Баннер приветствия /start. Файл: assets/start/start_banner.png"""
     p = PROJECT_ROOT / "assets" / "start" / "start_banner.png"
     return p if p.is_file() else None
 
@@ -96,14 +96,17 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
             bonus_note = "\n🎉 Реферальный бонус: тебе +5 кредитов."
     balance = await get_credits(user_id)
 
+    text = _main_screen_text(balance, bonus_note)
+    kb = _start_menu_kb()
     banner = _start_banner_path()
     if banner:
-        await message.answer_photo(FSInputFile(banner))
-
-    await message.answer(
-        _main_screen_text(balance, bonus_note),
-        reply_markup=_start_menu_kb(),
-    )
+        await message.answer_photo(
+            FSInputFile(banner),
+            caption=text,
+            reply_markup=kb,
+        )
+    else:
+        await message.answer(text, reply_markup=kb)
 
 
 @router.callback_query(F.data == CB_MENU_BACK_START)
@@ -116,10 +119,17 @@ async def menu_back_start(callback: CallbackQuery, state: FSMContext) -> None:
     await ensure_user(user_id, callback.from_user.username)
     balance = await get_credits(user_id)
     await callback.answer()
-    await callback.message.answer(
-        _main_screen_text(balance, ""),
-        reply_markup=_start_menu_kb(),
-    )
+    text = _main_screen_text(balance, "")
+    kb = _start_menu_kb()
+    banner = _start_banner_path()
+    if banner:
+        await callback.message.answer_photo(
+            FSInputFile(banner),
+            caption=text,
+            reply_markup=kb,
+        )
+    else:
+        await callback.message.answer(text, reply_markup=kb)
 
 
 @router.message(Command("help"))
