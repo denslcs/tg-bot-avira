@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -382,6 +383,7 @@ async def take_credits(user_id: int, amount: int) -> bool:
 async def apply_referral(invitee_user_id: int, inviter_user_id: int) -> bool:
     """Apply referral once. Inviter gets +10 credits, invitee gets +5 credits."""
     if invitee_user_id == inviter_user_id:
+        logging.info("referral: skip self-ref invitee=%s", invitee_user_id)
         return False
     async with aiosqlite.connect(DB_PATH) as db:
         # Already applied for this invitee.
@@ -390,6 +392,7 @@ async def apply_referral(invitee_user_id: int, inviter_user_id: int) -> bool:
             (invitee_user_id,),
         ) as cur:
             if await cur.fetchone():
+                logging.info("referral: skip already registered invitee=%s", invitee_user_id)
                 return False
 
         # Inviter must exist.
@@ -398,6 +401,11 @@ async def apply_referral(invitee_user_id: int, inviter_user_id: int) -> bool:
             (inviter_user_id,),
         ) as cur:
             if not await cur.fetchone():
+                logging.warning(
+                    "referral: inviter not in users invitee=%s inviter=%s",
+                    invitee_user_id,
+                    inviter_user_id,
+                )
                 return False
 
         await db.execute("BEGIN")
@@ -421,6 +429,11 @@ async def apply_referral(invitee_user_id: int, inviter_user_id: int) -> bool:
             return True
         except sqlite3.IntegrityError:
             await db.rollback()
+            logging.info(
+                "referral: integrity error (race/dup) invitee=%s inviter=%s",
+                invitee_user_id,
+                inviter_user_id,
+            )
             return False
         except Exception:
             await db.rollback()

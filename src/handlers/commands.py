@@ -3,7 +3,7 @@ import urllib.parse
 from pathlib import Path
 
 from aiogram import Bot, F, Router
-from aiogram.filters import Command
+from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
@@ -74,12 +74,11 @@ def _start_banner_path() -> Path | None:
     return p if p.is_file() else None
 
 
-def _parse_ref_payload(raw_text: str) -> int | None:
-    """Диплинк: https://t.me/bot?start=ref_<id> → в чат приходит «/start ref_<id>»."""
-    parts = raw_text.split(maxsplit=1)
-    if len(parts) < 2:
+def _parse_ref_start_arg(args: str | None) -> int | None:
+    """Аргумент команды /start (диплинк t.me/bot?start=ref_<id>)."""
+    if not args:
         return None
-    rest = parts[1].strip()
+    rest = args.strip()
     if not rest:
         return None
     first = rest.split()[0]
@@ -89,15 +88,32 @@ def _parse_ref_payload(raw_text: str) -> int | None:
     return None
 
 
-@router.message(Command("start"))
-async def cmd_start(message: Message, state: FSMContext) -> None:
+def _parse_ref_payload(raw_text: str) -> int | None:
+    """Fallback: полный текст сообщения, если args недоступен."""
+    parts = raw_text.split(maxsplit=1)
+    if len(parts) < 2:
+        return None
+    return _parse_ref_start_arg(parts[1])
+
+
+@router.message(Command("start", ignore_mention=True))
+async def cmd_start(message: Message, state: FSMContext, command: CommandObject) -> None:
     if not message.from_user:
         return
 
     await state.clear()
     user_id = message.from_user.id
     await ensure_user(user_id, message.from_user.username)
-    referrer_id = _parse_ref_payload((message.text or "").strip())
+    raw = (message.text or message.caption or "").strip()
+    referrer_id = _parse_ref_start_arg(command.args)
+    if referrer_id is None and raw:
+        referrer_id = _parse_ref_payload(raw)
+    if referrer_id is None and raw and ("ref_" in raw or raw.split(maxsplit=1)[-1].strip().isdigit()):
+        logging.warning(
+            "referral: не распарсили диплинк raw=%r command.args=%r",
+            raw,
+            command.args,
+        )
     bonus_note = ""
     if referrer_id:
         # Пригласитель должен быть в БД, иначе apply_referral тихо вернёт False
@@ -106,12 +122,6 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         if applied:
             bonus_note = "\n🎉 Реферальный бонус: тебе +5 кредитов."
             logging.info("referral applied: invitee=%s inviter=%s", user_id, referrer_id)
-        else:
-            logging.debug(
-                "referral not applied: invitee=%s referrer=%s",
-                user_id,
-                referrer_id,
-            )
     balance = await get_credits(user_id)
 
     text = _main_screen_text(balance, bonus_note)
