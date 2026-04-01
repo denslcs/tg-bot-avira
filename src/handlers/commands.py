@@ -29,16 +29,16 @@ def _start_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="◼ Создать картинку", callback_data=CB_CREATE_IMAGE),
-                InlineKeyboardButton(text="◾ Готовые идеи", callback_data=CB_READY_IDEAS),
+                InlineKeyboardButton(text="🎨 Создать картинку", callback_data=CB_CREATE_IMAGE),
+                InlineKeyboardButton(text="💡 Готовые идеи", callback_data=CB_READY_IDEAS),
             ],
             [
-                InlineKeyboardButton(text="◆ Что умеет бот", callback_data="menu:about"),
-                InlineKeyboardButton(text="◇ Реф. система", callback_data="menu:ref"),
+                InlineKeyboardButton(text="ℹ️ Что умеет бот", callback_data="menu:about"),
+                InlineKeyboardButton(text="👥 Реферальная система", callback_data="menu:ref"),
             ],
             [
-                InlineKeyboardButton(text="▦ Оплатить", callback_data="menu:pay"),
-                InlineKeyboardButton(text="▣ Поддержка", callback_data="menu:support"),
+                InlineKeyboardButton(text="💳 Оплатить", callback_data="menu:pay"),
+                InlineKeyboardButton(text="💬 Поддержка", callback_data="menu:support"),
             ],
         ]
     )
@@ -73,10 +73,10 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     balance = await get_credits(user_id)
 
     await message.answer(
-        "Измени фото или создай новое изображение с ИИ.\n\n"
-        "Главные разделы: «Создать картинку» и «Готовые идеи».\n"
-        "Остальные кнопки — сервис и управление.\n"
-        f"Твой баланс: {balance} кредитов.{bonus_note}",
+        "🖼 Измени фото или создай новое изображение с ИИ.\n\n"
+        "Главное: 🎨 «Создать картинку» и 💡 «Готовые идеи».\n"
+        "Остальные кнопки — оплата, поддержка и справка.\n"
+        f"💰 Баланс: {balance} кредитов.{bonus_note}",
         reply_markup=_start_menu_kb(),
     )
 
@@ -84,17 +84,15 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 @router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
     await message.answer(
-        "Доступно сейчас:\n"
-        "- /start — запуск\n"
-        "- /help — помощь\n"
-        "- /faq — частые вопросы (шаблоны ответов)\n"
-        "- /profile — баланс кредитов\n"
-        "- /newchat (/clear) — очистить память диалога\n"
-        "- /support — отдельный чат поддержки\n"
-        "- /resolved — как закрыть тикет (ведёт в бот поддержки)\n"
-        "- /myid — твой Telegram ID\n\n"
-        "1 текстовый запрос = 1 кредит.\n"
-        "Генерация картинок: нажми кнопку «Создать картинку» в /start."
+        "📌 Что доступно:\n\n"
+        "🏠 /start — главное меню, баланс и картинки\n"
+        "❓ /help — этот список\n"
+        "📋 /faq — частые вопросы и шаблоны ответов\n"
+        "🔄 /newchat или /clear — очистить память диалога\n"
+        "💬 /support — открыть обращение в поддержку\n"
+        "✅ /resolved — как закрыть тикет (в боте поддержки)\n"
+        "🆔 /myid — твой Telegram ID\n\n"
+        "🎨 Картинки — кнопки в /start («Создать картинку», «Готовые идеи»)."
     )
 
 

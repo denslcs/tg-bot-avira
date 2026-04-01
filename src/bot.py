@@ -15,25 +15,24 @@ from src.handlers.messages import router as messages_router
 from src.handlers.payments import router as payments_router
 
 _USER_COMMANDS = [
-    BotCommand(command="start", description="Запуск"),
-    BotCommand(command="help", description="Помощь"),
-    BotCommand(command="faq", description="Частые вопросы"),
-    BotCommand(command="profile", description="Баланс кредитов"),
-    BotCommand(command="newchat", description="Очистить историю диалога"),
-    BotCommand(command="support", description="Открыть обращение в поддержку"),
-    BotCommand(command="resolved", description="Как закрыть тикет (ссылка в поддержку)"),
-    BotCommand(command="myid", description="Показать мой Telegram ID"),
+    BotCommand(command="start", description="🏠 Главное меню и баланс"),
+    BotCommand(command="help", description="❓ Список команд"),
+    BotCommand(command="faq", description="📋 Частые вопросы"),
+    BotCommand(command="newchat", description="🔄 Очистить историю диалога"),
+    BotCommand(command="support", description="💬 Обращение в поддержку"),
+    BotCommand(command="resolved", description="✅ Как закрыть тикет"),
+    BotCommand(command="myid", description="🆔 Мой Telegram ID"),
 ]
 
 _ADMIN_COMMANDS = [
-    BotCommand(command="admin", description="Админ-панель"),
-    BotCommand(command="stats", description="Статистика: пользователи и подписки"),
-    BotCommand(command="chatid", description="ID текущего чата (в группе)"),
-    BotCommand(command="user", description="Профиль пользователя по ID"),
-    BotCommand(command="addcredits", description="Начислить кредиты"),
-    BotCommand(command="takecredits", description="Списать кредиты"),
-    BotCommand(command="setsub", description="Продлить подписку (дни)"),
-    BotCommand(command="wipechat", description="Очистить диалог пользователя"),
+    BotCommand(command="admin", description="⚙️ Админ-панель"),
+    BotCommand(command="stats", description="📊 Пользователи и подписки"),
+    BotCommand(command="chatid", description="🗨️ ID чата (в группе)"),
+    BotCommand(command="user", description="👤 Профиль по ID"),
+    BotCommand(command="addcredits", description="➕ Начислить кредиты"),
+    BotCommand(command="takecredits", description="➖ Списать кредиты"),
+    BotCommand(command="setsub", description="📅 Подписка (дни)"),
+    BotCommand(command="wipechat", description="🧹 Очистить диалог пользователя"),
 ]
 
 

@@ -83,16 +83,11 @@ def _methods_keyboard(plan_id: str) -> InlineKeyboardMarkup:
 
 def _pay_methods_text(plan_id: str) -> str:
     p = PLANS[plan_id]
-    stars = p.stars
-    usd = p.price_usd
     return (
         "💳 Выбери способ оплаты\n\n"
         f"🎁 Подписка: {p.title} ({p.monthly_generations} генераций картинок в месяц, UTC)\n"
         f"Срок после оплаты: ровно {SUBSCRIPTION_PERIOD_DAYS} дней к подписке.\n"
         f"Бонус на баланс при оплате: +{p.bonus_credits} кредитов.\n\n"
-        "Ориентир курса (как у тарифа Nova): "
-        f"159 ₽ ≈ 150 ⭐ ≈ $1.99 → для {p.title}: "
-        f"{p.price_rub} ₽ ≈ {stars} ⭐ ≈ ${usd:g}.\n\n"
         "Оформляя оплату, ты соглашаешься с условиями сервиса и политикой возврата "
         "(подробности — в поддержке / на странице оплаты)."
     )
