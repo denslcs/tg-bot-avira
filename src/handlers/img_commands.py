@@ -22,9 +22,11 @@ from src.database import (
     add_credits,
     ensure_user,
     get_credits,
+    get_last_image_context,
     get_monthly_image_generation_usage,
     get_user_admin_profile,
     release_monthly_image_generation,
+    save_last_image_context,
     subscription_is_active,
     take_credits,
     try_reserve_monthly_image_generation,
@@ -40,6 +42,7 @@ CB_PICK_NANO = "img:pick_nano"
 CB_PICK_NANO_2 = "img:pick_nano2"
 CB_READY_IDEAS = "menu:ready_ideas"
 CB_APPLY_READY_PREFIX = "img:idea:"
+CB_REGEN = "img:regen"
 
 
 class ImageGenState(StatesGroup):
@@ -111,6 +114,169 @@ async def _prepare_image_charge_and_monthly_slot(
             )
             return False
     return True
+
+
+def _regen_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="🔄 Ещё раз", callback_data=CB_REGEN)]],
+    )
+
+
+async def _send_result_photo_with_regen(
+    message: Message,
+    state: FSMContext | None,
+    *,
+    user_id: int,
+    image_bytes: bytes,
+    filename: str,
+    kind: str,
+    prompt: str,
+    model: str,
+    model_name: str,
+    cost: int,
+    photo_file_id: str | None,
+    is_admin: bool,
+    charge: bool,
+    profile,
+) -> None:
+    await save_last_image_context(
+        user_id, kind, prompt, model, cost, model_name, photo_file_id
+    )
+    used_m, limit_m = await get_monthly_image_generation_usage(user_id)
+    month_note = "" if is_admin else f"\nМесяц (UTC): {used_m}/{limit_m} генераций."
+    if is_admin:
+        caption = f"Готово ✅\nИИ: {model_name}\nРежим админа: кредиты не списывались."
+    elif not charge and profile is not None:
+        balance = await get_credits(user_id)
+        caption = (
+            f"Готово ✅\nИИ: {model_name}\n"
+            f"Баланс: {balance}.\n"
+            "(Кредиты за картинку не списывались: активна подписка.)"
+            f"{month_note}"
+        )
+    else:
+        balance = await get_credits(user_id)
+        cw = _credits_word(cost)
+        caption = (
+            f"Готово ✅\nИИ: {model_name}\n"
+            f"Списано: {cost} {cw}.\nБаланс: {balance}.{month_note}"
+        )
+    await message.answer_photo(
+        photo=BufferedInputFile(image_bytes, filename=filename),
+        caption=caption,
+        reply_markup=_regen_keyboard(),
+    )
+    if state is not None:
+        await state.clear()
+
+
+async def _execute_text_generation(
+    message: Message,
+    state: FSMContext | None,
+    *,
+    user_id: int,
+    username: str | None,
+    prompt: str,
+    model: str,
+    model_name: str,
+    cost: int,
+) -> None:
+    await ensure_user(user_id, username)
+    if not is_gemini_configured():
+        await message.answer("Генерация не настроена: задай GEMINI_API_KEY в окружении.")
+        return
+    is_admin = user_id in ADMIN_IDS
+    profile = await get_user_admin_profile(user_id) if not is_admin else None
+    charge = not is_admin and (
+        profile is None or not subscription_is_active(profile.subscription_ends_at)
+    )
+    if not await _prepare_image_charge_and_monthly_slot(
+        message, user_id=user_id, is_admin=is_admin, charge=charge, cost=cost
+    ):
+        return
+    wait_msg = await message.answer("Идет генерация картинки")
+    try:
+        image_bytes = await generate_image_png(prompt, model=model)
+    except Exception as exc:
+        if not is_admin:
+            await release_monthly_image_generation(user_id)
+        if charge:
+            await add_credits(user_id, cost)
+        await wait_msg.edit_text(f"Ошибка генерации: {exc}")
+        return
+    await wait_msg.delete()
+    await _send_result_photo_with_regen(
+        message,
+        state,
+        user_id=user_id,
+        image_bytes=image_bytes,
+        filename="image.png",
+        kind="text",
+        prompt=prompt,
+        model=model,
+        model_name=model_name,
+        cost=cost,
+        photo_file_id=None,
+        is_admin=is_admin,
+        charge=charge,
+        profile=profile,
+    )
+
+
+async def _execute_edit_generation(
+    message: Message,
+    state: FSMContext | None,
+    *,
+    user_id: int,
+    username: str | None,
+    prompt: str,
+    model: str,
+    model_name: str,
+    cost: int,
+    source_file_id: str,
+) -> None:
+    await ensure_user(user_id, username)
+    if not is_gemini_configured():
+        await message.answer("Генерация не настроена: задай GEMINI_API_KEY в окружении.")
+        return
+    is_admin = user_id in ADMIN_IDS
+    profile = await get_user_admin_profile(user_id) if not is_admin else None
+    charge = not is_admin and (
+        profile is None or not subscription_is_active(profile.subscription_ends_at)
+    )
+    if not await _prepare_image_charge_and_monthly_slot(
+        message, user_id=user_id, is_admin=is_admin, charge=charge, cost=cost
+    ):
+        return
+    wait_msg = await message.answer("Идет генерация картинки")
+    try:
+        image_bytes_src = await message.bot.download(source_file_id)
+        source_bytes = image_bytes_src.read()
+        image_bytes = await edit_image_png(source_bytes, prompt, model=model)
+    except Exception as exc:
+        if not is_admin:
+            await release_monthly_image_generation(user_id)
+        if charge:
+            await add_credits(user_id, cost)
+        await wait_msg.edit_text(f"Ошибка генерации: {exc}")
+        return
+    await wait_msg.delete()
+    await _send_result_photo_with_regen(
+        message,
+        state,
+        user_id=user_id,
+        image_bytes=image_bytes,
+        filename="edited.png",
+        kind="edit",
+        prompt=prompt,
+        model=model,
+        model_name=model_name,
+        cost=cost,
+        photo_file_id=source_file_id,
+        is_admin=is_admin,
+        charge=charge,
+        profile=profile,
+    )
 
 
 def _credits_word(n: int) -> str:
@@ -274,58 +440,65 @@ async def create_image_from_prompt(message: Message, state: FSMContext) -> None:
         return
 
     user_id = message.from_user.id
-    await ensure_user(user_id, message.from_user.username)
-    if not is_gemini_configured():
-        await message.answer("Генерация не настроена: задай GEMINI_API_KEY в окружении.")
-        return
-
     data = await state.get_data()
     model = str(data.get("selected_model") or GEMINI_IMAGE_MODEL)
     model_name = str(data.get("selected_name") or "Nano Banana 2")
     cost = int(data.get("selected_cost") or GEMINI_IMAGE_COST_CREDITS)
-
-    is_admin = user_id in ADMIN_IDS
-    profile = await get_user_admin_profile(user_id) if not is_admin else None
-    charge = not is_admin and (
-        profile is None or not subscription_is_active(profile.subscription_ends_at)
+    await _execute_text_generation(
+        message,
+        state,
+        user_id=user_id,
+        username=message.from_user.username,
+        prompt=prompt,
+        model=model,
+        model_name=model_name,
+        cost=cost,
     )
 
-    if not await _prepare_image_charge_and_monthly_slot(
-        message, user_id=user_id, is_admin=is_admin, charge=charge, cost=cost
-    ):
-        return
 
-    wait_msg = await message.answer("Идет генерация картинки")
-    try:
-        image_bytes = await generate_image_png(prompt, model=model)
-    except Exception as exc:
-        if not is_admin:
-            await release_monthly_image_generation(user_id)
-        if charge:
-            await add_credits(user_id, cost)
-        await wait_msg.edit_text(f"Ошибка генерации: {exc}")
+@router.callback_query(F.data == CB_REGEN)
+async def regenerate_same(callback: CallbackQuery, _state: FSMContext) -> None:
+    if not callback.from_user or not callback.message:
+        await callback.answer()
         return
-
-    photo = BufferedInputFile(image_bytes, filename="image.png")
-    await wait_msg.delete()
-    used_m, limit_m = await get_monthly_image_generation_usage(user_id)
-    month_note = "" if is_admin else f"\nМесяц (UTC): {used_m}/{limit_m} генераций."
-    if is_admin:
-        caption = f"Готово ✅\nИИ: {model_name}\nРежим админа: кредиты не списывались."
-    elif not charge and profile is not None:
-        balance = await get_credits(user_id)
-        caption = (
-            f"Готово ✅\nИИ: {model_name}\n"
-            f"Баланс: {balance}.\n"
-            "(Кредиты за картинку не списывались: активна подписка.)"
-            f"{month_note}"
+    user_id = callback.from_user.id
+    ctx = await get_last_image_context(user_id)
+    if not ctx:
+        await callback.answer(
+            "Нет сохранённого запроса. Сначала сгенерируй картинку.",
+            show_alert=True,
+        )
+        return
+    await callback.answer()
+    if ctx.kind == "text":
+        await _execute_text_generation(
+            callback.message,
+            None,
+            user_id=user_id,
+            username=callback.from_user.username,
+            prompt=ctx.prompt,
+            model=ctx.model,
+            model_name=ctx.model_name,
+            cost=ctx.cost,
         )
     else:
-        balance = await get_credits(user_id)
-        cw = _credits_word(cost)
-        caption = f"Готово ✅\nИИ: {model_name}\nСписано: {cost} {cw}.\nБаланс: {balance}.{month_note}"
-    await message.answer_photo(photo=photo, caption=caption)
-    await state.clear()
+        if not ctx.photo_file_id:
+            await callback.message.answer(
+                "Исходное фото недоступно (истекло у Telegram или сессия пустая). "
+                "Отправь фото с подписью снова через «Создать картинку»."
+            )
+            return
+        await _execute_edit_generation(
+            callback.message,
+            None,
+            user_id=user_id,
+            username=callback.from_user.username,
+            prompt=ctx.prompt,
+            model=ctx.model,
+            model_name=ctx.model_name,
+            cost=ctx.cost,
+            source_file_id=ctx.photo_file_id,
+        )
 
 
 @router.message(ImageGenState.waiting_photo_for_edit, F.photo)
@@ -356,58 +529,20 @@ async def _generate_from_photo_with_prompt(message: Message, state: FSMContext, 
     if not message.from_user or not message.photo:
         return
     user_id = message.from_user.id
-    await ensure_user(user_id, message.from_user.username)
-    if not is_gemini_configured():
-        await message.answer("Генерация не настроена: задай GEMINI_API_KEY в окружении.")
-        return
-
+    source_file_id = message.photo[-1].file_id
     data = await state.get_data()
     model = str(data.get("selected_model") or GEMINI_IMAGE_MODEL)
     model_name = str(data.get("selected_name") or "Nano Banana 2")
     cost = int(data.get("selected_cost") or GEMINI_IMAGE_COST_CREDITS)
-
-    is_admin = user_id in ADMIN_IDS
-    profile = await get_user_admin_profile(user_id) if not is_admin else None
-    charge = not is_admin and (
-        profile is None or not subscription_is_active(profile.subscription_ends_at)
+    await _execute_edit_generation(
+        message,
+        state,
+        user_id=user_id,
+        username=message.from_user.username,
+        prompt=prompt,
+        model=model,
+        model_name=model_name,
+        cost=cost,
+        source_file_id=source_file_id,
     )
-
-    if not await _prepare_image_charge_and_monthly_slot(
-        message, user_id=user_id, is_admin=is_admin, charge=charge, cost=cost
-    ):
-        return
-
-    wait_msg = await message.answer("Идет генерация картинки")
-    try:
-        image_bytes_src = await message.bot.download(message.photo[-1].file_id)
-        source_bytes = image_bytes_src.read()
-        image_bytes = await edit_image_png(source_bytes, prompt, model=model)
-    except Exception as exc:
-        if not is_admin:
-            await release_monthly_image_generation(user_id)
-        if charge:
-            await add_credits(user_id, cost)
-        await wait_msg.edit_text(f"Ошибка генерации: {exc}")
-        return
-
-    photo = BufferedInputFile(image_bytes, filename="edited.png")
-    await wait_msg.delete()
-    used_m, limit_m = await get_monthly_image_generation_usage(user_id)
-    month_note = "" if is_admin else f"\nМесяц (UTC): {used_m}/{limit_m} генераций."
-    if is_admin:
-        caption = f"Готово ✅\nИИ: {model_name}\nРежим админа: кредиты не списывались."
-    elif not charge and profile is not None:
-        balance = await get_credits(user_id)
-        caption = (
-            f"Готово ✅\nИИ: {model_name}\n"
-            f"Баланс: {balance}.\n"
-            "(Кредиты за картинку не списывались: активна подписка.)"
-            f"{month_note}"
-        )
-    else:
-        balance = await get_credits(user_id)
-        cw = _credits_word(cost)
-        caption = f"Готово ✅\nИИ: {model_name}\nСписано: {cost} {cw}.\nБаланс: {balance}.{month_note}"
-    await message.answer_photo(photo=photo, caption=caption)
-    await state.clear()
 

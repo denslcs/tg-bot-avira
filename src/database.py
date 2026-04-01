@@ -47,6 +47,18 @@ class SupportTicketDetail:
     tag: str | None
 
 
+@dataclass
+class LastImageContext:
+    """Последняя успешная генерация: для кнопки «Ещё раз». kind: text | edit."""
+
+    kind: str
+    prompt: str
+    model: str
+    cost: int
+    model_name: str
+    photo_file_id: str | None
+
+
 async def _migrate_schema(db: aiosqlite.Connection) -> None:
     async with db.execute("PRAGMA table_info(users)") as cur:
         cols = {row[1] for row in await cur.fetchall()}
@@ -185,6 +197,19 @@ async def init_db() -> None:
             )
             """
         )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_last_image_context (
+                user_id INTEGER PRIMARY KEY,
+                kind TEXT NOT NULL,
+                prompt TEXT NOT NULL,
+                model TEXT NOT NULL,
+                cost INTEGER NOT NULL,
+                model_name TEXT NOT NULL,
+                photo_file_id TEXT
+            )
+            """
+        )
         await _migrate_schema(db)
         await _migrate_support_tickets(db)
         await _migrate_support_ratings_feedback(db)
@@ -204,6 +229,58 @@ async def ensure_user(user_id: int, username: str | None) -> None:
             (user_id, username, START_CREDITS),
         )
         await db.commit()
+
+
+async def save_last_image_context(
+    user_id: int,
+    kind: str,
+    prompt: str,
+    model: str,
+    cost: int,
+    model_name: str,
+    photo_file_id: str | None,
+) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO user_last_image_context (
+                user_id, kind, prompt, model, cost, model_name, photo_file_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                kind=excluded.kind,
+                prompt=excluded.prompt,
+                model=excluded.model,
+                cost=excluded.cost,
+                model_name=excluded.model_name,
+                photo_file_id=excluded.photo_file_id
+            """,
+            (user_id, kind, prompt, model, cost, model_name, photo_file_id),
+        )
+        await db.commit()
+
+
+async def get_last_image_context(user_id: int) -> LastImageContext | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT kind, prompt, model, cost, model_name, photo_file_id
+            FROM user_last_image_context
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return None
+    return LastImageContext(
+        kind=str(row[0]),
+        prompt=str(row[1]),
+        model=str(row[2]),
+        cost=int(row[3]),
+        model_name=str(row[4]),
+        photo_file_id=str(row[5]) if row[5] else None,
+    )
 
 
 async def get_credits(user_id: int) -> int:
