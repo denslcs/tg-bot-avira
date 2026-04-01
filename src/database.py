@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import aiosqlite
 
 from src.config import DB_PATH, START_CREDITS
+from src.subscription_catalog import PLANS, plan_limit_generations
 
 
 @dataclass
@@ -30,6 +32,7 @@ class UserAdminProfile:
     credits: int
     created_at: str
     subscription_ends_at: str | None
+    subscription_plan: str | None
 
 
 @dataclass
@@ -67,6 +70,13 @@ async def _migrate_support_ratings_feedback(db: aiosqlite.Connection) -> None:
         cols = {row[1] for row in await cur.fetchall()}
     if "feedback_text" not in cols:
         await db.execute("ALTER TABLE support_ratings ADD COLUMN feedback_text TEXT")
+
+
+async def _migrate_subscription_plan(db: aiosqlite.Connection) -> None:
+    async with db.execute("PRAGMA table_info(users)") as cur:
+        cols = {row[1] for row in await cur.fetchall()}
+    if "subscription_plan" not in cols:
+        await db.execute("ALTER TABLE users ADD COLUMN subscription_plan TEXT")
 
 
 async def init_db() -> None:
@@ -147,9 +157,38 @@ async def init_db() -> None:
             )
             """
         )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_referrals (
+                invitee_user_id INTEGER PRIMARY KEY,
+                inviter_user_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_monthly_image_usage (
+                user_id INTEGER NOT NULL,
+                month_utc TEXT NOT NULL,
+                count INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (user_id, month_utc)
+            )
+            """
+        )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS star_payment_charges (
+                charge_id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
         await _migrate_schema(db)
         await _migrate_support_tickets(db)
         await _migrate_support_ratings_feedback(db)
+        await _migrate_subscription_plan(db)
         await db.commit()
 
 
@@ -261,6 +300,64 @@ async def take_credits(user_id: int, amount: int) -> bool:
         )
         await db.commit()
         return cur.rowcount > 0
+
+
+async def apply_referral(invitee_user_id: int, inviter_user_id: int) -> bool:
+    """Apply referral once. Inviter gets +10 credits, invitee gets +5 credits."""
+    if invitee_user_id == inviter_user_id:
+        return False
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Already applied for this invitee.
+        async with db.execute(
+            "SELECT 1 FROM user_referrals WHERE invitee_user_id = ?",
+            (invitee_user_id,),
+        ) as cur:
+            if await cur.fetchone():
+                return False
+
+        # Inviter must exist.
+        async with db.execute(
+            "SELECT 1 FROM users WHERE user_id = ?",
+            (inviter_user_id,),
+        ) as cur:
+            if not await cur.fetchone():
+                return False
+
+        await db.execute("BEGIN")
+        try:
+            await db.execute(
+                """
+                INSERT INTO user_referrals (invitee_user_id, inviter_user_id)
+                VALUES (?, ?)
+                """,
+                (invitee_user_id, inviter_user_id),
+            )
+            await db.execute(
+                "UPDATE users SET credits = credits + 10 WHERE user_id = ?",
+                (inviter_user_id,),
+            )
+            await db.execute(
+                "UPDATE users SET credits = credits + 5 WHERE user_id = ?",
+                (invitee_user_id,),
+            )
+            await db.commit()
+            return True
+        except sqlite3.IntegrityError:
+            await db.rollback()
+            return False
+        except Exception:
+            await db.rollback()
+            raise
+
+
+async def get_referral_count(inviter_user_id: int) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT COUNT(*) FROM user_referrals WHERE inviter_user_id = ?",
+            (inviter_user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    return int(row[0]) if row else 0
 
 
 async def create_support_ticket(user_id: int, username: str, thread_id: int) -> int:
@@ -464,6 +561,140 @@ def subscription_is_active(ends_at: str | None) -> bool:
         return False
 
 
+def _month_utc_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m")
+
+
+def monthly_image_generation_limit(
+    subscription_ends_at: str | None, subscription_plan: str | None
+) -> int:
+    return plan_limit_generations(
+        subscription_plan,
+        subscription_is_active(subscription_ends_at),
+    )
+
+
+async def get_monthly_image_generation_usage(user_id: int) -> tuple[int, int]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT subscription_ends_at, subscription_plan
+            FROM users
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return 0, plan_limit_generations(None, False)
+    ends, plan = row[0], row[1]
+    limit = monthly_image_generation_limit(
+        str(ends) if ends else None,
+        str(plan) if plan else None,
+    )
+    month = _month_utc_now()
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT count FROM user_monthly_image_usage
+            WHERE user_id = ? AND month_utc = ?
+            """,
+            (user_id, month),
+        ) as cur:
+            urow = await cur.fetchone()
+    used = int(urow[0]) if urow else 0
+    return used, limit
+
+
+async def try_reserve_monthly_image_generation(user_id: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("BEGIN IMMEDIATE")
+        async with db.execute(
+            """
+            SELECT subscription_ends_at, subscription_plan
+            FROM users
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+        if not row:
+            await db.rollback()
+            return False
+        limit = monthly_image_generation_limit(
+            str(row[0]) if row[0] else None,
+            str(row[1]) if row[1] else None,
+        )
+        month = _month_utc_now()
+        async with db.execute(
+            """
+            SELECT count FROM user_monthly_image_usage
+            WHERE user_id = ? AND month_utc = ?
+            """,
+            (user_id, month),
+        ) as cur:
+            urow = await cur.fetchone()
+        used = int(urow[0]) if urow else 0
+        if used >= limit:
+            await db.rollback()
+            return False
+        if urow:
+            await db.execute(
+                """
+                UPDATE user_monthly_image_usage
+                SET count = count + 1
+                WHERE user_id = ? AND month_utc = ?
+                """,
+                (user_id, month),
+            )
+        else:
+            await db.execute(
+                """
+                INSERT INTO user_monthly_image_usage (user_id, month_utc, count)
+                VALUES (?, ?, 1)
+                """,
+                (user_id, month),
+            )
+        await db.commit()
+    return True
+
+
+async def release_monthly_image_generation(user_id: int) -> None:
+    month = _month_utc_now()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("BEGIN IMMEDIATE")
+        async with db.execute(
+            """
+            SELECT count FROM user_monthly_image_usage
+            WHERE user_id = ? AND month_utc = ?
+            """,
+            (user_id, month),
+        ) as cur:
+            row = await cur.fetchone()
+        if not row or int(row[0]) <= 0:
+            await db.rollback()
+            return
+        new_c = int(row[0]) - 1
+        if new_c <= 0:
+            await db.execute(
+                """
+                DELETE FROM user_monthly_image_usage
+                WHERE user_id = ? AND month_utc = ?
+                """,
+                (user_id, month),
+            )
+        else:
+            await db.execute(
+                """
+                UPDATE user_monthly_image_usage
+                SET count = ?
+                WHERE user_id = ? AND month_utc = ?
+                """,
+                (new_c, user_id, month),
+            )
+        await db.commit()
+
+
 def _add_days_subscription(existing_iso: str | None, days: int) -> str:
     now = datetime.now(timezone.utc)
     if existing_iso:
@@ -478,8 +709,40 @@ def _add_days_subscription(existing_iso: str | None, days: int) -> str:
     return new_end.isoformat()
 
 
-async def add_subscription_days(user_id: int, days: int) -> str | None:
+async def try_claim_star_payment(charge_id: str, user_id: int) -> bool:
+    """Зарезервировать charge_id (идемпотентность Stars). Пустой charge_id — True без записи."""
+    if not charge_id:
+        return True
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                """
+                INSERT INTO star_payment_charges (charge_id, user_id)
+                VALUES (?, ?)
+                """,
+                (charge_id, user_id),
+            )
+            await db.commit()
+    except sqlite3.IntegrityError:
+        return False
+    return True
+
+
+async def release_star_payment_claim(charge_id: str) -> None:
+    if not charge_id:
+        return
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "DELETE FROM star_payment_charges WHERE charge_id = ?",
+            (charge_id,),
+        )
+        await db.commit()
+
+
+async def extend_subscription(user_id: int, days: int, plan: str | None = None) -> str | None:
     if days <= 0:
+        return None
+    if plan is not None and plan not in PLANS:
         return None
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -490,18 +753,36 @@ async def add_subscription_days(user_id: int, days: int) -> str | None:
         if not row:
             return None
         new_iso = _add_days_subscription(row[0] if row[0] else None, days)
-        await db.execute(
-            "UPDATE users SET subscription_ends_at = ? WHERE user_id = ?",
-            (new_iso, user_id),
-        )
+        if plan is not None:
+            await db.execute(
+                """
+                UPDATE users
+                SET subscription_ends_at = ?, subscription_plan = ?
+                WHERE user_id = ?
+                """,
+                (new_iso, plan, user_id),
+            )
+        else:
+            await db.execute(
+                "UPDATE users SET subscription_ends_at = ? WHERE user_id = ?",
+                (new_iso, user_id),
+            )
         await db.commit()
     return new_iso
+
+
+async def add_subscription_days(user_id: int, days: int) -> str | None:
+    return await extend_subscription(user_id, days, None)
 
 
 async def clear_subscription(user_id: int) -> None:
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            "UPDATE users SET subscription_ends_at = NULL WHERE user_id = ?",
+            """
+            UPDATE users
+            SET subscription_ends_at = NULL, subscription_plan = NULL
+            WHERE user_id = ?
+            """,
             (user_id,),
         )
         await db.commit()
@@ -665,7 +946,7 @@ async def get_user_admin_profile(user_id: int) -> UserAdminProfile | None:
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             """
-            SELECT user_id, username, credits, created_at, subscription_ends_at
+            SELECT user_id, username, credits, created_at, subscription_ends_at, subscription_plan
             FROM users
             WHERE user_id = ?
             """,
@@ -680,6 +961,7 @@ async def get_user_admin_profile(user_id: int) -> UserAdminProfile | None:
         credits=int(row[2]),
         created_at=str(row[3]),
         subscription_ends_at=row[4] if row[4] else None,
+        subscription_plan=row[5] if row[5] else None,
     )
 
 

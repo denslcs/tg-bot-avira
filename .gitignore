@@ -1,17 +1,57 @@
+# Python
 .venv/
+venv/
+env/
 __pycache__/
 *.py[cod]
+*$py.class
 .Python
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+pip-wheel-metadata/
+
+# Секреты и локальная конфигурация
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+secrets/
+
+# БД и данные приложения (путь по умолчанию из DB_PATH)
+data/
 *.sqlite3
+*.sqlite
 *.db
+
+# Логи и отладка
+*.log
+logs/
+.coverage
+coverage.xml
+htmlcov/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.tox/
+.nox/
+
+# IDE / ОС
 .idea/
 .vscode/
-dist/
-build/
+*.swp
+*.swo
+*~
 .DS_Store
+Thumbs.db
+Desktop.ini
+
+# Локальные systemd unit-файлы (в репозитории — только *.service.example)
+deploy/avira-main-bot.service
+deploy/avira-support-bot.service
+
+# Cursor / локальные артефакты воркспейса (при необходимости раскомментируй)
+# .cursor/

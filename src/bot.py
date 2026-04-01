@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand, BotCommandScopeChat, BotCommandScopeChatAdministrators, BotCommandScopeDefault
 
 from src.config import ADMIN_IDS, SUPPORT_CHAT_ID, TELEGRAM_BOT_TOKEN
@@ -9,7 +10,9 @@ from src.database import init_db
 from src.handlers.admin_panel import router as admin_panel_router
 from src.handlers.commands import router as commands_router
 from src.handlers.faq_handlers import router as faq_router
+from src.handlers.img_commands import router as img_commands_router
 from src.handlers.messages import router as messages_router
+from src.handlers.payments import router as payments_router
 
 _USER_COMMANDS = [
     BotCommand(command="start", description="Запуск"),
@@ -59,11 +62,13 @@ async def main() -> None:
 
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
     await _register_bot_commands(bot)
-    dp = Dispatcher()
+    dp = Dispatcher(storage=MemoryStorage())
 
     dp.include_router(commands_router)
+    dp.include_router(payments_router)
     dp.include_router(admin_panel_router)
     dp.include_router(faq_router)
+    dp.include_router(img_commands_router)
     dp.include_router(messages_router)
 
     await dp.start_polling(bot)

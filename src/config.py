@@ -80,3 +80,15 @@ WEEKLY_REPORT_WEEKDAY: int = min(6, max(0, _parse_int(os.getenv("WEEKLY_REPORT_W
 MAX_USER_MESSAGE_CHARS: int = max(500, min(32000, _parse_int(os.getenv("MAX_USER_MESSAGE_CHARS", "8000"), 8000)))
 MAX_SUPPORT_DRAFT_TOTAL_CHARS: int = max(2000, min(64000, _parse_int(os.getenv("MAX_SUPPORT_DRAFT_TOTAL_CHARS", "16000"), 16000)))
 PRIVATE_MESSAGES_PER_MINUTE: int = max(5, min(120, _parse_int(os.getenv("PRIVATE_MESSAGES_PER_MINUTE", "30"), 30)))
+
+# Gemini image generation
+GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_NANO_MODEL: str = os.getenv("GEMINI_NANO_MODEL", "gemini-2.5-flash-image").strip()
+GEMINI_NANO_COST_CREDITS: int = max(1, _parse_int(os.getenv("GEMINI_NANO_COST_CREDITS", "1"), 1))
+GEMINI_IMAGE_MODEL: str = os.getenv("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image-preview").strip()
+GEMINI_IMAGE_COST_CREDITS: int = max(1, _parse_int(os.getenv("GEMINI_IMAGE_COST_CREDITS", "3"), 3))
+
+# Оплата подписки: внешние ссылки (YooKassa / Stripe / crypto-касса). Пусто — бот предложит поддержку.
+PAY_URL_CARD_RU: str = os.getenv("PAY_URL_CARD_RU", "").strip()
+PAY_URL_CARD_INTL: str = os.getenv("PAY_URL_CARD_INTL", "").strip()
+PAY_URL_CRYPTO: str = os.getenv("PAY_URL_CRYPTO", "").strip()

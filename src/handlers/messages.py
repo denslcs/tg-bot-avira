@@ -1,4 +1,6 @@
 from aiogram import F, Router
+from aiogram.enums import ContentType
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from src.antispam_state import check_spam_private_message
@@ -59,10 +61,17 @@ async def support_topic_admin_reply(message: Message) -> None:
 
 
 @router.message()
-async def any_message(message: Message) -> None:
+async def any_message(message: Message, state: FSMContext) -> None:
     if not message.from_user:
         return
     if message.chat.type != "private":
+        return
+
+    if message.content_type == ContentType.SUCCESSFUL_PAYMENT:
+        return
+
+    fsm_state = await state.get_state()
+    if fsm_state is not None and str(fsm_state).startswith("ImageGenState"):
         return
 
     text = (message.text or "").strip()

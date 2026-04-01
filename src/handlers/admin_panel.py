@@ -4,7 +4,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from src.config import ADMIN_IDS
 from src.database import (
-    add_subscription_days,
+    extend_subscription,
     clear_dialog_messages,
     count_dialog_messages,
     count_dialog_messages_total,
@@ -52,7 +52,7 @@ async def cmd_admin_panel(message: Message) -> None:
         "• /user ID — профиль пользователя\n"
         "• /addcredits ID сумма — начислить кредиты\n"
         "• /takecredits ID сумма — списать кредиты\n"
-        "• /setsub ID дни — продлить подписку на N дней\n"
+        "• /setsub ID дни [nova|supernova|galaxy|universe] — продлить подписку\n"
         "• /wipechat ID — очистить историю диалога у пользователя\n"
         "• /stats — сводка по пользователям, подпискам и кредитам",
         reply_markup=_main_kb(),
@@ -70,7 +70,8 @@ async def adm_help(callback: CallbackQuery) -> None:
         "/user 123 — кредиты, подписка, тикет, сообщения в диалоге\n"
         "/addcredits 123 50\n"
         "/takecredits 123 20\n"
-        "/setsub 123 30 — +30 дней подписки от текущего срока или от сейчас\n"
+        "/setsub 123 30 — +30 дней (тариф в БД не меняется)\n"
+        "/setsub 123 30 nova — +30 дней и тариф Nova (лимит генераций/мес)\n"
         "/wipechat 123 — очистить dialog_messages\n"
         "/faq — шаблоны ответов для пользователей\n"
         "/chatid — id чата (в группе)"
@@ -172,7 +173,8 @@ async def cmd_user_lookup(message: Message) -> None:
     sub = profile.subscription_ends_at or "—"
     active = subscription_is_active(profile.subscription_ends_at)
     sub_human = "активна" if active else "не активна"
-    sub_line = f"Подписка: {sub_human}, до: {sub}"
+    plan = profile.subscription_plan or "—"
+    sub_line = f"Подписка: {sub_human}, до: {sub}, тариф: {plan}"
     ticket = await get_open_ticket_by_user(uid)
     ticket_line = (
         f"Открытый тикет: #{ticket.ticket_id}" if ticket else "Открытых тикетов нет"
@@ -196,19 +198,33 @@ async def cmd_setsub(message: Message) -> None:
         await message.answer("Только для администраторов.")
         return
     raw = (message.text or "").split()
-    if len(raw) != 3 or not raw[1].isdigit() or not raw[2].isdigit():
-        await message.answer("Формат:\n/setsub 123456789 30\n(+30 дней подписки)")
+    valid_plans = {"nova", "supernova", "galaxy", "universe"}
+    plan: str | None = None
+    if len(raw) == 4 and raw[3] in valid_plans:
+        plan = raw[3]
+    elif len(raw) == 3:
+        plan = None
+    else:
+        await message.answer(
+            "Формат:\n"
+            "/setsub USER_ID дни\n"
+            "/setsub USER_ID дни nova|supernova|galaxy|universe"
+        )
+        return
+    if not raw[1].isdigit() or not raw[2].isdigit():
+        await message.answer("USER_ID и дни должны быть числами.")
         return
     uid = int(raw[1])
     days = int(raw[2])
     await ensure_user(uid, None)
-    new_end = await add_subscription_days(uid, days)
+    new_end = await extend_subscription(uid, days, plan)
     if not new_end:
-        await message.answer("Не удалось продлить подписку.")
+        await message.answer("Не удалось продлить подписку (проверь ID и тариф).")
         return
+    plan_note = f"\nТариф записан: {plan}" if plan else ""
     await message.answer(
         f"Подписка для {uid} продлена на {days} д.\n"
-        f"Новая дата окончания (UTC): {new_end}"
+        f"Новая дата окончания (UTC): {new_end}{plan_note}"
     )
 
 

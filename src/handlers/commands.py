@@ -1,37 +1,83 @@
 from aiogram import Router
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from src.config import ADMIN_IDS, SUPPORT_BOT_USERNAME
 from src.antispam_state import reset_user_spam
 from src.private_rate_limit import reset_private_rate
 from src.database import (
     add_credits,
+    apply_referral,
     clear_dialog_messages,
     ensure_user,
     get_credits,
+    get_monthly_image_generation_usage,
+    get_referral_count,
     get_user_admin_profile,
     subscription_is_active,
     take_credits,
 )
+from src.subscription_catalog import PLANS
+from src.handlers.img_commands import CB_CREATE_IMAGE, CB_READY_IDEAS
 
 
 router = Router(name="commands")
 
 
+def _start_menu_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="◼ Создать картинку", callback_data=CB_CREATE_IMAGE),
+                InlineKeyboardButton(text="◾ Готовые идеи", callback_data=CB_READY_IDEAS),
+            ],
+            [
+                InlineKeyboardButton(text="◆ Что умеет бот", callback_data="menu:about"),
+                InlineKeyboardButton(text="◇ Реф. система", callback_data="menu:ref"),
+            ],
+            [
+                InlineKeyboardButton(text="▦ Оплатить", callback_data="menu:pay"),
+                InlineKeyboardButton(text="▣ Поддержка", callback_data="menu:support"),
+            ],
+        ]
+    )
+
+
+def _parse_ref_payload(raw_text: str) -> int | None:
+    parts = raw_text.split(maxsplit=1)
+    if len(parts) < 2:
+        return None
+    payload = parts[1].strip()
+    if payload.startswith("ref_"):
+        payload = payload[4:]
+    if payload.isdigit():
+        return int(payload)
+    return None
+
+
 @router.message(Command("start"))
-async def cmd_start(message: Message) -> None:
+async def cmd_start(message: Message, state: FSMContext) -> None:
     if not message.from_user:
         return
 
-    await ensure_user(message.from_user.id, message.from_user.username)
-    balance = await get_credits(message.from_user.id)
+    await state.clear()
+    user_id = message.from_user.id
+    await ensure_user(user_id, message.from_user.username)
+    referrer_id = _parse_ref_payload((message.text or "").strip())
+    bonus_note = ""
+    if referrer_id:
+        applied = await apply_referral(invitee_user_id=user_id, inviter_user_id=referrer_id)
+        if applied:
+            bonus_note = "\n🎉 Реферальный бонус: тебе +5 кредитов."
+    balance = await get_credits(user_id)
 
     await message.answer(
-        "Привет! Я Avira.\n\n"
-        "Напиши сообщение — и я отвечу.\n"
-        f"Твой баланс: {balance} кредитов.\n\n"
-        "Команды: /help /profile"
+        "Измени фото или создай новое изображение с ИИ.\n\n"
+        "Главные разделы: «Создать картинку» и «Готовые идеи».\n"
+        "Остальные кнопки — сервис и управление.\n"
+        f"Твой баланс: {balance} кредитов.{bonus_note}",
+        reply_markup=_start_menu_kb(),
     )
 
 
@@ -48,8 +94,59 @@ async def cmd_help(message: Message) -> None:
         "- /resolved — как закрыть тикет (ведёт в бот поддержки)\n"
         "- /myid — твой Telegram ID\n\n"
         "1 текстовый запрос = 1 кредит.\n"
-        "Дальше подключим ИИ (Gemini через прокси)."
+        "Генерация картинок: нажми кнопку «Создать картинку» в /start."
     )
+
+
+@router.callback_query(lambda c: c.data == "menu:about")
+async def menu_about(callback: CallbackQuery) -> None:
+    if not callback.message:
+        return
+    await callback.message.answer(
+        "Что умеет бот:\n"
+        "• Сгенерировать картинку из текста.\n"
+        "• Изменить картинку по фото + тексту.\n"
+        "• Применить готовые промпты к фото.\n"
+        "• Использовать разные ИИ-модели для генерации."
+    )
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data == "menu:support")
+async def menu_support(callback: CallbackQuery) -> None:
+    if not callback.message:
+        return
+    if not SUPPORT_BOT_USERNAME:
+        await callback.message.answer("Поддержка пока не настроена (пустой SUPPORT_BOT_USERNAME).")
+        await callback.answer()
+        return
+    support_url = f"https://t.me/{SUPPORT_BOT_USERNAME}?start=from_avira"
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="Открыть поддержку", url=support_url)]]
+    )
+    await callback.message.answer("Нажми кнопку, чтобы написать в поддержку:", reply_markup=keyboard)
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data == "menu:ref")
+async def menu_ref(callback: CallbackQuery) -> None:
+    if not callback.message or not callback.from_user:
+        return
+    user_id = callback.from_user.id
+    invited = await get_referral_count(user_id)
+    ref_link = (
+        f"https://t.me/{callback.bot.username}?start=ref_{user_id}"
+        if callback.bot.username
+        else f"/start ref_{user_id}"
+    )
+    await callback.message.answer(
+        "Реферальная система:\n"
+        f"• Приглашено друзей: {invited}\n"
+        "• За каждого друга тебе +10 кредитов.\n"
+        "• Другу при старте по ссылке +5 кредитов.\n\n"
+        f"Твоя ссылка:\n{ref_link}"
+    )
+    await callback.answer()
 
 
 @router.message(Command("profile"))
@@ -69,6 +166,10 @@ async def cmd_profile(message: Message) -> None:
             sub_extra = f"\nПодписка активна до: {profile.subscription_ends_at}"
         else:
             sub_extra = f"\nПодписка (истекла): {profile.subscription_ends_at}"
+    if profile and profile.subscription_plan and profile.subscription_plan in PLANS:
+        sub_extra += f"\nТариф: {PLANS[profile.subscription_plan].title}."
+    used_m, limit_m = await get_monthly_image_generation_usage(message.from_user.id)
+    sub_extra += f"\nГенераций картинок в этом месяце (UTC): {used_m}/{limit_m}."
     await message.answer(f"Твой текущий баланс: {balance} кредитов.{sub_extra}")
 
 

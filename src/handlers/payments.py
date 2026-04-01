@@ -1,0 +1,296 @@
+from __future__ import annotations
+
+from aiogram import F, Router
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    LabeledPrice,
+    Message,
+    PreCheckoutQuery,
+)
+from aiogram.enums import ContentType
+
+from src.config import PAY_URL_CARD_INTL, PAY_URL_CARD_RU, PAY_URL_CRYPTO, SUPPORT_BOT_USERNAME
+from src.database import (
+    add_credits,
+    ensure_user,
+    extend_subscription,
+    release_star_payment_claim,
+    try_claim_star_payment,
+)
+from src.subscription_catalog import (
+    FREE_MONTHLY_IMAGE_GENERATIONS,
+    PLANS,
+    PLANS_ORDER,
+    SUBSCRIPTION_PERIOD_DAYS,
+)
+
+router = Router(name="payments")
+
+CB_PAY_MENU = "pay:menu"
+CB_PAY_PLAN_PREFIX = "pay:p:"
+CB_PAY_STARS_PREFIX = "pay:s:"
+CB_PAY_RUB_PREFIX = "pay:r:"
+CB_PAY_INTL_PREFIX = "pay:i:"
+CB_PAY_CRYPTO_PREFIX = "pay:c:"
+
+
+def _plans_keyboard() -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for pid in PLANS_ORDER:
+        p = PLANS[pid]
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"{p.title} — {p.monthly_generations} ген. / мес · {p.price_rub} ₽",
+                    callback_data=f"{CB_PAY_PLAN_PREFIX}{pid}",
+                )
+            ]
+        )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _methods_keyboard(plan_id: str) -> InlineKeyboardMarkup:
+    p = PLANS[plan_id]
+    stars = p.stars
+    usd = p.price_usd
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"{p.price_rub} ₽ · картой РФ",
+                    callback_data=f"{CB_PAY_RUB_PREFIX}{plan_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"${usd:g} · карта другой страны",
+                    callback_data=f"{CB_PAY_INTL_PREFIX}{plan_id}",
+                )
+            ],
+            [InlineKeyboardButton(text=f"⭐ {stars} · Звёздами", callback_data=f"{CB_PAY_STARS_PREFIX}{plan_id}")],
+            [
+                InlineKeyboardButton(
+                    text=f"${usd:g} · криптовалютой",
+                    callback_data=f"{CB_PAY_CRYPTO_PREFIX}{plan_id}",
+                )
+            ],
+            [InlineKeyboardButton(text="⬅ Назад к тарифам", callback_data=CB_PAY_MENU)],
+        ]
+    )
+
+
+def _pay_methods_text(plan_id: str) -> str:
+    p = PLANS[plan_id]
+    stars = p.stars
+    usd = p.price_usd
+    return (
+        "💳 Выбери способ оплаты\n\n"
+        f"🎁 Подписка: {p.title} ({p.monthly_generations} генераций картинок в месяц, UTC)\n"
+        f"Срок после оплаты: ровно {SUBSCRIPTION_PERIOD_DAYS} дней к подписке.\n"
+        f"Бонус на баланс при оплате: +{p.bonus_credits} кредитов.\n\n"
+        "Ориентир курса (как у тарифа Nova): "
+        f"159 ₽ ≈ 150 ⭐ ≈ $1.99 → для {p.title}: "
+        f"{p.price_rub} ₽ ≈ {stars} ⭐ ≈ ${usd:g}.\n\n"
+        "Оформляя оплату, ты соглашаешься с условиями сервиса и политикой возврата "
+        "(подробности — в поддержке / на странице оплаты)."
+    )
+
+
+@router.callback_query(F.data == "menu:pay")
+async def menu_pay(callback: CallbackQuery) -> None:
+    if callback.message is None or callback.from_user is None:
+        await callback.answer()
+        return
+    await ensure_user(callback.from_user.id, callback.from_user.username)
+    await callback.message.answer(
+        "Тарифы — месячный лимит генераций изображений (1 генерация = 1 слот в месяце, UTC), "
+        "даже если на балансе много кредитов.\n\n"
+        f"Без подписки доступно {FREE_MONTHLY_IMAGE_GENERATIONS} генераций в месяц.",
+        reply_markup=_plans_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == CB_PAY_MENU)
+async def pay_back_plans(callback: CallbackQuery) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    await callback.message.answer(
+        "Выбери тариф:",
+        reply_markup=_plans_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith(CB_PAY_PLAN_PREFIX))
+async def pay_pick_plan(callback: CallbackQuery) -> None:
+    if callback.message is None or not callback.data:
+        await callback.answer()
+        return
+    plan_id = callback.data.removeprefix(CB_PAY_PLAN_PREFIX)
+    if plan_id not in PLANS:
+        await callback.answer("Неизвестный тариф", show_alert=True)
+        return
+    await callback.message.answer(
+        _pay_methods_text(plan_id),
+        reply_markup=_methods_keyboard(plan_id),
+    )
+    await callback.answer()
+
+
+async def _external_pay_hint(callback: CallbackQuery, plan_id: str, label: str, url: str | None) -> None:
+    if url:
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text=f"Перейти к оплате ({label})", url=url)]]
+        )
+        if callback.message:
+            await callback.message.answer(
+                f"Открой страницу оплаты и выбери тариф «{PLANS[plan_id].title}», если на кассе есть выбор.",
+                reply_markup=keyboard,
+            )
+        await callback.answer()
+        return
+    support_line = (
+        f"Напиши в @{SUPPORT_BOT_USERNAME} с текстом тарифа «{PLANS[plan_id].title}» ({PLANS[plan_id].price_rub} ₽)."
+        if SUPPORT_BOT_USERNAME
+        else f"Напиши в поддержку (бот в настройках проекта) с текстом тарифа «{PLANS[plan_id].title}» ({PLANS[plan_id].price_rub} ₽)."
+    )
+    if callback.message:
+        await callback.message.answer(
+            f"Оплата «{label}» пока подключается.\n{support_line} "
+            "Мы выставим счёт или дадим ссылку."
+        )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith(CB_PAY_RUB_PREFIX))
+async def pay_rub(callback: CallbackQuery) -> None:
+    if not callback.data:
+        await callback.answer()
+        return
+    plan_id = callback.data.removeprefix(CB_PAY_RUB_PREFIX)
+    if plan_id not in PLANS:
+        await callback.answer("Ошибка", show_alert=True)
+        return
+    await _external_pay_hint(callback, plan_id, "карта РФ", PAY_URL_CARD_RU or None)
+
+
+@router.callback_query(F.data.startswith(CB_PAY_INTL_PREFIX))
+async def pay_intl(callback: CallbackQuery) -> None:
+    if not callback.data:
+        await callback.answer()
+        return
+    plan_id = callback.data.removeprefix(CB_PAY_INTL_PREFIX)
+    if plan_id not in PLANS:
+        await callback.answer("Ошибка", show_alert=True)
+        return
+    await _external_pay_hint(callback, plan_id, "карта другой страны", PAY_URL_CARD_INTL or None)
+
+
+@router.callback_query(F.data.startswith(CB_PAY_CRYPTO_PREFIX))
+async def pay_crypto(callback: CallbackQuery) -> None:
+    if not callback.data:
+        await callback.answer()
+        return
+    plan_id = callback.data.removeprefix(CB_PAY_CRYPTO_PREFIX)
+    if plan_id not in PLANS:
+        await callback.answer("Ошибка", show_alert=True)
+        return
+    await _external_pay_hint(callback, plan_id, "крипта", PAY_URL_CRYPTO or None)
+
+
+@router.callback_query(F.data.startswith(CB_PAY_STARS_PREFIX))
+async def pay_stars_invoice(callback: CallbackQuery) -> None:
+    if callback.message is None or callback.from_user is None or not callback.data:
+        await callback.answer()
+        return
+    plan_id = callback.data.removeprefix(CB_PAY_STARS_PREFIX)
+    if plan_id not in PLANS:
+        await callback.answer("Неизвестный тариф", show_alert=True)
+        return
+    p = PLANS[plan_id]
+    await ensure_user(callback.from_user.id, callback.from_user.username)
+    payload = f"{callback.from_user.id}:{plan_id}"
+    await callback.message.bot.send_invoice(
+        chat_id=callback.message.chat.id,
+        title=f"Avira — {p.title}",
+        description=(
+            f"Подписка {p.title}: до {p.monthly_generations} генераций картинок в месяц (UTC), "
+            f"+{SUBSCRIPTION_PERIOD_DAYS} дней, бонус +{p.bonus_credits} кредитов."
+        ),
+        payload=payload,
+        currency="XTR",
+        prices=[LabeledPrice(label=f"{p.title} ({SUBSCRIPTION_PERIOD_DAYS} дн.)", amount=p.stars)],
+        provider_token="",
+    )
+    await callback.answer()
+
+
+@router.pre_checkout_query()
+async def pre_checkout(q: PreCheckoutQuery) -> None:
+    payload = (q.invoice_payload or "").strip()
+    parts = payload.split(":")
+    if (
+        len(parts) != 2
+        or not parts[0].isdigit()
+        or parts[1] not in PLANS
+        or q.from_user is None
+        or int(parts[0]) != q.from_user.id
+    ):
+        await q.answer(ok=False, error_message="Платёж не подходит к этому аккаунту. Запроси счёт заново.")
+        return
+    plan = PLANS[parts[1]]
+    if (q.currency or "").upper() != "XTR" or int(q.total_amount or 0) != plan.stars:
+        await q.answer(ok=False, error_message="Сумма или валюта счёта не совпадают с тарифом. Запроси новый счёт.")
+        return
+    await q.answer(ok=True)
+
+
+@router.message(F.content_type == ContentType.SUCCESSFUL_PAYMENT)
+async def successful_payment(message: Message) -> None:
+    sp = message.successful_payment
+    if sp is None or not message.from_user:
+        return
+    payload = (sp.invoice_payload or "").strip()
+    parts = payload.split(":")
+    if len(parts) != 2 or not parts[0].isdigit() or parts[1] not in PLANS:
+        await message.answer("Оплата получена, но не удалось распознать тариф. Напиши в поддержку с скрином.")
+        return
+    if int(parts[0]) != message.from_user.id:
+        await message.answer("Оплата на другой Telegram ID. Обратись в поддержку.")
+        return
+    plan_id = parts[1]
+    p = PLANS[plan_id]
+    await ensure_user(message.from_user.id, message.from_user.username)
+    charge_id = (sp.telegram_payment_charge_id or "").strip()
+    if not await try_claim_star_payment(charge_id, message.from_user.id):
+        await message.answer(
+            "Этот платёж уже учтён. Если подписка или кредиты не отображаются — напиши в поддержку."
+        )
+        return
+    new_end = await extend_subscription(message.from_user.id, SUBSCRIPTION_PERIOD_DAYS, plan_id)
+    if not new_end:
+        await release_star_payment_claim(charge_id)
+        await message.answer(
+            "Ошибка записи подписки в базу. Сохрани это сообщение и напиши в поддержку — проверим оплату."
+        )
+        return
+    credited = await add_credits(message.from_user.id, p.bonus_credits)
+    bonus_line = (
+        f"Начислено кредитов: +{p.bonus_credits}."
+        if credited
+        else (
+            f"Подписка записана, но бонус +{p.bonus_credits} кредитов не удалось начислить автоматически — "
+            "напиши в поддержку, начислим вручную."
+        )
+    )
+    await message.answer(
+        f"Оплата прошла ✅\n"
+        f"Тариф: {p.title} — до {p.monthly_generations} генераций картинок в месяц (UTC).\n"
+        f"Подписка: +{SUBSCRIPTION_PERIOD_DAYS} дн., активна до (UTC): {new_end}\n"
+        f"{bonus_line}\n\n"
+        "Можно снова нажать «Создать картинку» в /start."
+    )
