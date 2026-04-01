@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from aiogram import F, Router
@@ -23,6 +24,8 @@ from src.database import (
 from src.subscription_catalog import PLANS
 from src.handlers.img_commands import CB_CREATE_IMAGE, CB_MENU_BACK_START, CB_READY_IDEAS
 
+# Короткий callback_data (старые кнопки с «menu:ref» всё ещё обрабатываются в handler)
+CB_MENU_REF = "ref_menu"
 
 router = Router(name="commands")
 
@@ -36,7 +39,7 @@ def _start_menu_kb() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(text="ℹ️ Что умеет бот", callback_data="menu:about"),
-                InlineKeyboardButton(text="👥 Реферальная система", callback_data="menu:ref"),
+                InlineKeyboardButton(text="👥 Реферальная система", callback_data=CB_MENU_REF),
             ],
             [
                 InlineKeyboardButton(text="💳 Оплатить", callback_data="menu:pay"),
@@ -185,13 +188,14 @@ async def menu_support(callback: CallbackQuery) -> None:
     await callback.message.answer("Нажми кнопку, чтобы написать в поддержку:", reply_markup=keyboard)
 
 
-@router.callback_query(F.data == "menu:ref")
+@router.callback_query(F.data.in_({CB_MENU_REF, "menu:ref"}))
 async def menu_ref(callback: CallbackQuery) -> None:
-    if not callback.from_user:
-        await callback.answer("Не удалось определить пользователя.", show_alert=True)
-        return
+    # Сразу снимаем «часики» в Telegram; иначе при медленной БД или сбое отправки кажется, что кнопка мёртвая
     await callback.answer()
+    if not callback.from_user:
+        return
     user_id = callback.from_user.id
+    chat_id = callback.message.chat.id if callback.message else user_id
     try:
         invited = await get_referral_count(user_id)
     except Exception:
@@ -209,12 +213,13 @@ async def menu_ref(callback: CallbackQuery) -> None:
         f"Твоя ссылка:\n{ref_link}"
     )
     try:
-        if callback.message:
-            await callback.message.answer(text, reply_markup=_back_to_main_menu_kb())
-        else:
-            await callback.bot.send_message(user_id, text, reply_markup=_back_to_main_menu_kb())
+        await callback.bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=_back_to_main_menu_kb(),
+        )
     except Exception:
-        await callback.bot.send_message(user_id, text, reply_markup=_back_to_main_menu_kb())
+        logging.exception("menu_ref: не удалось отправить сообщение с реферальной ссылкой")
 
 
 @router.message(Command("profile"))
