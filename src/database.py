@@ -224,7 +224,7 @@ async def ensure_user(user_id: int, username: str | None) -> None:
             INSERT INTO users (user_id, username, credits)
             VALUES (?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
-                username=excluded.username
+                username = COALESCE(excluded.username, users.username)
             """,
             (user_id, username, START_CREDITS),
         )

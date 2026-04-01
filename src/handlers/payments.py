@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from aiogram import F, Router
+from aiogram.filters import Command
 from aiogram.types import (
     CallbackQuery,
     FSInputFile,
@@ -115,25 +116,37 @@ def _pay_methods_text(plan_id: str) -> str:
     )
 
 
-@router.callback_query(F.data == "menu:pay")
-async def menu_pay(callback: CallbackQuery) -> None:
-    if callback.message is None or callback.from_user is None:
-        await callback.answer()
+async def send_subscription_menu(message: Message) -> None:
+    """Тарифы и оплата — то же, что кнопка «Оплатить» в /start."""
+    if not message.from_user:
         return
-    await ensure_user(callback.from_user.id, callback.from_user.username)
+    await ensure_user(message.from_user.id, message.from_user.username)
     caption = _plans_menu_caption()
     kb = _plans_keyboard()
     pricing_img = _subscriptions_pricing_image_path()
     if pricing_img:
-        await callback.message.answer_photo(
+        await message.answer_photo(
             FSInputFile(pricing_img),
             caption=caption,
             reply_markup=kb,
             parse_mode=HTML,
         )
     else:
-        await callback.message.answer(caption, reply_markup=kb, parse_mode=HTML)
+        await message.answer(caption, reply_markup=kb, parse_mode=HTML)
+
+
+@router.callback_query(F.data == "menu:pay")
+async def menu_pay(callback: CallbackQuery) -> None:
+    if callback.message is None or callback.from_user is None:
+        await callback.answer()
+        return
     await callback.answer()
+    await send_subscription_menu(callback.message)
+
+
+@router.message(Command("pay"))
+async def cmd_pay(message: Message) -> None:
+    await send_subscription_menu(message)
 
 
 @router.callback_query(F.data == CB_PAY_MENU)

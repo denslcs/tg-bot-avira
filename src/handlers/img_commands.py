@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from aiogram import F, Router
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -475,6 +476,19 @@ async def open_ready_ideas(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
     await state.clear()
     await callback.message.answer(
+        "<b>Готовые идеи</b>\n<blockquote><i>Выбери промпт — потом отправь фото без текста.</i></blockquote>",
+        reply_markup=ready_ideas_keyboard(),
+        parse_mode=HTML,
+    )
+
+
+@router.message(Command("ideas"))
+async def cmd_ready_ideas(message: Message, state: FSMContext) -> None:
+    if not message.from_user:
+        return
+    await ensure_user(message.from_user.id, message.from_user.username)
+    await state.clear()
+    await message.answer(
         "<b>Готовые идеи</b>\n<blockquote><i>Выбери промпт — потом отправь фото без текста.</i></blockquote>",
         reply_markup=ready_ideas_keyboard(),
         parse_mode=HTML,

@@ -1,7 +1,8 @@
 import logging
+import urllib.parse
 from pathlib import Path
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, Message
@@ -74,12 +75,15 @@ def _start_banner_path() -> Path | None:
 
 
 def _parse_ref_payload(raw_text: str) -> int | None:
+    """Диплинк: https://t.me/bot?start=ref_<id> → в чат приходит «/start ref_<id>»."""
     parts = raw_text.split(maxsplit=1)
     if len(parts) < 2:
         return None
-    payload = parts[1].strip()
-    if payload.startswith("ref_"):
-        payload = payload[4:]
+    rest = parts[1].strip()
+    if not rest:
+        return None
+    first = rest.split()[0]
+    payload = first[4:] if first.startswith("ref_") else first
     if payload.isdigit():
         return int(payload)
     return None
@@ -101,6 +105,13 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         applied = await apply_referral(invitee_user_id=user_id, inviter_user_id=referrer_id)
         if applied:
             bonus_note = "\n🎉 Реферальный бонус: тебе +5 кредитов."
+            logging.info("referral applied: invitee=%s inviter=%s", user_id, referrer_id)
+        else:
+            logging.debug(
+                "referral not applied: invitee=%s referrer=%s",
+                user_id,
+                referrer_id,
+            )
     balance = await get_credits(user_id)
 
     text = _main_screen_text(balance, bonus_note)
@@ -147,6 +158,9 @@ async def cmd_help(message: Message) -> None:
         "📌 <b>Что доступно</b>\n\n"
         "🏠 <code>/start</code> — <i>главное меню, баланс и картинки</i>\n"
         "❓ <code>/help</code> — <i>этот список</i>\n"
+        "💳 <code>/pay</code> — <i>подписка и оплата</i>\n"
+        "👥 <code>/ref</code> — <i>реферальная система</i>\n"
+        "💡 <code>/ideas</code> — <i>готовые идеи для фото</i>\n"
         "📋 <code>/faq</code> — <i>частые вопросы</i>\n"
         "🔄 <code>/newchat</code> или <code>/clear</code> — <i>очистить память диалога</i>\n"
         "💬 <code>/support</code> — <i>обращение в поддержку</i>\n"
@@ -204,55 +218,91 @@ async def menu_support(callback: CallbackQuery) -> None:
     )
 
 
+def _referral_share_url(bot_username: str | None, user_id: int) -> str:
+    """Ссылка для кнопки «Пригласить»: открывает шаринг в Telegram без callback."""
+    text_share = "Заходи в Avira по моей ссылке 👇"
+    if bot_username:
+        ref_https = f"https://t.me/{bot_username}?start=ref_{user_id}"
+        return "https://t.me/share/url?" + urllib.parse.urlencode(
+            {"url": ref_https, "text": text_share}
+        )
+    ref_plain = f"/start ref_{user_id}"
+    return "https://t.me/share/url?" + urllib.parse.urlencode({"text": f"{text_share}\n{ref_plain}"})
+
+
+async def _build_referral_message(bot: Bot, user_id: int, username: str | None) -> tuple[str, InlineKeyboardMarkup]:
+    await ensure_user(user_id, username)
+    try:
+        invited = await get_referral_count(user_id)
+    except Exception:
+        invited = 0
+    try:
+        balance = await get_credits(user_id)
+    except Exception:
+        balance = 0
+    ref_link = (
+        f"https://t.me/{bot.username}?start=ref_{user_id}" if bot.username else f"/start ref_{user_id}"
+    )
+    uname_line = f"@{username}" if username else "без username"
+    # Без HTML: разметка цитат/вложенных тегов у части клиентов ломала отправку (parse entities)
+    text = (
+        f"👤 Профиль {uname_line}\n"
+        f"💳 ID: {user_id}\n"
+        f"💵 Кредиты: {balance}\n\n"
+        f"✉️ Приглашения: {invited}\n\n"
+        "Приглашай друзей и получай 10 кредитов за каждого приглашённого.\n"
+        "Другу по твоей ссылке при первом /start — +5 кредитов.\n\n"
+        f"Твоя реферальная ссылка:\n{ref_link}"
+    )
+    share_url = _referral_share_url(bot.username, user_id)
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📩 Пригласить", url=share_url)],
+            _BACK_TO_MENU_ROW,
+        ]
+    )
+    return text, kb
+
+
+async def deliver_referral_screen(bot: Bot, user_id: int, username: str | None, reply_via: Message | None) -> None:
+    """Отправить экран рефералки (callback или команда /ref)."""
+    text, kb = await _build_referral_message(bot, user_id, username)
+    try:
+        if reply_via:
+            await reply_via.answer(text, reply_markup=kb, disable_web_page_preview=True)
+        else:
+            await bot.send_message(chat_id=user_id, text=text, reply_markup=kb, disable_web_page_preview=True)
+    except Exception:
+        logging.exception("deliver_referral_screen: не удалось отправить сообщение с реферальной ссылкой")
+        try:
+            await bot.send_message(
+                chat_id=user_id,
+                text="Не удалось показать реферальное сообщение. Нажми /start и попробуй снова.",
+            )
+        except Exception:
+            logging.exception("deliver_referral_screen: не удалось отправить сообщение об ошибке")
+
+
 @router.callback_query((F.data == CB_MENU_REF) | (F.data == "menu:ref"))
 async def menu_ref(callback: CallbackQuery) -> None:
     if not callback.from_user:
         await callback.answer("Не удалось определить пользователя.", show_alert=True)
         return
-    user_id = callback.from_user.id
-    await ensure_user(user_id, callback.from_user.username)
-    try:
-        invited = await get_referral_count(user_id)
-    except Exception:
-        invited = 0
-    ref_link = (
-        f"https://t.me/{callback.bot.username}?start=ref_{user_id}"
-        if callback.bot.username
-        else f"/start ref_{user_id}"
+    # Сразу снимаем «часики» у кнопки; иначе клиент ждёт до конца отправки сообщения (до ~20 с).
+    await callback.answer()
+    await deliver_referral_screen(
+        callback.bot,
+        callback.from_user.id,
+        callback.from_user.username,
+        callback.message,
     )
-    # Без HTML: разметка цитат/вложенных тегов у части клиентов ломала отправку (parse entities)
-    text = (
-        "📣 Реферальная система\n\n"
-        f"• Приглашено друзей: {invited}\n"
-        "• За каждого приглашённого тебе +10 кредитов.\n"
-        "• Другу по твоей ссылке при первом /start +5 кредитов.\n\n"
-        f"Твоя ссылка (отправь другу):\n{ref_link}"
-    )
-    kb = _back_to_main_menu_kb()
-    try:
-        if callback.message:
-            await callback.message.answer(
-                text,
-                reply_markup=kb,
-                disable_web_page_preview=True,
-            )
-        else:
-            await callback.bot.send_message(
-                chat_id=user_id,
-                text=text,
-                reply_markup=kb,
-                disable_web_page_preview=True,
-            )
-        await callback.answer()
-    except Exception:
-        logging.exception("menu_ref: не удалось отправить сообщение с реферальной ссылкой")
-        try:
-            await callback.answer(
-                "Не удалось отправить текст. Нажми /start и попробуй снова.",
-                show_alert=True,
-            )
-        except Exception:
-            logging.exception("menu_ref: answer после ошибки отправки")
+
+
+@router.message(Command("ref"))
+async def cmd_ref(message: Message) -> None:
+    if not message.from_user:
+        return
+    await deliver_referral_screen(message.bot, message.from_user.id, message.from_user.username, message)
 
 
 @router.message(Command("profile"))
