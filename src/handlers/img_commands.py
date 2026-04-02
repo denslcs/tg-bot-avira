@@ -103,6 +103,8 @@ class ImageGenState(StatesGroup):
     waiting_mode = State()
     waiting_prompt = State()
     waiting_photo_for_edit = State()
+    waiting_edit_text_after_photo = State()
+    waiting_edit_photo_after_text = State()
     waiting_photo_for_idea = State()
 
 
@@ -542,7 +544,8 @@ async def mode_edit(callback: CallbackQuery, state: FSMContext) -> None:
         return
     await state.set_state(ImageGenState.waiting_photo_for_edit)
     await callback.message.answer(
-        "<blockquote><i>Одно сообщение:</i> фото + описание в <b>подписи</b> к фото.</blockquote>",
+        "<blockquote><i>Можно одним сообщением:</i> фото + описание в подписи.\n"
+        "<i>Или двумя:</i> сначала фото, потом текст (или наоборот).</blockquote>",
         parse_mode=HTML,
     )
 
@@ -622,13 +625,34 @@ async def wrong_type_waiting_prompt(message: Message) -> None:
 
 
 @router.message(ImageGenState.waiting_photo_for_edit, ~F.photo)
-async def wrong_type_waiting_photo_edit(message: Message) -> None:
+async def wrong_type_waiting_photo_edit(message: Message, state: FSMContext) -> None:
     if message.text and message.text.startswith("/"):
         return
+    text = (message.text or "").strip()
+    if text:
+        await state.update_data(pending_edit_prompt=text)
+        await state.set_state(ImageGenState.waiting_edit_photo_after_text)
+        await message.answer(
+            "Текст получил ✅ Теперь отправь фото, которое нужно изменить."
+        )
+        return
     await message.answer(
-        "Нужно фото с подписью в одном сообщении. "
-        "Отправь сжатое фото (не файлом) и опиши правку в подписи к фото."
+        "Нужно фото для правки. Отправь фото (с подписью или отдельно)."
     )
+
+
+@router.message(ImageGenState.waiting_edit_photo_after_text, ~F.photo)
+async def wrong_type_waiting_edit_photo_after_text(message: Message) -> None:
+    if message.text and message.text.startswith("/"):
+        return
+    await message.answer("Жду фото для правки. Текст уже сохранён.")
+
+
+@router.message(ImageGenState.waiting_edit_text_after_photo, ~F.text)
+async def wrong_type_waiting_edit_text_after_photo(message: Message) -> None:
+    if message.text and message.text.startswith("/"):
+        return
+    await message.answer("Жду текст с описанием правки. Фото уже сохранено.")
 
 
 @router.message(ImageGenState.waiting_photo_for_idea, ~F.photo)
@@ -718,14 +742,77 @@ async def create_image_edit_from_photo(message: Message, state: FSMContext) -> N
         return
     prompt = (message.caption or "").strip()
     if not prompt:
-        await message.answer("Добавьте описание в подпись к фото и отправьте снова.")
+        await state.update_data(pending_edit_photo_file_id=message.photo[-1].file_id)
+        await state.set_state(ImageGenState.waiting_edit_text_after_photo)
+        await message.answer("Фото получил ✅ Теперь пришли текст: что изменить на фото.")
         return
     await _generate_from_photo_with_prompt(message, state, prompt, usage_kind="self")
+
+
+@router.message(ImageGenState.waiting_edit_text_after_photo, F.text)
+async def create_image_edit_after_photo_then_text(message: Message, state: FSMContext) -> None:
+    if not message.from_user:
+        return
+    prompt = (message.text or "").strip()
+    if not prompt:
+        await message.answer("Нужен текст с описанием правки.")
+        return
+    data = await state.get_data()
+    source_file_id = str(data.get("pending_edit_photo_file_id") or "").strip()
+    if not source_file_id:
+        await message.answer("Фото не найдено. Отправь фото снова.")
+        await state.set_state(ImageGenState.waiting_photo_for_edit)
+        return
+    model = str(data.get("selected_model") or GEMINI_IMAGE_MODEL)
+    model_name = str(data.get("selected_name") or MODEL_NANO2_DISPLAY)
+    cost = int(data.get("selected_cost") or GEMINI_IMAGE_COST_CREDITS)
+    await _execute_edit_generation(
+        message,
+        state,
+        user_id=message.from_user.id,
+        username=message.from_user.username,
+        prompt=prompt,
+        model=model,
+        model_name=model_name,
+        cost=cost,
+        source_file_id=source_file_id,
+        usage_kind="self",
+    )
+
+
+@router.message(ImageGenState.waiting_edit_photo_after_text, F.photo)
+async def create_image_edit_after_text_then_photo(message: Message, state: FSMContext) -> None:
+    if not message.from_user or not message.photo:
+        return
+    data = await state.get_data()
+    prompt = str(data.get("pending_edit_prompt") or "").strip()
+    if not prompt:
+        await message.answer("Текст правки не найден. Напиши описание заново.")
+        await state.set_state(ImageGenState.waiting_photo_for_edit)
+        return
+    model = str(data.get("selected_model") or GEMINI_IMAGE_MODEL)
+    model_name = str(data.get("selected_name") or MODEL_NANO2_DISPLAY)
+    cost = int(data.get("selected_cost") or GEMINI_IMAGE_COST_CREDITS)
+    await _execute_edit_generation(
+        message,
+        state,
+        user_id=message.from_user.id,
+        username=message.from_user.username,
+        prompt=prompt,
+        model=model,
+        model_name=model_name,
+        cost=cost,
+        source_file_id=message.photo[-1].file_id,
+        usage_kind="self",
+    )
 
 
 @router.message(ImageGenState.waiting_photo_for_idea, F.photo)
 async def create_image_from_ready_prompt(message: Message, state: FSMContext) -> None:
     if not message.from_user or not message.photo:
+        return
+    if (message.caption or "").strip():
+        await message.answer("Для готового промпта отправь только фото без текста в подписи.")
         return
     data = await state.get_data()
     prompt = str(data.get("ready_prompt") or "").strip()

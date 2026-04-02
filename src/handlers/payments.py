@@ -38,6 +38,7 @@ from src.subscription_catalog import (
 router = Router(name="payments")
 
 CB_PAY_MENU = "pay:menu"
+CB_PAY_BONUS_MENU = "pay:bonus_menu"
 CB_PAY_PLAN_PREFIX = "pay:p:"
 CB_PAY_PACK_PREFIX = "pay:b:"
 CB_PAY_STARS_PREFIX = "pay:s:"
@@ -52,24 +53,12 @@ def _subscriptions_pricing_image_path() -> Path | None:
 
 
 def _plans_menu_caption() -> str:
-    packs_lines = "\n".join(
-        [
-            "<b>🎁 Пакеты бонусов (докупка кредитов)</b>",
-            *(
-                f"• <b>{esc(BONUS_PACKS[pid].credits)}</b> кредитов — {esc(BONUS_PACKS[pid].price_rub)} ₽ / "
-                f"${BONUS_PACKS[pid].price_usd:g} / ⭐ {esc(BONUS_PACKS[pid].stars)}: "
-                f"≈ {esc(BONUS_PACKS[pid].prompt_estimate)} готовых промптов"
-                for pid in BONUS_PACKS_ORDER
-            ),
-        ]
-    )
     return (
         "<b>Тарифы</b> — при оплате на баланс начисляются <b>кредиты</b> "
         f"(срок подписки <b>{esc(SUBSCRIPTION_PERIOD_DAYS)}</b> дн.). "
         "Ограничений на количество генераций по подписке нет — всё зависит от баланса кредитов.\n\n"
         f"<blockquote><i>Без подписки (UTC сутки):</i> свои генерации — <b>{esc(FREE_DAILY_SELF_IMAGE_GENERATIONS)}</b>, "
-        f"готовые промпты — <b>{esc(FREE_DAILY_READY_IMAGE_GENERATIONS)}</b>.</blockquote>\n\n"
-        f"{packs_lines}"
+        f"готовые промпты — <b>{esc(FREE_DAILY_READY_IMAGE_GENERATIONS)}</b>.</blockquote>"
     )
 
 
@@ -85,21 +74,12 @@ def _plans_keyboard() -> InlineKeyboardMarkup:
                 )
             ]
         )
-    for bid in BONUS_PACKS_ORDER:
-        b = BONUS_PACKS[bid]
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=f"🎁 +{b.credits} кр. · {b.price_rub} ₽",
-                    callback_data=f"{CB_PAY_PACK_PREFIX}{bid}",
-                )
-            ]
-        )
+    rows.append([InlineKeyboardButton(text="🎁 Пакеты бонусов", callback_data=CB_PAY_BONUS_MENU)])
     rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _methods_keyboard(item_id: str, *, is_pack: bool) -> InlineKeyboardMarkup:
+def _methods_keyboard(item_id: str, *, is_pack: bool, back_callback_data: str = CB_PAY_MENU) -> InlineKeyboardMarkup:
     if is_pack:
         pack = BONUS_PACKS[item_id]
         stars = pack.stars
@@ -131,7 +111,7 @@ def _methods_keyboard(item_id: str, *, is_pack: bool) -> InlineKeyboardMarkup:
                     callback_data=f"{CB_PAY_CRYPTO_PREFIX}{item_id}",
                 )
             ],
-            [InlineKeyboardButton(text="⬅️ Назад к тарифам", callback_data=CB_PAY_MENU)],
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback_data)],
         ]
     )
 
@@ -163,6 +143,37 @@ def _pack_methods_text(pack_id: str) -> str:
         "<i>Оформляя оплату, ты соглашаешься с условиями сервиса и политикой возврата "
         "(подробности — в поддержке или на странице оплаты).</i>"
     )
+
+
+def _bonus_packs_caption() -> str:
+    lines = [
+        "<b>🎁 Пакеты бонусов</b>\n"
+        "<blockquote><i>Докупка кредитов без продления подписки.</i></blockquote>",
+    ]
+    for pid in BONUS_PACKS_ORDER:
+        p = BONUS_PACKS[pid]
+        lines.append(
+            f"<b>{esc(p.credits)} кредитов</b>\n"
+            f"💰 Цена: {esc(p.price_rub)} ₽, ${p.price_usd:g}\n"
+            f"🎯 Промптов: {esc(p.prompt_estimate)}"
+        )
+    return "\n\n".join(lines)
+
+
+def _bonus_packs_keyboard() -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for bid in BONUS_PACKS_ORDER:
+        b = BONUS_PACKS[bid]
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"Купить {b.credits} кр. — {b.price_rub} ₽",
+                    callback_data=f"{CB_PAY_PACK_PREFIX}{bid}",
+                )
+            ]
+        )
+    rows.append([InlineKeyboardButton(text="⬅️ Назад к тарифам", callback_data=CB_PAY_MENU)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 async def send_subscription_menu(message: Message) -> None:
@@ -233,7 +244,20 @@ async def pay_pick_plan(callback: CallbackQuery) -> None:
         return
     await callback.message.answer(
         _pay_methods_text(plan_id),
-        reply_markup=_methods_keyboard(plan_id, is_pack=False),
+        reply_markup=_methods_keyboard(plan_id, is_pack=False, back_callback_data=CB_PAY_MENU),
+        parse_mode=HTML,
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == CB_PAY_BONUS_MENU)
+async def pay_bonus_menu(callback: CallbackQuery) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    await callback.message.answer(
+        _bonus_packs_caption(),
+        reply_markup=_bonus_packs_keyboard(),
         parse_mode=HTML,
     )
     await callback.answer()
@@ -250,7 +274,7 @@ async def pay_pick_pack(callback: CallbackQuery) -> None:
         return
     await callback.message.answer(
         _pack_methods_text(pack_id),
-        reply_markup=_methods_keyboard(pack_id, is_pack=True),
+        reply_markup=_methods_keyboard(pack_id, is_pack=True, back_callback_data=CB_PAY_BONUS_MENU),
         parse_mode=HTML,
     )
     await callback.answer()
