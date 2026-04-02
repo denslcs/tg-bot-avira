@@ -81,8 +81,8 @@ MAX_USER_MESSAGE_CHARS: int = max(500, min(32000, _parse_int(os.getenv("MAX_USER
 MAX_SUPPORT_DRAFT_TOTAL_CHARS: int = max(2000, min(64000, _parse_int(os.getenv("MAX_SUPPORT_DRAFT_TOTAL_CHARS", "16000"), 16000)))
 PRIVATE_MESSAGES_PER_MINUTE: int = max(5, min(120, _parse_int(os.getenv("PRIVATE_MESSAGES_PER_MINUTE", "30"), 30)))
 
-# Генерация картинок: gemini (Google) или qwen (Qwen-Image / Qwen-Image-Edit через DashScope).
-_img_backend = os.getenv("IMAGE_GEN_BACKEND", "gemini").strip().lower() or "gemini"
+# Генерация картинок: gemini (Google) или qwen/wan (DashScope).
+_img_backend = os.getenv("IMAGE_GEN_BACKEND", "qwen").strip().lower() or "qwen"
 IMAGE_GEN_BACKEND: str = _img_backend if _img_backend in ("gemini", "qwen") else "gemini"
 
 # Gemini image generation / редактирование
@@ -90,23 +90,24 @@ GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_NANO_MODEL: str = os.getenv("GEMINI_NANO_MODEL", "gemini-2.5-flash-image").strip()
 GEMINI_NANO_COST_CREDITS: int = max(1, _parse_int(os.getenv("GEMINI_NANO_COST_CREDITS", "6"), 6))
 GEMINI_IMAGE_MODEL: str = os.getenv("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image-preview").strip()
-GEMINI_IMAGE_COST_CREDITS: int = max(1, _parse_int(os.getenv("GEMINI_IMAGE_COST_CREDITS", "6"), 6))
+GEMINI_IMAGE_COST_CREDITS: int = max(1, _parse_int(os.getenv("GEMINI_IMAGE_COST_CREDITS", "9"), 9))
 # «Готовые идеи» (редакт по пресету): дороже обычной правки.
 IMAGE_READY_IDEAS_COST_CREDITS: int = max(1, _parse_int(os.getenv("IMAGE_READY_IDEAS_COST_CREDITS", "20"), 20))
 
-# Qwen-Image (Alibaba DashScope). Ключ: https://modelstudio.console.alibabacloud.com
+# Wan 2.7 Image (Alibaba DashScope). Ключ: https://modelstudio.console.alibabacloud.com
 # API: .../services/aigc/multimodal-generation/generation (Singapore vs Beijing — разные ключи/endpoint).
 DASHSCOPE_API_KEY: str = os.getenv("DASHSCOPE_API_KEY", "").strip()
-QWEN_IMAGE_MODEL: str = os.getenv("QWEN_IMAGE_MODEL", "qwen-image-2.0").strip() or "qwen-image-2.0"
+QWEN_IMAGE_MODEL: str = os.getenv("QWEN_IMAGE_MODEL", "wan2.7-image").strip() or "wan2.7-image"
 QWEN_DASHSCOPE_API_V1_BASE: str = (
     os.getenv("QWEN_DASHSCOPE_API_V1_BASE", "https://dashscope-intl.aliyuncs.com/api/v1").strip().rstrip("/")
     or "https://dashscope-intl.aliyuncs.com/api/v1"
 )
 QWEN_IMAGE_SIZE: str = os.getenv("QWEN_IMAGE_SIZE", "1024*1024").strip() or "1024*1024"
-# Редактирование: отдельная модель (см. Qwen-Image-Edit в доке Model Studio). Пустой size = по умолчанию у API.
+QWEN_IMAGE_COST_CREDITS: int = max(1, _parse_int(os.getenv("QWEN_IMAGE_COST_CREDITS", "6"), 6))
+# Редактирование: отдельная модель (Wan Image Editing). Пустой size = по умолчанию у API.
 QWEN_IMAGE_EDIT_MODEL: str = (
-    os.getenv("QWEN_IMAGE_EDIT_MODEL", "qwen-image-edit-plus-2025-12-15").strip()
-    or "qwen-image-edit-plus-2025-12-15"
+    os.getenv("QWEN_IMAGE_EDIT_MODEL", "wan2.7-image-editing").strip()
+    or "wan2.7-image-editing"
 )
 QWEN_IMAGE_EDIT_SIZE: str = os.getenv("QWEN_IMAGE_EDIT_SIZE", "").strip()
 

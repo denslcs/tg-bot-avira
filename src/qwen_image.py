@@ -1,8 +1,10 @@
-"""Qwen-Image и Qwen-Image-Edit (Alibaba DashScope, multimodal-generation)."""
+"""Wan 2.7 Image / Editing через DashScope multimodal-generation."""
 
 from __future__ import annotations
 
+import asyncio
 import base64
+import hashlib
 import logging
 from typing import Any
 
@@ -20,6 +22,9 @@ from src.config import (
 logger = logging.getLogger(__name__)
 
 _MAX_INPUT_BYTES = 10 * 1024 * 1024
+_MAX_CACHE_ITEMS = 128
+_text_cache: dict[str, tuple[str, bytes]] = {}
+_edit_cache: dict[str, tuple[str, bytes]] = {}
 
 
 def is_qwen_image_configured() -> bool:
@@ -34,12 +39,12 @@ def format_qwen_image_user_error(exc: BaseException) -> str:
             "(Singapore vs Beijing)."
         )
     if "429" in text or "throttl" in text or "rate" in text:
-        return "Сервис Qwen перегружен или лимит запросов. Попробуй через минуту."
+        return "Сервис Wan перегружен или лимит запросов. Попробуй через минуту."
     if "quota" in text or "balance" in text or "insufficient" in text:
-        return "Квота или баланс Qwen в Model Studio исчерпаны. Проверь консоль Alibaba Cloud."
+        return "Квота или баланс Wan в Model Studio исчерпаны. Проверь консоль Alibaba Cloud."
     if "10 mb" in text or "file size" in text or "too large" in text:
-        return "Фото слишком большое для Qwen (лимит ~10 МБ). Отправь сжатое изображение."
-    return "Не удалось обработать картинку через Qwen. Попробуй позже или смени формулировку."
+        return "Фото слишком большое для Wan (лимит ~10 МБ). Отправь сжатое изображение."
+    return "Не удалось обработать картинку через Wan. Попробуй позже или смени формулировку."
 
 
 def _multimodal_url() -> str:
@@ -82,7 +87,7 @@ def _extract_first_image_url(data: dict[str, Any]) -> str:
     raise RuntimeError("В ответе Qwen нет URL изображения.")
 
 
-async def _post_multimodal_and_download(body: dict[str, Any]) -> bytes:
+async def _post_multimodal_and_download(body: dict[str, Any]) -> tuple[str, bytes]:
     if not DASHSCOPE_API_KEY:
         raise RuntimeError("Не задан DASHSCOPE_API_KEY")
     headers = {
@@ -108,11 +113,12 @@ async def _post_multimodal_and_download(body: dict[str, Any]) -> bytes:
     async with httpx.AsyncClient(timeout=timeout) as client:
         ir = await client.get(img_url)
         ir.raise_for_status()
-        return ir.content
+        return img_url, ir.content
 
 
 def _gen_parameters() -> dict[str, Any]:
     return {
+        "n": 1,
         "negative_prompt": (
             "Low resolution, low quality, distorted limbs, malformed fingers, "
             "oversaturated colors, blurry text."
@@ -137,8 +143,68 @@ def _edit_parameters(model: str) -> dict[str, Any]:
     return p
 
 
+def _normalize_prompt(prompt: str) -> str:
+    return " ".join((prompt or "").strip().lower().split())
+
+
+def _cache_put(cache: dict[str, tuple[str, bytes]], key: str, value: tuple[str, bytes]) -> None:
+    cache[key] = value
+    if len(cache) > _MAX_CACHE_ITEMS:
+        oldest_key = next(iter(cache))
+        cache.pop(oldest_key, None)
+
+
+def _is_retryable_error(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    markers = (
+        "failed",
+        "canceled",
+        "timeout",
+        "timed out",
+        "tempor",
+        "429",
+        "502",
+        "503",
+        "504",
+        "rate limit",
+        "connection reset",
+    )
+    return any(m in text for m in markers)
+
+
+async def _post_multimodal_and_download_with_retry(
+    body: dict[str, Any],
+    *,
+    max_attempts: int = 4,
+) -> tuple[str, bytes]:
+    last_exc: BaseException | None = None
+    for attempt in range(max_attempts):
+        try:
+            return await _post_multimodal_and_download(body)
+        except Exception as exc:
+            last_exc = exc
+            if attempt >= max_attempts - 1 or not _is_retryable_error(exc):
+                raise
+            delay = 1.0 * (2**attempt)
+            logger.warning(
+                "Wan task retry %s/%s in %.1fs: %s",
+                attempt + 1,
+                max_attempts,
+                delay,
+                exc,
+            )
+            await asyncio.sleep(delay)
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("Wan task failed without exception")
+
+
 async def qwen_text_to_image_bytes(prompt: str) -> bytes:
     text = (prompt or "").strip()[:800]
+    cache_key = f"{QWEN_IMAGE_MODEL}|{QWEN_IMAGE_SIZE}|{_normalize_prompt(text)}"
+    cached = _text_cache.get(cache_key)
+    if cached:
+        return cached[1]
     body: dict[str, Any] = {
         "model": QWEN_IMAGE_MODEL,
         "input": {
@@ -151,7 +217,9 @@ async def qwen_text_to_image_bytes(prompt: str) -> bytes:
         },
         "parameters": _gen_parameters(),
     }
-    return await _post_multimodal_and_download(body)
+    img_url, data = await _post_multimodal_and_download_with_retry(body)
+    _cache_put(_text_cache, cache_key, (img_url, data))
+    return data
 
 
 async def qwen_edit_image_bytes(image_bytes: bytes, prompt: str) -> bytes:
@@ -160,6 +228,11 @@ async def qwen_edit_image_bytes(image_bytes: bytes, prompt: str) -> bytes:
         raise RuntimeError("Image exceeds 10 MB limit for Qwen input.")
     text = (prompt or "").strip()[:800]
     model = QWEN_IMAGE_EDIT_MODEL
+    img_hash = hashlib.sha256(image_bytes).hexdigest()
+    cache_key = f"{model}|{QWEN_IMAGE_EDIT_SIZE}|{img_hash}|{_normalize_prompt(text)}"
+    cached = _edit_cache.get(cache_key)
+    if cached:
+        return cached[1]
     body: dict[str, Any] = {
         "model": model,
         "input": {
@@ -175,4 +248,6 @@ async def qwen_edit_image_bytes(image_bytes: bytes, prompt: str) -> bytes:
         },
         "parameters": _edit_parameters(model),
     }
-    return await _post_multimodal_and_download(body)
+    img_url, data = await _post_multimodal_and_download_with_retry(body)
+    _cache_put(_edit_cache, cache_key, (img_url, data))
+    return data
