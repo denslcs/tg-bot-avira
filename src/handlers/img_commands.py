@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+"""
+Генерация и правка изображений: клавиатуры выбора режима/модели, FSM, хендлеры callback и сообщений.
+"""
+
 import logging
 
 from aiogram import F, Router
@@ -52,6 +56,19 @@ from src.qwen_image import (
     qwen_edit_image_bytes,
     qwen_text_to_image_bytes,
 )
+from src.keyboards.callback_data import (
+    CB_APPLY_READY_PREFIX,
+    CB_BACK_IMAGE_MODELS,
+    CB_CREATE_IMAGE,
+    CB_GEN_EDIT,
+    CB_GEN_TEXT,
+    CB_MENU_BACK_START,
+    CB_PICK_NANO,
+    CB_PICK_NANO_2,
+    CB_PICK_QWEN,
+    CB_READY_IDEAS,
+    CB_REGEN,
+)
 from src.subscription_catalog import UNLIMITED_DAILY_IMAGE_GENERATIONS
 
 router = Router(name="img_commands")
@@ -90,18 +107,6 @@ def _edit_flow_configured_for(backend: str) -> bool:
     if backend == "qwen":
         return is_qwen_image_configured()
     return is_gemini_configured()
-
-CB_CREATE_IMAGE = "menu:create_image"
-CB_MENU_BACK_START = "menu:back_start"
-CB_BACK_IMAGE_MODELS = "img:back_models"
-CB_GEN_TEXT = "img:mode:text"
-CB_GEN_EDIT = "img:mode:edit"
-CB_PICK_NANO = "img:pick_nano"
-CB_PICK_NANO_2 = "img:pick_nano2"
-CB_PICK_QWEN = "img:pick_qwen"
-CB_READY_IDEAS = "menu:ready_ideas"
-CB_APPLY_READY_PREFIX = "img:idea:"
-CB_REGEN = "img:regen"
 
 _BACK_MAIN = [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)]
 _BACK_MODELS = [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_BACK_IMAGE_MODELS)]

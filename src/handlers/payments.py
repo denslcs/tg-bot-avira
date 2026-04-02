@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+"""
+Подписки, бонус-пакеты, Stars и внешние способы оплаты (callback + pre_checkout).
+"""
+
 from pathlib import Path
 
 from aiogram import F, Router
@@ -26,7 +30,18 @@ from src.database import (
     try_claim_star_payment,
 )
 from src.formatting import HTML, esc
-from src.handlers.img_commands import CB_MENU_BACK_START
+from src.keyboards.callback_data import (
+    CB_MENU_BACK_START,
+    CB_MENU_PAY,
+    CB_PAY_BONUS_MENU,
+    CB_PAY_CRYPTO_PREFIX,
+    CB_PAY_INTL_PREFIX,
+    CB_PAY_MENU,
+    CB_PAY_PACK_PREFIX,
+    CB_PAY_PLAN_PREFIX,
+    CB_PAY_RUB_PREFIX,
+    CB_PAY_STARS_PREFIX,
+)
 from src.subscription_catalog import (
     BONUS_PACKS,
     BONUS_PACKS_ORDER,
@@ -38,15 +53,6 @@ from src.subscription_catalog import (
 )
 
 router = Router(name="payments")
-
-CB_PAY_MENU = "pay:menu"
-CB_PAY_BONUS_MENU = "pay:bonus_menu"
-CB_PAY_PLAN_PREFIX = "pay:p:"
-CB_PAY_PACK_PREFIX = "pay:b:"
-CB_PAY_STARS_PREFIX = "pay:s:"
-CB_PAY_RUB_PREFIX = "pay:r:"
-CB_PAY_INTL_PREFIX = "pay:i:"
-CB_PAY_CRYPTO_PREFIX = "pay:c:"
 
 
 async def _can_buy_plan(user_id: int, plan_id: str) -> tuple[bool, str | None]:
@@ -207,7 +213,7 @@ async def send_subscription_menu(message: Message) -> None:
         await message.answer(caption, reply_markup=kb, parse_mode=HTML)
 
 
-@router.callback_query(F.data == "menu:pay")
+@router.callback_query(F.data == CB_MENU_PAY)
 async def menu_pay(callback: CallbackQuery) -> None:
     if callback.message is None or callback.from_user is None:
         await callback.answer()

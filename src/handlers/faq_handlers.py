@@ -3,7 +3,7 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from src.formatting import HTML, esc
-from src.handlers.img_commands import CB_MENU_BACK_START
+from src.keyboards.callback_data import CB_MENU_BACK_START
 
 router = Router(name="faq")
 

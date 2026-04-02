@@ -1,3 +1,8 @@
+"""
+Команды и главное меню: /start, профиль, рефералка, справка, часть админ-команд в ЛС.
+Клавиатура старта: src/keyboards/main_menu.py.
+"""
+
 import logging
 import urllib.parse
 from datetime import datetime, timezone
@@ -26,42 +31,19 @@ from src.database import (
 )
 from src.subscription_catalog import PLANS
 from src.formatting import HTML, esc
-from src.handlers.img_commands import CB_CREATE_IMAGE, CB_MENU_BACK_START, CB_READY_IDEAS
-
-# Короткий callback_data (старые кнопки с «menu:ref» всё ещё обрабатываются в handler)
-CB_MENU_REF = "ref_menu"
-CB_MENU_PROFILE = "menu:profile"
+from src.keyboards.callback_data import (
+    CB_MENU_ABOUT,
+    CB_MENU_BACK_START,
+    CB_MENU_PROFILE,
+    CB_MENU_REF,
+    CB_MENU_REF_LEGACY,
+    CB_MENU_SUPPORT,
+)
+from src.keyboards.main_menu import back_to_main_menu_keyboard, start_menu_keyboard
 
 router = Router(name="commands")
 
-
-def _start_menu_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="🎨 Создать картинку", callback_data=CB_CREATE_IMAGE),
-                InlineKeyboardButton(text="💡 Готовые идеи", callback_data=CB_READY_IDEAS),
-            ],
-            [
-                InlineKeyboardButton(text="ℹ️ Что умеет бот", callback_data="menu:about"),
-                InlineKeyboardButton(text="👥 Реферальная система", callback_data=CB_MENU_REF),
-            ],
-            [
-                InlineKeyboardButton(text="👤 Профиль", callback_data=CB_MENU_PROFILE),
-            ],
-            [
-                InlineKeyboardButton(text="💳 Оплатить", callback_data="menu:pay"),
-                InlineKeyboardButton(text="💬 Поддержка", callback_data="menu:support"),
-            ],
-        ]
-    )
-
-
 _BACK_TO_MENU_ROW = [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)]
-
-
-def _back_to_main_menu_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[_BACK_TO_MENU_ROW])
 
 
 def _main_screen_text(balance: int, bonus_note: str = "") -> str:
@@ -151,7 +133,7 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
     balance = await get_credits(user_id)
 
     text = _main_screen_text(balance, bonus_note)
-    kb = _start_menu_kb()
+    kb = start_menu_keyboard()
     banner = _start_banner_path()
     if banner:
         await message.answer_photo(
@@ -175,7 +157,7 @@ async def menu_back_start(callback: CallbackQuery, state: FSMContext) -> None:
     balance = await get_credits(user_id)
     await callback.answer()
     text = _main_screen_text(balance, "")
-    kb = _start_menu_kb()
+    kb = start_menu_keyboard()
     banner = _start_banner_path()
     if banner:
         await callback.message.answer_photo(
@@ -208,7 +190,7 @@ async def cmd_help(message: Message) -> None:
     )
 
 
-@router.callback_query(F.data == "menu:about")
+@router.callback_query(F.data == CB_MENU_ABOUT)
 async def menu_about(callback: CallbackQuery) -> None:
     if not callback.message:
         await callback.answer("Сообщение недоступно.", show_alert=True)
@@ -222,12 +204,12 @@ async def menu_about(callback: CallbackQuery) -> None:
         "• Готовые промпты к фото.\n"
         "• Разные <i>ИИ-модели</i> для генерации."
         "</blockquote>",
-        reply_markup=_back_to_main_menu_kb(),
+        reply_markup=back_to_main_menu_keyboard(),
         parse_mode=HTML,
     )
 
 
-@router.callback_query(F.data == "menu:support")
+@router.callback_query(F.data == CB_MENU_SUPPORT)
 async def menu_support(callback: CallbackQuery) -> None:
     if not callback.message:
         await callback.answer("Сообщение недоступно.", show_alert=True)
@@ -237,7 +219,7 @@ async def menu_support(callback: CallbackQuery) -> None:
         await callback.message.answer(
             "<blockquote><i>Поддержка пока не настроена</i> "
             "(пустой <code>SUPPORT_BOT_USERNAME</code>).</blockquote>",
-            reply_markup=_back_to_main_menu_kb(),
+            reply_markup=back_to_main_menu_keyboard(),
             parse_mode=HTML,
         )
         return
@@ -344,7 +326,7 @@ async def deliver_referral_screen(bot: Bot, user_id: int, username: str | None, 
             logging.exception("deliver_referral_screen: не удалось отправить сообщение об ошибке")
 
 
-@router.callback_query((F.data == CB_MENU_REF) | (F.data == "menu:ref"))
+@router.callback_query((F.data == CB_MENU_REF) | (F.data == CB_MENU_REF_LEGACY))
 async def menu_ref(callback: CallbackQuery) -> None:
     if not callback.from_user:
         await callback.answer("Не удалось определить пользователя.", show_alert=True)
