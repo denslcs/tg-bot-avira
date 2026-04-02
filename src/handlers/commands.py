@@ -40,6 +40,7 @@ from src.keyboards.callback_data import (
     CB_MENU_SUPPORT,
 )
 from src.keyboards.main_menu import back_to_main_menu_keyboard, start_menu_keyboard
+from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 
 router = Router(name="commands")
 
@@ -288,7 +289,7 @@ async def _build_referral_message(
     share_url = _referral_share_url(bot_username, user_id)
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📩 Пригласить", url=share_url)],
+            [InlineKeyboardButton(text="📩 Пригласить", url=share_url, style=BTN_SUCCESS)],
             _BACK_TO_MENU_ROW,
         ]
     )
@@ -469,7 +470,7 @@ async def cmd_support(message: Message) -> None:
     support_url = f"https://t.me/{SUPPORT_BOT_USERNAME}?start=from_avira"
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Открыть чат поддержки", url=support_url)],
+            [InlineKeyboardButton(text="Открыть чат поддержки", url=support_url, style=BTN_PRIMARY)],
             _BACK_TO_MENU_ROW,
         ]
     )

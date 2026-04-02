@@ -4,6 +4,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from src.formatting import HTML, esc
 from src.keyboards.callback_data import CB_MENU_BACK_START
+from src.keyboards.styles import BTN_PRIMARY
 
 router = Router(name="faq")
 
@@ -43,7 +44,9 @@ def _faq_keyboard() -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     row: list[InlineKeyboardButton] = []
     for i, (slug, title, _) in enumerate(_FAQ):
-        row.append(InlineKeyboardButton(text=title[:30], callback_data=f"faq:{i}"))
+        row.append(
+            InlineKeyboardButton(text=title[:30], callback_data=f"faq:{i}", style=BTN_PRIMARY)
+        )
         if len(row) == 2:
             rows.append(row)
             row = []

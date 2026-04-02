@@ -21,6 +21,7 @@ from src.database import (
     subscription_is_active,
     sum_users_credits,
 )
+from src.keyboards.styles import BTN_PRIMARY
 from src.subscription_catalog import PLANS, PLANS_ORDER
 
 router = Router(name="admin_panel")
@@ -34,14 +35,22 @@ def _main_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="Открытые тикеты", callback_data="adm:tickets"),
-                InlineKeyboardButton(text="Статистика бота", callback_data="adm:stats"),
+                InlineKeyboardButton(
+                    text="Открытые тикеты", callback_data="adm:tickets", style=BTN_PRIMARY
+                ),
+                InlineKeyboardButton(
+                    text="Статистика бота", callback_data="adm:stats", style=BTN_PRIMARY
+                ),
             ],
             [
-                InlineKeyboardButton(text="Оценки поддержки", callback_data="adm:ratings"),
+                InlineKeyboardButton(
+                    text="Оценки поддержки", callback_data="adm:ratings", style=BTN_PRIMARY
+                ),
             ],
             [
-                InlineKeyboardButton(text="Справка по командам", callback_data="adm:help"),
+                InlineKeyboardButton(
+                    text="Справка по командам", callback_data="adm:help", style=BTN_PRIMARY
+                ),
             ],
         ]
     )

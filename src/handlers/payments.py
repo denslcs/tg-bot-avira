@@ -42,6 +42,7 @@ from src.keyboards.callback_data import (
     CB_PAY_RUB_PREFIX,
     CB_PAY_STARS_PREFIX,
 )
+from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 from src.subscription_catalog import (
     BONUS_PACKS,
     BONUS_PACKS_ORDER,
@@ -114,19 +115,28 @@ def _methods_keyboard(item_id: str, *, is_pack: bool, back_callback_data: str = 
                 InlineKeyboardButton(
                     text=f"{rub} ₽ · картой РФ",
                     callback_data=f"{CB_PAY_RUB_PREFIX}{item_id}",
+                    style=BTN_PRIMARY,
                 )
             ],
             [
                 InlineKeyboardButton(
                     text=f"${usd:g} · карта другой страны",
                     callback_data=f"{CB_PAY_INTL_PREFIX}{item_id}",
+                    style=BTN_PRIMARY,
                 )
             ],
-            [InlineKeyboardButton(text=f"⭐ {stars} · Звёздами", callback_data=f"{CB_PAY_STARS_PREFIX}{item_id}")],
+            [
+                InlineKeyboardButton(
+                    text=f"⭐ {stars} · Звёздами",
+                    callback_data=f"{CB_PAY_STARS_PREFIX}{item_id}",
+                    style=BTN_SUCCESS,
+                )
+            ],
             [
                 InlineKeyboardButton(
                     text=f"${usd:g} · криптовалютой",
                     callback_data=f"{CB_PAY_CRYPTO_PREFIX}{item_id}",
+                    style=BTN_PRIMARY,
                 )
             ],
             [InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback_data)],
@@ -315,7 +325,7 @@ async def _external_pay_hint(callback: CallbackQuery, item_id: str, label: str, 
     if url:
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text=f"Перейти к оплате ({label})", url=url)],
+                [InlineKeyboardButton(text=f"Перейти к оплате ({label})", url=url, style=BTN_PRIMARY)],
                 [
                     InlineKeyboardButton(
                         text="⬅️ Назад",

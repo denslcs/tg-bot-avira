@@ -3,6 +3,7 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from src.config import ADMIN_IDS
+from src.keyboards.styles import BTN_PRIMARY
 
 router = Router(name="support_admin_panel")
 
@@ -11,11 +12,17 @@ def _main_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="В теме тикета", callback_data="supadm:topic"),
-                InlineKeyboardButton(text="В группе поддержки", callback_data="supadm:group"),
+                InlineKeyboardButton(
+                    text="В теме тикета", callback_data="supadm:topic", style=BTN_PRIMARY
+                ),
+                InlineKeyboardButton(
+                    text="В группе поддержки", callback_data="supadm:group", style=BTN_PRIMARY
+                ),
             ],
             [
-                InlineKeyboardButton(text="Закрытие и статус", callback_data="supadm:close"),
+                InlineKeyboardButton(
+                    text="Закрытие и статус", callback_data="supadm:close", style=BTN_PRIMARY
+                ),
             ],
         ]
     )

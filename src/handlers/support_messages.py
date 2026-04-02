@@ -6,6 +6,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from aiogram.exceptions import TelegramBadRequest
 
 from src.config import ADMIN_IDS, MAX_SUPPORT_DRAFT_TOTAL_CHARS, SUPPORT_CHAT_ID, SUPPORT_FEEDBACK_THREAD_ID
+from src.keyboards.styles import BTN_DANGER, BTN_PRIMARY, BTN_SUCCESS
 from src.database import (
     close_ticket,
     count_generated_images_total,
@@ -123,7 +124,9 @@ def _rating_keyboard(ticket_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text=str(i), callback_data=f"tickrate:{ticket_id}:{i}")
+                InlineKeyboardButton(
+                    text=str(i), callback_data=f"tickrate:{ticket_id}:{i}", style=BTN_PRIMARY
+                )
                 for i in range(1, 6)
             ],
             [
@@ -140,6 +143,7 @@ def _feedback_offer_keyboard(ticket_id: int, score: int) -> InlineKeyboardMarkup
                 InlineKeyboardButton(
                     text="Написать отзыв",
                     callback_data=f"fb_write:{ticket_id}:{score}",
+                    style=BTN_PRIMARY,
                 ),
                 InlineKeyboardButton(
                     text="В другой раз",
@@ -168,8 +172,16 @@ def _admin_chunk_keyboard(ticket_id: int, chunk_id: int) -> InlineKeyboardMarkup
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="Отправить", callback_data=f"adm_snd:{ticket_id}:{chunk_id}"),
-                InlineKeyboardButton(text="Отмена", callback_data=f"adm_can:{ticket_id}:{chunk_id}"),
+                InlineKeyboardButton(
+                    text="Отправить",
+                    callback_data=f"adm_snd:{ticket_id}:{chunk_id}",
+                    style=BTN_SUCCESS,
+                ),
+                InlineKeyboardButton(
+                    text="Отмена",
+                    callback_data=f"adm_can:{ticket_id}:{chunk_id}",
+                    style=BTN_DANGER,
+                ),
             ]
         ]
     )
@@ -179,7 +191,11 @@ def _admin_finish_keyboard(ticket_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="Закончить ответ", callback_data=f"adm_fin:{ticket_id}"),
+                InlineKeyboardButton(
+                    text="Закончить ответ",
+                    callback_data=f"adm_fin:{ticket_id}",
+                    style=BTN_SUCCESS,
+                ),
             ]
         ]
     )
