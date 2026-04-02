@@ -1,15 +1,15 @@
-"""Тарифы подписки на генерацию изображений: лимиты в месяц (UTC), цены для UI.
+"""Тарифы подписки: кредиты на баланс, цены ₽ / $ / ⭐ Telegram Stars.
 
-Курсы (опорная точка как в референсе Nova): 159 ₽ ≈ 150 ⭐ ≈ $1.99
-→ 1 ⭐ ≈ 1.059 ₽; 1 $ ≈ 79.90 ₽ (плавающие, ориентир для отображения).
+Подписка даёт кредиты и срок доступа; лимитов на количество генераций для
+подписчиков нет. Для пользователей без подписки действуют дневные лимиты:
+самостоятельные генерации и готовые промпты считаются отдельно.
 
-Кредиты за покупку подписки (начисляются при успешной оплате в боте):
-сбалансированы так, чтобы давать запас на текстовый чат и будущие «дорогие»
-модели (Pro и т.д.), не подменяя месячный лимит генераций картинок.
+Звёзды (XTR): опорная точка Nova — $2.99 → 225 ⭐ (согласовано с прежним
+соотношением ~159 ₽ → 150 ⭐, масштаб по курсу Nova). Остальные тарифы:
+round(usd / 2.99 * 225).
 
-Позже сюда же логично добавить allowlist моделей по тарифу (дешевле → проще
-генераторы, дороже → Nano Banana Pro и аналоги), и в img_commands фильтровать
-выбор по subscription_plan.
+Ориентир по кредитам (~20 за готовый промпт, ~6 за свою генерацию):
+Nova 500 ≈ 25 готовых; Supernova 1100 ≈ 55; Galaxy 2400 ≈ 120; Universe 5000 ≈ 250.
 """
 
 from __future__ import annotations
@@ -17,42 +17,35 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-# Без оплаченной подписки (пока есть/нет кредитов — не важно): лимит генераций картинок в календарном месяце UTC.
-FREE_MONTHLY_IMAGE_GENERATIONS: int = 5
+# Без активной подписки: лимиты генераций картинок в сутки (UTC), по типам.
+FREE_DAILY_SELF_IMAGE_GENERATIONS: int = 2
+FREE_DAILY_READY_IMAGE_GENERATIONS: int = 4
+UNLIMITED_DAILY_IMAGE_GENERATIONS: int = 1_000_000_000
 
 # Ровно 30 календарных дней с момента оплаты (или продления от текущего срока).
 SUBSCRIPTION_PERIOD_DAYS: int = 30
-
-# Опорный курс для пересчёта (Nova).
-_REF_RUB: float = 159.0
-_REF_STARS: int = 150
-_REF_USD: float = 1.99
-
-
-def stars_from_rub(rub: int) -> int:
-    return max(1, int(round(rub * _REF_STARS / _REF_RUB)))
-
-
-def usd_from_rub(rub: int) -> float:
-    return round(rub * _REF_USD / _REF_RUB, 2)
 
 
 @dataclass(frozen=True)
 class SubscriptionPlan:
     id: str
     title: str
-    monthly_generations: int
     price_rub: int
-    # Разовый бонус на баланс при покупке этой подписки (см. successful_payment).
+    price_usd: float
+    stars: int
+    # Начисляется на баланс при успешной оплате подписки.
     bonus_credits: int
 
-    @property
-    def stars(self) -> int:
-        return stars_from_rub(self.price_rub)
 
-    @property
-    def price_usd(self) -> float:
-        return usd_from_rub(self.price_rub)
+@dataclass(frozen=True)
+class BonusPack:
+    id: str
+    title: str
+    credits: int
+    price_rub: int
+    price_usd: float
+    stars: int
+    prompt_estimate: int
 
 
 PLANS_ORDER: tuple[str, ...] = ("nova", "supernova", "galaxy", "universe")
@@ -61,37 +54,78 @@ PLANS: dict[str, SubscriptionPlan] = {
     "nova": SubscriptionPlan(
         id="nova",
         title="✨ Nova",
-        monthly_generations=20,
-        price_rub=159,
-        bonus_credits=90,
+        price_rub=239,
+        price_usd=2.99,
+        stars=225,
+        bonus_credits=500,
     ),
     "supernova": SubscriptionPlan(
         id="supernova",
         title="🌟 SuperNova",
-        monthly_generations=40,
         price_rub=399,
-        bonus_credits=220,
+        price_usd=4.99,
+        stars=376,
+        bonus_credits=1100,
     ),
     "galaxy": SubscriptionPlan(
         id="galaxy",
-        title="🌌 galaxy",
-        monthly_generations=90,
-        price_rub=699,
-        bonus_credits=500,
+        title="🌌 Galaxy",
+        price_rub=799,
+        price_usd=9.99,
+        stars=752,
+        bonus_credits=2400,
     ),
     "universe": SubscriptionPlan(
         id="universe",
         title="👾 Universe",
-        monthly_generations=270,
-        price_rub=1399,
-        bonus_credits=1050,
+        price_rub=1449,
+        price_usd=17.99,
+        stars=1354,
+        bonus_credits=5000,
     ),
 }
 
 
-def plan_limit_generations(plan_id: str | None, subscription_active: bool) -> int:
-    if not subscription_active:
-        return FREE_MONTHLY_IMAGE_GENERATIONS
-    if not plan_id or plan_id not in PLANS:
-        return PLANS["nova"].monthly_generations
-    return PLANS[plan_id].monthly_generations
+BONUS_PACKS_ORDER: tuple[str, ...] = ("pack300", "pack500", "pack1000")
+
+BONUS_PACKS: dict[str, BonusPack] = {
+    "pack300": BonusPack(
+        id="pack300",
+        title="300 кредитов",
+        credits=300,
+        price_rub=299,
+        price_usd=3.73,
+        stars=281,
+        prompt_estimate=15,
+    ),
+    "pack500": BonusPack(
+        id="pack500",
+        title="500 кредитов",
+        credits=500,
+        price_rub=499,
+        price_usd=6.22,
+        stars=468,
+        prompt_estimate=25,
+    ),
+    "pack1000": BonusPack(
+        id="pack1000",
+        title="1000 кредитов",
+        credits=1000,
+        price_rub=999,
+        price_usd=12.45,
+        stars=936,
+        prompt_estimate=50,
+    ),
+}
+
+
+def free_daily_generation_limit(usage_kind: str) -> int:
+    if usage_kind == "ready":
+        return FREE_DAILY_READY_IMAGE_GENERATIONS
+    return FREE_DAILY_SELF_IMAGE_GENERATIONS
+
+
+def daily_image_generation_limit(subscription_active: bool, usage_kind: str) -> int:
+    if subscription_active:
+        return UNLIMITED_DAILY_IMAGE_GENERATIONS
+    return free_daily_generation_limit(usage_kind)

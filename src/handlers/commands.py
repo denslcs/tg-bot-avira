@@ -16,7 +16,7 @@ from src.database import (
     clear_dialog_messages,
     ensure_user,
     get_credits,
-    get_monthly_image_generation_usage,
+    get_daily_image_generation_usage,
     get_referral_count,
     get_user_admin_profile,
     subscription_is_active,
@@ -260,16 +260,21 @@ async def _build_referral_message(
         if bot_username
         else f"/start ref_{user_id}"
     )
-    uname_line = f"@{username}" if username else "без username"
-    # Без HTML: разметка цитат/вложенных тегов у части клиентов ломала отправку (parse entities)
+    uname_html = f"@{esc(username)}" if username else "<i>без username</i>"
     text = (
-        f"👤 Профиль {uname_line}\n"
-        f"💳 ID: {user_id}\n"
-        f"💵 Кредиты: {balance}\n\n"
-        f"✉️ Приглашения: {invited}\n\n"
-        "Приглашай друзей и получай 10 кредитов за каждого приглашённого.\n"
-        "Другу по твоей ссылке при первом /start — +5 кредитов.\n\n"
-        f"Твоя реферальная ссылка:\n{ref_link}"
+        "<b>👥 Реферальная программа</b>\n\n"
+        "<blockquote>"
+        f"<i>👤 Профиль</i> {uname_html}\n"
+        f"<i>💳 ID</i> <code>{esc(user_id)}</code>\n"
+        f"<i>💵 Кредиты</i> <b>{esc(balance)}</b>\n"
+        f"<i>✉️ Приглашения</i> <b>{esc(invited)}</b>"
+        "</blockquote>\n\n"
+        "<blockquote><i>"
+        "За каждого приглашённого друга — <b>+10</b> кредитов тебе. "
+        "Новому пользователю при первом <code>/start</code> по твоей ссылке — <b>+5</b> кредитов."
+        "</i></blockquote>\n\n"
+        "<b>🔗 Твоя ссылка</b>\n"
+        f"<code>{esc(ref_link)}</code>"
     )
     share_url = _referral_share_url(bot_username, user_id)
     kb = InlineKeyboardMarkup(
@@ -287,9 +292,20 @@ async def deliver_referral_screen(bot: Bot, user_id: int, username: str | None, 
     text, kb = await _build_referral_message(user_id, username, me.username)
     try:
         if reply_via:
-            await reply_via.answer(text, reply_markup=kb, disable_web_page_preview=True)
+            await reply_via.answer(
+                text,
+                reply_markup=kb,
+                parse_mode=HTML,
+                disable_web_page_preview=True,
+            )
         else:
-            await bot.send_message(chat_id=user_id, text=text, reply_markup=kb, disable_web_page_preview=True)
+            await bot.send_message(
+                chat_id=user_id,
+                text=text,
+                reply_markup=kb,
+                parse_mode=HTML,
+                disable_web_page_preview=True,
+            )
     except Exception:
         logging.exception("deliver_referral_screen: не удалось отправить сообщение с реферальной ссылкой")
         try:
@@ -345,8 +361,15 @@ async def cmd_profile(message: Message) -> None:
             sub_extra = f"\nПодписка (истекла): {esc(profile.subscription_ends_at)}"
     if profile and profile.subscription_plan and profile.subscription_plan in PLANS:
         sub_extra += f"\nТариф: {esc(PLANS[profile.subscription_plan].title)}."
-    used_m, limit_m = await get_monthly_image_generation_usage(message.from_user.id)
-    sub_extra += f"\nГенераций картинок в этом месяце (UTC): {esc(used_m)}/{esc(limit_m)}."
+    if profile and subscription_is_active(profile.subscription_ends_at):
+        sub_extra += "\nКартинки: без лимитов по количеству, списываются только кредиты."
+    else:
+        used_self, limit_self = await get_daily_image_generation_usage(message.from_user.id, "self")
+        used_ready, limit_ready = await get_daily_image_generation_usage(message.from_user.id, "ready")
+        sub_extra += (
+            f"\nСегодня (UTC): свои генерации {esc(used_self)}/{esc(limit_self)}, "
+            f"готовые промпты {esc(used_ready)}/{esc(limit_ready)}."
+        )
     await message.answer(
         "<b>Профиль</b>\n"
         f"<blockquote><i>💰 Баланс:</i> <b>{esc(balance)}</b> кредитов{sub_extra}</blockquote>",

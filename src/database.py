@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 import aiosqlite
 
 from src.config import DB_PATH, START_CREDITS
-from src.subscription_catalog import PLANS, plan_limit_generations
+from src.subscription_catalog import PLANS, daily_image_generation_limit
 
 
 @dataclass
@@ -186,6 +186,17 @@ async def init_db() -> None:
                 month_utc TEXT NOT NULL,
                 count INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (user_id, month_utc)
+            )
+            """
+        )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_daily_image_usage (
+                user_id INTEGER NOT NULL,
+                day_utc TEXT NOT NULL,
+                usage_kind TEXT NOT NULL,
+                count INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (user_id, day_utc, usage_kind)
             )
             """
         )
@@ -655,20 +666,30 @@ def _month_utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m")
 
 
-def monthly_image_generation_limit(
-    subscription_ends_at: str | None, subscription_plan: str | None
+def _day_utc_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def daily_image_generation_limit_for_user(
+    subscription_ends_at: str | None, usage_kind: str
 ) -> int:
-    return plan_limit_generations(
-        subscription_plan,
+    return daily_image_generation_limit(
         subscription_is_active(subscription_ends_at),
+        usage_kind,
     )
 
 
 async def get_monthly_image_generation_usage(user_id: int) -> tuple[int, int]:
+    # Legacy API (deprecated): для обратной совместимости считаем "self" за текущие сутки.
+    return await get_daily_image_generation_usage(user_id, "self")
+
+
+async def get_daily_image_generation_usage(user_id: int, usage_kind: str) -> tuple[int, int]:
+    kind = "ready" if usage_kind == "ready" else "self"
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             """
-            SELECT subscription_ends_at, subscription_plan
+            SELECT subscription_ends_at
             FROM users
             WHERE user_id = ?
             """,
@@ -676,20 +697,19 @@ async def get_monthly_image_generation_usage(user_id: int) -> tuple[int, int]:
         ) as cur:
             row = await cur.fetchone()
     if not row:
-        return 0, plan_limit_generations(None, False)
-    ends, plan = row[0], row[1]
-    limit = monthly_image_generation_limit(
-        str(ends) if ends else None,
-        str(plan) if plan else None,
+        return 0, daily_image_generation_limit(False, kind)
+    limit = daily_image_generation_limit_for_user(
+        str(row[0]) if row[0] else None,
+        kind,
     )
-    month = _month_utc_now()
+    day = _day_utc_now()
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             """
-            SELECT count FROM user_monthly_image_usage
-            WHERE user_id = ? AND month_utc = ?
+            SELECT count FROM user_daily_image_usage
+            WHERE user_id = ? AND day_utc = ? AND usage_kind = ?
             """,
-            (user_id, month),
+            (user_id, day, kind),
         ) as cur:
             urow = await cur.fetchone()
     used = int(urow[0]) if urow else 0
@@ -697,11 +717,17 @@ async def get_monthly_image_generation_usage(user_id: int) -> tuple[int, int]:
 
 
 async def try_reserve_monthly_image_generation(user_id: int) -> bool:
+    # Legacy API (deprecated).
+    return await try_reserve_daily_image_generation(user_id, "self")
+
+
+async def try_reserve_daily_image_generation(user_id: int, usage_kind: str) -> bool:
+    kind = "ready" if usage_kind == "ready" else "self"
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("BEGIN IMMEDIATE")
         async with db.execute(
             """
-            SELECT subscription_ends_at, subscription_plan
+            SELECT subscription_ends_at
             FROM users
             WHERE user_id = ?
             """,
@@ -711,17 +737,17 @@ async def try_reserve_monthly_image_generation(user_id: int) -> bool:
         if not row:
             await db.rollback()
             return False
-        limit = monthly_image_generation_limit(
+        limit = daily_image_generation_limit_for_user(
             str(row[0]) if row[0] else None,
-            str(row[1]) if row[1] else None,
+            kind,
         )
-        month = _month_utc_now()
+        day = _day_utc_now()
         async with db.execute(
             """
-            SELECT count FROM user_monthly_image_usage
-            WHERE user_id = ? AND month_utc = ?
+            SELECT count FROM user_daily_image_usage
+            WHERE user_id = ? AND day_utc = ? AND usage_kind = ?
             """,
-            (user_id, month),
+            (user_id, day, kind),
         ) as cur:
             urow = await cur.fetchone()
         used = int(urow[0]) if urow else 0
@@ -731,34 +757,40 @@ async def try_reserve_monthly_image_generation(user_id: int) -> bool:
         if urow:
             await db.execute(
                 """
-                UPDATE user_monthly_image_usage
+                UPDATE user_daily_image_usage
                 SET count = count + 1
-                WHERE user_id = ? AND month_utc = ?
+                WHERE user_id = ? AND day_utc = ? AND usage_kind = ?
                 """,
-                (user_id, month),
+                (user_id, day, kind),
             )
         else:
             await db.execute(
                 """
-                INSERT INTO user_monthly_image_usage (user_id, month_utc, count)
-                VALUES (?, ?, 1)
+                INSERT INTO user_daily_image_usage (user_id, day_utc, usage_kind, count)
+                VALUES (?, ?, ?, 1)
                 """,
-                (user_id, month),
+                (user_id, day, kind),
             )
         await db.commit()
     return True
 
 
 async def release_monthly_image_generation(user_id: int) -> None:
-    month = _month_utc_now()
+    # Legacy API (deprecated).
+    await release_daily_image_generation(user_id, "self")
+
+
+async def release_daily_image_generation(user_id: int, usage_kind: str) -> None:
+    kind = "ready" if usage_kind == "ready" else "self"
+    day = _day_utc_now()
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("BEGIN IMMEDIATE")
         async with db.execute(
             """
-            SELECT count FROM user_monthly_image_usage
-            WHERE user_id = ? AND month_utc = ?
+            SELECT count FROM user_daily_image_usage
+            WHERE user_id = ? AND day_utc = ? AND usage_kind = ?
             """,
-            (user_id, month),
+            (user_id, day, kind),
         ) as cur:
             row = await cur.fetchone()
         if not row or int(row[0]) <= 0:
@@ -768,19 +800,19 @@ async def release_monthly_image_generation(user_id: int) -> None:
         if new_c <= 0:
             await db.execute(
                 """
-                DELETE FROM user_monthly_image_usage
-                WHERE user_id = ? AND month_utc = ?
+                DELETE FROM user_daily_image_usage
+                WHERE user_id = ? AND day_utc = ? AND usage_kind = ?
                 """,
-                (user_id, month),
+                (user_id, day, kind),
             )
         else:
             await db.execute(
                 """
-                UPDATE user_monthly_image_usage
+                UPDATE user_daily_image_usage
                 SET count = ?
-                WHERE user_id = ? AND month_utc = ?
+                WHERE user_id = ? AND day_utc = ? AND usage_kind = ?
                 """,
-                (new_c, user_id, month),
+                (new_c, user_id, day, kind),
             )
         await db.commit()
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -18,22 +20,37 @@ from src.config import (
     GEMINI_IMAGE_MODEL,
     GEMINI_NANO_COST_CREDITS,
     GEMINI_NANO_MODEL,
+    IMAGE_GEN_BACKEND,
+    IMAGE_READY_IDEAS_COST_CREDITS,
+    MAX_USER_MESSAGE_CHARS,
+    QWEN_IMAGE_EDIT_MODEL,
+    QWEN_IMAGE_MODEL,
 )
 from src.database import (
     add_credits,
     ensure_user,
     get_credits,
+    get_daily_image_generation_usage,
     get_last_image_context,
-    get_monthly_image_generation_usage,
-    get_user_admin_profile,
-    release_monthly_image_generation,
+    release_daily_image_generation,
     save_last_image_context,
-    subscription_is_active,
     take_credits,
-    try_reserve_monthly_image_generation,
+    try_reserve_daily_image_generation,
 )
 from src.formatting import HTML, esc
-from src.gemini_image import edit_image_png, generate_image_png, is_gemini_configured
+from src.gemini_image import (
+    edit_image_png,
+    format_gemini_user_error,
+    generate_image_png,
+    is_gemini_configured,
+)
+from src.qwen_image import (
+    format_qwen_image_user_error,
+    is_qwen_image_configured,
+    qwen_edit_image_bytes,
+    qwen_text_to_image_bytes,
+)
+from src.subscription_catalog import UNLIMITED_DAILY_IMAGE_GENERATIONS
 
 router = Router(name="img_commands")
 
@@ -41,12 +58,27 @@ router = Router(name="img_commands")
 MODEL_NANO_DISPLAY = "🍌 Nano Banana"
 MODEL_NANO2_DISPLAY = "🍌🍌 Nano Banana 2"
 
-_GEMINI_MISSING_TEXT = (
-    "<b>Генерация картинок выключена</b> — нет ключа <code>GEMINI_API_KEY</code>.\n\n"
-    "<blockquote><i>Создай ключ в Google AI Studio и добавь в <code>.env</code> на сервере:</i>\n"
-    "<code>GEMINI_API_KEY=твой_ключ</code></blockquote>\n"
-    "Перезапусти бота (<code>systemctl restart</code>). Шаблон — в <code>.env.example</code>."
+_IMAGE_GEN_MISSING_TEXT = (
+    "<b>Генерация картинок выключена.</b>\n\n"
+    "<blockquote><i>Google Gemini:</i> <code>GEMINI_API_KEY</code>, "
+    "<code>IMAGE_GEN_BACKEND=gemini</code> (по умолчанию).</blockquote>\n"
+    "<blockquote><i>Qwen (текст→картинка и правка фото):</i> "
+    "<code>IMAGE_GEN_BACKEND=qwen</code> и <code>DASHSCOPE_API_KEY</code>.</blockquote>\n"
+    "Для Qwen-правки задай <code>QWEN_IMAGE_EDIT_MODEL</code> (см. .env.example)."
 )
+
+
+def _text_to_image_configured() -> bool:
+    if IMAGE_GEN_BACKEND == "qwen":
+        return is_qwen_image_configured()
+    return is_gemini_configured()
+
+
+def _edit_flow_configured() -> bool:
+    """Правка по фото и готовые идеи: Gemini или Qwen-Image-Edit."""
+    if IMAGE_GEN_BACKEND == "qwen":
+        return is_qwen_image_configured()
+    return is_gemini_configured()
 
 CB_CREATE_IMAGE = "menu:create_image"
 CB_MENU_BACK_START = "menu:back_start"
@@ -79,13 +111,13 @@ def image_menu_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=f"🍌 Nano Banana — {GEMINI_NANO_COST_CREDITS} кредит",
+                    text=f"🍌 Nano Banana — {GEMINI_NANO_COST_CREDITS} кредитов",
                     callback_data=CB_PICK_NANO,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=f"🍌🍌 Nano Banana 2 — {GEMINI_IMAGE_COST_CREDITS} кредита",
+                    text=f"🍌🍌 Nano Banana 2 — {GEMINI_IMAGE_COST_CREDITS} кредитов",
                     callback_data=CB_PICK_NANO_2,
                 )
             ],
@@ -113,21 +145,23 @@ READY_IDEAS: list[tuple[str, str]] = [
 ]
 
 
-async def _prepare_image_charge_and_monthly_slot(
+async def _prepare_image_charge_and_daily_slot(
     message: Message,
     *,
     user_id: int,
     is_admin: bool,
     charge: bool,
     cost: int,
+    usage_kind: str,
 ) -> bool:
     if not is_admin:
-        used0, limit0 = await get_monthly_image_generation_usage(user_id)
+        used0, limit0 = await get_daily_image_generation_usage(user_id, usage_kind)
         if used0 >= limit0:
+            kind_label = "готовые промпты" if usage_kind == "ready" else "свои генерации"
             await message.answer(
-                "<b>Лимит месяца</b>\n"
-                f"<blockquote><i>Генераций картинок:</i> <b>{esc(used0)}/{esc(limit0)}</b> (UTC). "
-                "Оформи подписку в <code>/start</code> или дождись нового месяца.</blockquote>",
+                "<b>Лимит на сегодня</b>\n"
+                f"<blockquote><i>{esc(kind_label)}:</i> <b>{esc(used0)}/{esc(limit0)}</b> (UTC сутки). "
+                "Оформи подписку в <code>/start</code> или дождись нового дня.</blockquote>",
                 parse_mode=HTML,
             )
             return False
@@ -141,14 +175,15 @@ async def _prepare_image_charge_and_monthly_slot(
             )
             return False
     if not is_admin:
-        if not await try_reserve_monthly_image_generation(user_id):
-            used, limit = await get_monthly_image_generation_usage(user_id)
+        if not await try_reserve_daily_image_generation(user_id, usage_kind):
+            used, limit = await get_daily_image_generation_usage(user_id, usage_kind)
+            kind_label = "готовые промпты" if usage_kind == "ready" else "свои генерации"
             if charge:
                 await add_credits(user_id, cost)
             await message.answer(
                 "<b>Лимит занят</b>\n"
-                f"<blockquote><i>Параллельный запрос.</i> Сейчас: <b>{esc(used)}/{esc(limit)}</b>. "
-                "Попробуй позже или оформи подписку.</blockquote>",
+                f"<blockquote><i>Параллельный запрос.</i> {esc(kind_label)}: <b>{esc(used)}/{esc(limit)}</b> "
+                "(UTC сутки). Попробуй позже или оформи подписку.</blockquote>",
                 parse_mode=HTML,
             )
             return False
@@ -179,31 +214,30 @@ async def _send_result_photo_with_regen(
     photo_file_id: str | None,
     is_admin: bool,
     charge: bool,
-    profile,
+    usage_kind: str,
 ) -> None:
     await save_last_image_context(
         user_id, kind, prompt, model, cost, model_name, photo_file_id
     )
-    used_m, limit_m = await get_monthly_image_generation_usage(user_id)
-    month_note = "" if is_admin else f"\n<blockquote><i>Месяц (UTC):</i> {esc(used_m)}/{esc(limit_m)} генераций.</blockquote>"
+    used_d, limit_d = await get_daily_image_generation_usage(user_id, usage_kind)
+    if is_admin or limit_d >= UNLIMITED_DAILY_IMAGE_GENERATIONS:
+        day_note = ""
+    else:
+        kind_label = "готовые промпты" if usage_kind == "ready" else "свои генерации"
+        day_note = f"\n<blockquote><i>Сегодня (UTC):</i> {esc(kind_label)} {esc(used_d)}/{esc(limit_d)}.</blockquote>"
     mn = esc(model_name)
     if is_admin:
         caption = f"<b>Готово ✅</b>\n<b>ИИ:</b> {mn}\n<i>Режим админа — кредиты не списывались.</i>"
-    elif not charge and profile is not None:
-        balance = await get_credits(user_id)
-        caption = (
-            f"<b>Готово ✅</b>\n<b>ИИ:</b> {mn}\n"
-            f"<blockquote><i>💰 Баланс:</i> <b>{esc(balance)}</b></blockquote>\n"
-            "<i>Кредиты за картинку не списывались (активна подписка).</i>"
-            f"{month_note}"
-        )
     else:
         balance = await get_credits(user_id)
-        cw = _credits_word(cost)
+        spent = ""
+        if charge:
+            cw = _credits_word(cost)
+            spent = f"Списано: <b>{esc(cost)}</b> {cw}.\n"
         caption = (
             f"<b>Готово ✅</b>\n<b>ИИ:</b> {mn}\n"
-            f"Списано: <b>{esc(cost)}</b> {cw}.\n"
-            f"<blockquote><i>💰 Баланс:</i> <b>{esc(balance)}</b></blockquote>{month_note}"
+            f"{spent}"
+            f"<blockquote><i>💰 Баланс:</i> <b>{esc(balance)}</b></blockquote>{day_note}"
         )
     await message.answer_photo(
         photo=BufferedInputFile(image_bytes, filename=filename),
@@ -225,31 +259,49 @@ async def _execute_text_generation(
     model: str,
     model_name: str,
     cost: int,
+    usage_kind: str = "self",
 ) -> None:
     await ensure_user(user_id, username)
-    if not is_gemini_configured():
-        await message.answer(_GEMINI_MISSING_TEXT, reply_markup=_gemini_missing_kb(), parse_mode=HTML)
+    if not _text_to_image_configured():
+        await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_gemini_missing_kb(), parse_mode=HTML)
         return
     is_admin = user_id in ADMIN_IDS
-    profile = await get_user_admin_profile(user_id) if not is_admin else None
-    charge = not is_admin and (
-        profile is None or not subscription_is_active(profile.subscription_ends_at)
-    )
-    if not await _prepare_image_charge_and_monthly_slot(
-        message, user_id=user_id, is_admin=is_admin, charge=charge, cost=cost
+    charge = not is_admin
+    if not await _prepare_image_charge_and_daily_slot(
+        message, user_id=user_id, is_admin=is_admin, charge=charge, cost=cost, usage_kind=usage_kind
     ):
         return
     wait_msg = await message.answer("Идет генерация картинки")
     try:
-        image_bytes = await generate_image_png(prompt, model=model)
+        if IMAGE_GEN_BACKEND == "qwen":
+            image_bytes = await qwen_text_to_image_bytes(prompt)
+        else:
+            image_bytes = await generate_image_png(prompt, model=model)
     except Exception as exc:
+        logging.exception(
+            "Image text generation failed user_id=%s backend=%s",
+            user_id,
+            IMAGE_GEN_BACKEND,
+        )
         if not is_admin:
-            await release_monthly_image_generation(user_id)
+            await release_daily_image_generation(user_id, usage_kind)
         if charge:
             await add_credits(user_id, cost)
-        await wait_msg.edit_text(f"Ошибка генерации: {exc}")
+        err = (
+            format_qwen_image_user_error(exc)
+            if IMAGE_GEN_BACKEND == "qwen"
+            else format_gemini_user_error(exc)
+        )
+        await wait_msg.edit_text(
+            err,
+            parse_mode=HTML if IMAGE_GEN_BACKEND == "gemini" else None,
+            disable_web_page_preview=True,
+        )
         return
     await wait_msg.delete()
+    caption_model_name = (
+        f"Qwen-Image ({QWEN_IMAGE_MODEL})" if IMAGE_GEN_BACKEND == "qwen" else model_name
+    )
     await _send_result_photo_with_regen(
         message,
         state,
@@ -259,12 +311,12 @@ async def _execute_text_generation(
         kind="text",
         prompt=prompt,
         model=model,
-        model_name=model_name,
+        model_name=caption_model_name,
         cost=cost,
         photo_file_id=None,
         is_admin=is_admin,
         charge=charge,
-        profile=profile,
+        usage_kind=usage_kind,
     )
 
 
@@ -279,33 +331,57 @@ async def _execute_edit_generation(
     model_name: str,
     cost: int,
     source_file_id: str,
+    usage_kind: str = "self",
 ) -> None:
+    if len(prompt) > MAX_USER_MESSAGE_CHARS:
+        await message.answer(
+            f"Слишком длинный текст в подписи (максимум {MAX_USER_MESSAGE_CHARS} символов). "
+            "Сократи описание и отправь снова."
+        )
+        return
     await ensure_user(user_id, username)
-    if not is_gemini_configured():
-        await message.answer(_GEMINI_MISSING_TEXT, reply_markup=_gemini_missing_kb(), parse_mode=HTML)
+    if not _edit_flow_configured():
+        await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_gemini_missing_kb(), parse_mode=HTML)
         return
     is_admin = user_id in ADMIN_IDS
-    profile = await get_user_admin_profile(user_id) if not is_admin else None
-    charge = not is_admin and (
-        profile is None or not subscription_is_active(profile.subscription_ends_at)
-    )
-    if not await _prepare_image_charge_and_monthly_slot(
-        message, user_id=user_id, is_admin=is_admin, charge=charge, cost=cost
+    charge = not is_admin
+    if not await _prepare_image_charge_and_daily_slot(
+        message, user_id=user_id, is_admin=is_admin, charge=charge, cost=cost, usage_kind=usage_kind
     ):
         return
     wait_msg = await message.answer("Идет генерация картинки")
     try:
         image_bytes_src = await message.bot.download(source_file_id)
         source_bytes = image_bytes_src.read()
-        image_bytes = await edit_image_png(source_bytes, prompt, model=model)
+        if IMAGE_GEN_BACKEND == "qwen":
+            image_bytes = await qwen_edit_image_bytes(source_bytes, prompt)
+        else:
+            image_bytes = await edit_image_png(source_bytes, prompt, model=model)
     except Exception as exc:
+        logging.exception(
+            "Image edit failed user_id=%s backend=%s",
+            user_id,
+            IMAGE_GEN_BACKEND,
+        )
         if not is_admin:
-            await release_monthly_image_generation(user_id)
+            await release_daily_image_generation(user_id, usage_kind)
         if charge:
             await add_credits(user_id, cost)
-        await wait_msg.edit_text(f"Ошибка генерации: {exc}")
+        err = (
+            format_qwen_image_user_error(exc)
+            if IMAGE_GEN_BACKEND == "qwen"
+            else format_gemini_user_error(exc)
+        )
+        await wait_msg.edit_text(
+            err,
+            parse_mode=HTML if IMAGE_GEN_BACKEND == "gemini" else None,
+            disable_web_page_preview=True,
+        )
         return
     await wait_msg.delete()
+    caption_edit_name = (
+        f"Qwen-Image-Edit ({QWEN_IMAGE_EDIT_MODEL})" if IMAGE_GEN_BACKEND == "qwen" else model_name
+    )
     await _send_result_photo_with_regen(
         message,
         state,
@@ -315,12 +391,12 @@ async def _execute_edit_generation(
         kind="edit",
         prompt=prompt,
         model=model,
-        model_name=model_name,
+        model_name=caption_edit_name,
         cost=cost,
         photo_file_id=source_file_id,
         is_admin=is_admin,
         charge=charge,
-        profile=profile,
+        usage_kind=usage_kind,
     )
 
 
@@ -352,9 +428,9 @@ async def back_to_image_models(callback: CallbackQuery, state: FSMContext) -> No
     if callback.message is None:
         await callback.answer("Сообщение недоступно.", show_alert=True)
         return
-    if not is_gemini_configured():
+    if not _text_to_image_configured():
         await callback.answer()
-        await callback.message.answer(_GEMINI_MISSING_TEXT, reply_markup=_gemini_missing_kb(), parse_mode=HTML)
+        await callback.message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_gemini_missing_kb(), parse_mode=HTML)
         return
     await ensure_user(callback.from_user.id, callback.from_user.username)
     await state.clear()
@@ -374,9 +450,9 @@ async def open_image_menu(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.message is None:
         await callback.answer("Сообщение недоступно.", show_alert=True)
         return
-    if not is_gemini_configured():
+    if not _text_to_image_configured():
         await callback.answer()
-        await callback.message.answer(_GEMINI_MISSING_TEXT, reply_markup=_gemini_missing_kb(), parse_mode=HTML)
+        await callback.message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_gemini_missing_kb(), parse_mode=HTML)
         return
     await ensure_user(callback.from_user.id, callback.from_user.username)
     await state.clear()
@@ -396,9 +472,9 @@ async def pick_nano(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.message is None:
         await callback.answer("Сообщение недоступно.", show_alert=True)
         return
-    if not is_gemini_configured():
+    if not _text_to_image_configured():
         await callback.answer()
-        await callback.message.answer(_GEMINI_MISSING_TEXT, reply_markup=_gemini_missing_kb(), parse_mode=HTML)
+        await callback.message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_gemini_missing_kb(), parse_mode=HTML)
         return
     await ensure_user(callback.from_user.id, callback.from_user.username)
     await state.update_data(
@@ -423,9 +499,9 @@ async def pick_nano_2(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.message is None:
         await callback.answer("Сообщение недоступно.", show_alert=True)
         return
-    if not is_gemini_configured():
+    if not _text_to_image_configured():
         await callback.answer()
-        await callback.message.answer(_GEMINI_MISSING_TEXT, reply_markup=_gemini_missing_kb(), parse_mode=HTML)
+        await callback.message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_gemini_missing_kb(), parse_mode=HTML)
         return
     await ensure_user(callback.from_user.id, callback.from_user.username)
     await state.update_data(
@@ -461,6 +537,9 @@ async def mode_edit(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer("Сообщение недоступно.", show_alert=True)
         return
     await callback.answer()
+    if not _edit_flow_configured():
+        await callback.message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_gemini_missing_kb(), parse_mode=HTML)
+        return
     await state.set_state(ImageGenState.waiting_photo_for_edit)
     await callback.message.answer(
         "<blockquote><i>Одно сообщение:</i> фото + описание в <b>подписи</b> к фото.</blockquote>",
@@ -500,9 +579,9 @@ async def apply_ready_idea(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.message is None or not callback.data:
         await callback.answer("Ошибка запроса.", show_alert=True)
         return
-    if not is_gemini_configured():
+    if not _edit_flow_configured():
         await callback.answer()
-        await callback.message.answer(_GEMINI_MISSING_TEXT, reply_markup=_gemini_missing_kb(), parse_mode=HTML)
+        await callback.message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_gemini_missing_kb(), parse_mode=HTML)
         return
     try:
         idx = int(callback.data.replace(CB_APPLY_READY_PREFIX, ""))
@@ -514,7 +593,7 @@ async def apply_ready_idea(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(
         selected_model=GEMINI_IMAGE_MODEL,
         selected_name=MODEL_NANO2_DISPLAY,
-        selected_cost=GEMINI_IMAGE_COST_CREDITS,
+        selected_cost=IMAGE_READY_IDEAS_COST_CREDITS,
         ready_prompt=prompt,
         ready_title=title,
     )
@@ -582,6 +661,7 @@ async def create_image_from_prompt(message: Message, state: FSMContext) -> None:
         model=model,
         model_name=model_name,
         cost=cost,
+        usage_kind="self",
     )
 
 
@@ -609,6 +689,7 @@ async def regenerate_same(callback: CallbackQuery, _state: FSMContext) -> None:
             model=ctx.model,
             model_name=ctx.model_name,
             cost=ctx.cost,
+            usage_kind="self",
         )
     else:
         if not ctx.photo_file_id:
@@ -627,6 +708,7 @@ async def regenerate_same(callback: CallbackQuery, _state: FSMContext) -> None:
             model_name=ctx.model_name,
             cost=ctx.cost,
             source_file_id=ctx.photo_file_id,
+            usage_kind="ready" if ctx.cost == IMAGE_READY_IDEAS_COST_CREDITS else "self",
         )
 
 
@@ -638,7 +720,7 @@ async def create_image_edit_from_photo(message: Message, state: FSMContext) -> N
     if not prompt:
         await message.answer("Добавьте описание в подпись к фото и отправьте снова.")
         return
-    await _generate_from_photo_with_prompt(message, state, prompt)
+    await _generate_from_photo_with_prompt(message, state, prompt, usage_kind="self")
 
 
 @router.message(ImageGenState.waiting_photo_for_idea, F.photo)
@@ -651,10 +733,12 @@ async def create_image_from_ready_prompt(message: Message, state: FSMContext) ->
         await message.answer("Промпт не найден. Нажмите 'Готовые идеи' снова.")
         await state.clear()
         return
-    await _generate_from_photo_with_prompt(message, state, prompt)
+    await _generate_from_photo_with_prompt(message, state, prompt, usage_kind="ready")
 
 
-async def _generate_from_photo_with_prompt(message: Message, state: FSMContext, prompt: str) -> None:
+async def _generate_from_photo_with_prompt(
+    message: Message, state: FSMContext, prompt: str, usage_kind: str
+) -> None:
     if not message.from_user or not message.photo:
         return
     user_id = message.from_user.id
@@ -673,5 +757,6 @@ async def _generate_from_photo_with_prompt(message: Message, state: FSMContext, 
         model_name=model_name,
         cost=cost,
         source_file_id=source_file_id,
+        usage_kind=usage_kind,
     )
 

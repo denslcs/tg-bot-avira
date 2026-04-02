@@ -194,7 +194,7 @@ async def any_message(message: Message, state: FSMContext) -> None:
         reply_text = (
             f"Avira получила: {text}\n\n"
             f"В памяти сейчас: {len(history)} сообщений (максимум 10).\n"
-            "Следующий шаг: подключим Gemini через прокси."
+            "Полноценный текстовый чат с ИИ подключим отдельно; пока основной режим — картинки через меню /start."
         )
         await add_dialog_message(user_id, "assistant", reply_text)
     except Exception:
