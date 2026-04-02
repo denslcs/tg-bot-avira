@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
@@ -7,13 +8,16 @@ from aiogram.exceptions import TelegramBadRequest
 from src.config import ADMIN_IDS, MAX_SUPPORT_DRAFT_TOTAL_CHARS, SUPPORT_CHAT_ID, SUPPORT_FEEDBACK_THREAD_ID
 from src.database import (
     close_ticket,
+    count_generated_images_total,
     get_meta,
     get_open_ticket_by_id,
     get_open_ticket_by_thread,
     get_ticket_detail_by_id,
+    get_user_admin_profile,
     mark_first_reply_to_user,
     record_support_rating,
     set_meta,
+    subscription_is_active,
     update_ticket_thread,
 )
 from src.support_topic_naming import topic_title
@@ -48,6 +52,19 @@ logger = logging.getLogger(__name__)
 
 MAX_FEEDBACK_CHARS = 3500
 _META_FEEDBACK_THREAD = "support_feedback_thread_id"
+
+
+def _days_in_main_bot(created_at: str | None) -> int:
+    text = (created_at or "").strip()
+    if not text:
+        return 0
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return 0
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return max(0, (datetime.now(timezone.utc) - dt).days)
 
 
 async def _ensure_feedback_thread_id(bot) -> int | None:
@@ -368,10 +385,28 @@ async def support_private_messages(message: Message) -> None:
             return
 
         username = f"@{message.from_user.username}" if message.from_user.username else "без_username"
+        profile = await get_user_admin_profile(user_id)
+        sub_status = "не активна"
+        sub_plan = "—"
+        sub_till = "—"
+        days_in_bot = 0
+        generated_total = 0
+        if profile:
+            days_in_bot = _days_in_main_bot(profile.created_at)
+            generated_total = await count_generated_images_total(user_id)
+            sub_plan = profile.subscription_plan or "—"
+            sub_till = profile.subscription_ends_at or "—"
+            if subscription_is_active(profile.subscription_ends_at):
+                sub_status = "активна"
         payload = (
             f"[Тикет #{ticket.ticket_id}] Сообщение от пользователя\n"
             f"user_id: {user_id}\n"
-            f"username: {username}\n\n"
+            f"username: {username}\n"
+            f"подписка: {sub_status}\n"
+            f"тариф: {sub_plan}\n"
+            f"подписка до (UTC): {sub_till}\n"
+            f"дней в основном боте: {days_in_bot}\n"
+            f"сгенерировано изображений: {generated_total}\n\n"
             f"{support_text}"
         )
         try:

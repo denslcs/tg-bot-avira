@@ -19,8 +19,10 @@ from src.config import PAY_URL_CARD_INTL, PAY_URL_CARD_RU, PAY_URL_CRYPTO, PROJE
 from src.database import (
     add_credits,
     ensure_user,
-    extend_subscription,
+    get_user_admin_profile,
+    reset_subscription_days,
     release_star_payment_claim,
+    subscription_is_active,
     try_claim_star_payment,
 )
 from src.formatting import HTML, esc
@@ -45,6 +47,16 @@ CB_PAY_STARS_PREFIX = "pay:s:"
 CB_PAY_RUB_PREFIX = "pay:r:"
 CB_PAY_INTL_PREFIX = "pay:i:"
 CB_PAY_CRYPTO_PREFIX = "pay:c:"
+
+
+async def _can_buy_plan(user_id: int, plan_id: str) -> tuple[bool, str | None]:
+    profile = await get_user_admin_profile(user_id)
+    if not profile:
+        return True, None
+    active = subscription_is_active(profile.subscription_ends_at)
+    if active:
+        return False, "Подписка уже активна. Продлить можно после окончания срока."
+    return True, None
 
 
 def _subscriptions_pricing_image_path() -> Path | None:
@@ -242,6 +254,10 @@ async def pay_pick_plan(callback: CallbackQuery) -> None:
     if plan_id not in PLANS:
         await callback.answer("Неизвестный тариф", show_alert=True)
         return
+    allowed, reason = await _can_buy_plan(callback.from_user.id, plan_id)
+    if not allowed:
+        await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
+        return
     await callback.message.answer(
         _pay_methods_text(plan_id),
         reply_markup=_methods_keyboard(plan_id, is_pack=False, back_callback_data=CB_PAY_MENU),
@@ -340,6 +356,11 @@ async def pay_rub(callback: CallbackQuery) -> None:
     if item_id not in PLANS and item_id not in BONUS_PACKS:
         await callback.answer("Ошибка", show_alert=True)
         return
+    if item_id in PLANS and callback.from_user:
+        allowed, reason = await _can_buy_plan(callback.from_user.id, item_id)
+        if not allowed:
+            await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
+            return
     await _external_pay_hint(callback, item_id, "карта РФ", PAY_URL_CARD_RU or None)
 
 
@@ -352,6 +373,11 @@ async def pay_intl(callback: CallbackQuery) -> None:
     if item_id not in PLANS and item_id not in BONUS_PACKS:
         await callback.answer("Ошибка", show_alert=True)
         return
+    if item_id in PLANS and callback.from_user:
+        allowed, reason = await _can_buy_plan(callback.from_user.id, item_id)
+        if not allowed:
+            await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
+            return
     await _external_pay_hint(callback, item_id, "карта другой страны", PAY_URL_CARD_INTL or None)
 
 
@@ -364,6 +390,11 @@ async def pay_crypto(callback: CallbackQuery) -> None:
     if item_id not in PLANS and item_id not in BONUS_PACKS:
         await callback.answer("Ошибка", show_alert=True)
         return
+    if item_id in PLANS and callback.from_user:
+        allowed, reason = await _can_buy_plan(callback.from_user.id, item_id)
+        if not allowed:
+            await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
+            return
     await _external_pay_hint(callback, item_id, "крипта", PAY_URL_CRYPTO or None)
 
 
@@ -375,6 +406,10 @@ async def pay_stars_invoice(callback: CallbackQuery) -> None:
     item_id = callback.data.removeprefix(CB_PAY_STARS_PREFIX)
     await ensure_user(callback.from_user.id, callback.from_user.username)
     if item_id in PLANS:
+        allowed, reason = await _can_buy_plan(callback.from_user.id, item_id)
+        if not allowed:
+            await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
+            return
         p = PLANS[item_id]
         payload = f"plan:{callback.from_user.id}:{item_id}"
         await callback.message.bot.send_invoice(
@@ -468,7 +503,7 @@ async def successful_payment(message: Message) -> None:
             await message.answer("Оплата получена, но тариф не найден. Напиши в поддержку.")
             return
         p = PLANS[item_id]
-        new_end = await extend_subscription(message.from_user.id, SUBSCRIPTION_PERIOD_DAYS, item_id)
+        new_end = await reset_subscription_days(message.from_user.id, SUBSCRIPTION_PERIOD_DAYS, item_id)
         if not new_end:
             await release_star_payment_claim(charge_id)
             await message.answer(

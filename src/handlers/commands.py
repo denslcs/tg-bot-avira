@@ -1,5 +1,6 @@
 import logging
 import urllib.parse
+from datetime import datetime, timezone
 from pathlib import Path
 
 from aiogram import Bot, F, Router
@@ -14,6 +15,7 @@ from src.database import (
     add_credits,
     apply_referral,
     clear_dialog_messages,
+    count_generated_images_total,
     ensure_user,
     get_credits,
     get_daily_image_generation_usage,
@@ -28,6 +30,7 @@ from src.handlers.img_commands import CB_CREATE_IMAGE, CB_MENU_BACK_START, CB_RE
 
 # Короткий callback_data (старые кнопки с «menu:ref» всё ещё обрабатываются в handler)
 CB_MENU_REF = "ref_menu"
+CB_MENU_PROFILE = "menu:profile"
 
 router = Router(name="commands")
 
@@ -42,6 +45,9 @@ def _start_menu_kb() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text="ℹ️ Что умеет бот", callback_data="menu:about"),
                 InlineKeyboardButton(text="👥 Реферальная система", callback_data=CB_MENU_REF),
+            ],
+            [
+                InlineKeyboardButton(text="👤 Профиль", callback_data=CB_MENU_PROFILE),
             ],
             [
                 InlineKeyboardButton(text="💳 Оплатить", callback_data="menu:pay"),
@@ -63,9 +69,29 @@ def _main_screen_text(balance: int, bonus_note: str = "") -> str:
     return (
         "🖼 <b>Создай или измени фото</b> с помощью ИИ.\n\n"
         "<b>Главное:</b> 🎨 <i>Создать картинку</i> и 💡 <i>Готовые идеи</i>.\n"
-        "<i>Остальное — оплата, поддержка и справка.</i>\n\n"
-        f"<blockquote><i>💰 Баланс: {esc(balance)} кредитов.</i>{bonus_html}</blockquote>"
+        "<i>Остальное — профиль, оплата, поддержка и справка.</i>\n\n"
+        "<blockquote><i>Открой «Профиль», чтобы посмотреть баланс, статус подписки и лимиты.</i>"
+        f"{bonus_html}</blockquote>"
     )
+
+
+def _days_in_bot(created_at: str) -> int:
+    text = (created_at or "").strip()
+    if not text:
+        return 0
+    candidates = (text.replace("Z", "+00:00"), text)
+    dt: datetime | None = None
+    for c in candidates:
+        try:
+            dt = datetime.fromisoformat(c)
+            break
+        except ValueError:
+            continue
+    if dt is None:
+        return 0
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return max(0, (datetime.now(timezone.utc) - dt).days)
 
 
 def _start_banner_path() -> Path | None:
@@ -169,6 +195,7 @@ async def cmd_help(message: Message) -> None:
         "🏠 <code>/start</code> — <i>главное меню, баланс и картинки</i>\n"
         "❓ <code>/help</code> — <i>этот список</i>\n"
         "💳 <code>/pay</code> — <i>подписка и оплата</i>\n"
+        "👤 <code>/profile</code> — <i>статус аккаунта и подписки</i>\n"
         "👥 <code>/ref</code> — <i>реферальная система</i>\n"
         "💡 <code>/ideas</code> — <i>готовые идеи для фото</i>\n"
         "📋 <code>/faq</code> — <i>частые вопросы</i>\n"
@@ -344,35 +371,66 @@ async def cmd_profile(message: Message) -> None:
     if not message.from_user:
         return
 
-    await ensure_user(message.from_user.id, message.from_user.username)
-    balance = await get_credits(message.from_user.id)
-    if message.from_user.id in ADMIN_IDS:
+    await send_profile_card(message, message.from_user.id, message.from_user.username)
+
+
+@router.callback_query(F.data == CB_MENU_PROFILE)
+async def menu_profile(callback: CallbackQuery) -> None:
+    if not callback.from_user or not callback.message:
+        await callback.answer()
+        return
+    await callback.answer()
+    await send_profile_card(callback.message, callback.from_user.id, callback.from_user.username)
+
+
+async def send_profile_card(message: Message, user_id: int, username_raw: str | None) -> None:
+    await ensure_user(user_id, username_raw)
+    balance = await get_credits(user_id)
+    if user_id in ADMIN_IDS:
         await message.answer(
             "<blockquote><b>Режим админа</b> — безлимит по кредитам.</blockquote>",
             parse_mode=HTML,
         )
         return
-    profile = await get_user_admin_profile(message.from_user.id)
-    sub_extra = ""
-    if profile and profile.subscription_ends_at:
-        if subscription_is_active(profile.subscription_ends_at):
-            sub_extra = f"\nПодписка активна до: {esc(profile.subscription_ends_at)}"
-        else:
-            sub_extra = f"\nПодписка (истекла): {esc(profile.subscription_ends_at)}"
-    if profile and profile.subscription_plan and profile.subscription_plan in PLANS:
-        sub_extra += f"\nТариф: {esc(PLANS[profile.subscription_plan].title)}."
-    if profile and subscription_is_active(profile.subscription_ends_at):
-        sub_extra += "\nКартинки: без лимитов по количеству, списываются только кредиты."
-    else:
-        used_self, limit_self = await get_daily_image_generation_usage(message.from_user.id, "self")
-        used_ready, limit_ready = await get_daily_image_generation_usage(message.from_user.id, "ready")
-        sub_extra += (
-            f"\nСегодня (UTC): свои генерации {esc(used_self)}/{esc(limit_self)}, "
-            f"готовые промпты {esc(used_ready)}/{esc(limit_ready)}."
+    profile = await get_user_admin_profile(user_id)
+    if not profile:
+        await message.answer(
+            "<blockquote><i>Профиль пока не найден. Нажми</i> <code>/start</code> <i>и попробуй снова.</i></blockquote>",
+            parse_mode=HTML,
         )
+        return
+    username = f"@{profile.username}" if profile.username else "—"
+    active_sub = subscription_is_active(profile.subscription_ends_at)
+    if active_sub:
+        sub_status = "активна"
+        sub_till = profile.subscription_ends_at or "—"
+        plan_name = (
+            PLANS[profile.subscription_plan].title
+            if profile.subscription_plan and profile.subscription_plan in PLANS
+            else "—"
+        )
+    else:
+        sub_status = "не активна"
+        sub_till = profile.subscription_ends_at or "—"
+        plan_name = "—"
+    used_self, limit_self = await get_daily_image_generation_usage(user_id, "self")
+    used_ready, limit_ready = await get_daily_image_generation_usage(user_id, "ready")
+    gen_total = await count_generated_images_total(user_id)
+    days_in_bot = _days_in_bot(profile.created_at)
     await message.answer(
-        "<b>Профиль</b>\n"
-        f"<blockquote><i>💰 Баланс:</i> <b>{esc(balance)}</b> кредитов{sub_extra}</blockquote>",
+        "<b>👤 Профиль</b>\n"
+        "<blockquote>"
+        f"<i>Ник:</i> <b>{esc(username)}</b>\n"
+        f"<i>ID:</i> <code>{esc(user_id)}</code>\n"
+        f"<i>💰 Кредиты:</i> <b>{esc(balance)}</b>\n"
+        f"<i>Подписка:</i> <b>{esc(sub_status)}</b>\n"
+        f"<i>Тариф:</i> <b>{esc(plan_name)}</b>\n"
+        f"<i>Активна до (UTC):</i> <b>{esc(sub_till)}</b>\n"
+        f"<i>Сгенерировано изображений:</i> <b>{esc(gen_total)}</b>\n"
+        f"<i>Дней в боте:</i> <b>{esc(days_in_bot)}</b>\n"
+        f"<i>Лимиты на сегодня (UTC):</i> свои <b>{esc(used_self)}/{esc(limit_self)}</b>, "
+        f"готовые <b>{esc(used_ready)}/{esc(limit_ready)}</b>."
+        "</blockquote>",
         parse_mode=HTML,
     )
 

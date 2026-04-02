@@ -16,6 +16,7 @@ from src.handlers.payments import router as payments_router
 
 _USER_COMMANDS = [
     BotCommand(command="start", description="🏠 Главное меню и баланс"),
+    BotCommand(command="profile", description="👤 Профиль и подписка"),
     BotCommand(command="help", description="❓ Список команд"),
     BotCommand(command="pay", description="💳 Подписка и оплата"),
     BotCommand(command="ref", description="👥 Реферальная система"),

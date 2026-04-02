@@ -831,6 +831,12 @@ def _add_days_subscription(existing_iso: str | None, days: int) -> str:
     return new_end.isoformat()
 
 
+def _add_days_from_now(days: int) -> str:
+    now = datetime.now(timezone.utc)
+    new_end = now + timedelta(days=max(0, days))
+    return new_end.isoformat()
+
+
 async def try_claim_star_payment(charge_id: str, user_id: int) -> bool:
     """Зарезервировать charge_id (идемпотентность Stars). Пустой charge_id — True без записи."""
     if not charge_id:
@@ -895,6 +901,39 @@ async def extend_subscription(user_id: int, days: int, plan: str | None = None) 
 
 async def add_subscription_days(user_id: int, days: int) -> str | None:
     return await extend_subscription(user_id, days, None)
+
+
+async def reset_subscription_days(user_id: int, days: int, plan: str | None = None) -> str | None:
+    """Сбросить срок подписки на N дней от текущего момента (без суммирования остатка)."""
+    if days <= 0:
+        return None
+    if plan is not None and plan not in PLANS:
+        return None
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT user_id FROM users WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+        if not row:
+            return None
+        new_iso = _add_days_from_now(days)
+        if plan is not None:
+            await db.execute(
+                """
+                UPDATE users
+                SET subscription_ends_at = ?, subscription_plan = ?
+                WHERE user_id = ?
+                """,
+                (new_iso, plan, user_id),
+            )
+        else:
+            await db.execute(
+                "UPDATE users SET subscription_ends_at = ? WHERE user_id = ?",
+                (new_iso, user_id),
+            )
+        await db.commit()
+    return new_iso
 
 
 async def clear_subscription(user_id: int) -> None:
@@ -1062,6 +1101,24 @@ async def count_dialog_messages(user_id: int) -> int:
         ) as cur:
             row = await cur.fetchone()
     return int(row[0]) if row else 0
+
+
+async def count_generated_images_total(user_id: int) -> int:
+    """Общее число генераций картинок пользователя (исторически: monthly + daily)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT COALESCE(SUM(count), 0) FROM user_monthly_image_usage WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row_m = await cur.fetchone()
+        async with db.execute(
+            "SELECT COALESCE(SUM(count), 0) FROM user_daily_image_usage WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row_d = await cur.fetchone()
+    return int(row_m[0] if row_m and row_m[0] is not None else 0) + int(
+        row_d[0] if row_d and row_d[0] is not None else 0
+    )
 
 
 async def get_user_admin_profile(user_id: int) -> UserAdminProfile | None:

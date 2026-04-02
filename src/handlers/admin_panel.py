@@ -4,6 +4,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from src.config import ADMIN_IDS
 from src.database import (
+    add_credits,
     extend_subscription,
     clear_dialog_messages,
     count_dialog_messages,
@@ -20,8 +21,13 @@ from src.database import (
     subscription_is_active,
     sum_users_credits,
 )
+from src.subscription_catalog import PLANS, PLANS_ORDER
 
 router = Router(name="admin_panel")
+
+
+def _plans_hint() -> str:
+    return "|".join(PLANS_ORDER)
 
 
 def _main_kb() -> InlineKeyboardMarkup:
@@ -52,7 +58,7 @@ async def cmd_admin_panel(message: Message) -> None:
         "• /user ID — профиль пользователя\n"
         "• /addcredits ID сумма — начислить кредиты\n"
         "• /takecredits ID сумма — списать кредиты\n"
-        "• /setsub ID дни [nova|supernova|galaxy|universe] — продлить подписку\n"
+        f"• /setsub ID дни [{_plans_hint()}] — продлить подписку и назначить тариф\n"
         "• /wipechat ID — очистить историю диалога у пользователя\n"
         "• /stats — сводка по пользователям, подпискам и кредитам",
         reply_markup=_main_kb(),
@@ -71,7 +77,7 @@ async def adm_help(callback: CallbackQuery) -> None:
         "/addcredits 123 50\n"
         "/takecredits 123 20\n"
         "/setsub 123 30 — +30 дней (тариф в БД не меняется)\n"
-        "/setsub 123 30 nova — +30 дней и тариф Nova (лимит генераций/мес)\n"
+        f"/setsub 123 30 {_plans_hint().split('|')[0]} — +30 дней и назначение тарифа\n"
         "/wipechat 123 — очистить dialog_messages\n"
         "/faq — шаблоны ответов для пользователей\n"
         "/chatid — id чата (в группе)"
@@ -198,17 +204,25 @@ async def cmd_setsub(message: Message) -> None:
         await message.answer("Только для администраторов.")
         return
     raw = (message.text or "").split()
-    valid_plans = {"nova", "supernova", "galaxy", "universe"}
+    valid_plans = set(PLANS.keys())
     plan: str | None = None
-    if len(raw) == 4 and raw[3] in valid_plans:
-        plan = raw[3]
+    if len(raw) == 4:
+        plan_raw = raw[3].strip().lower()
+        if plan_raw in valid_plans:
+            plan = plan_raw
+        else:
+            await message.answer(
+                "Неизвестный тариф.\n"
+                f"Доступно: {', '.join(PLANS_ORDER)}"
+            )
+            return
     elif len(raw) == 3:
         plan = None
     else:
         await message.answer(
             "Формат:\n"
             "/setsub USER_ID дни\n"
-            "/setsub USER_ID дни nova|supernova|galaxy|universe"
+            f"/setsub USER_ID дни {_plans_hint()}"
         )
         return
     if not raw[1].isdigit() or not raw[2].isdigit():
@@ -221,10 +235,19 @@ async def cmd_setsub(message: Message) -> None:
     if not new_end:
         await message.answer("Не удалось продлить подписку (проверь ID и тариф).")
         return
-    plan_note = f"\nТариф записан: {plan}" if plan else ""
+    bonus_note = ""
+    plan_note = ""
+    if plan:
+        plan_note = f"\nТариф записан: {plan} ({PLANS[plan].title})"
+        bonus = int(PLANS[plan].bonus_credits)
+        credited = await add_credits(uid, bonus)
+        if credited:
+            bonus_note = f"\nНачислено бонусом: +{bonus} кредитов."
+        else:
+            bonus_note = f"\nНе удалось автоматически начислить бонус +{bonus} кредитов."
     await message.answer(
         f"Подписка для {uid} продлена на {days} д.\n"
-        f"Новая дата окончания (UTC): {new_end}{plan_note}"
+        f"Новая дата окончания (UTC): {new_end}{plan_note}{bonus_note}"
     )
 
 
