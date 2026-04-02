@@ -25,6 +25,9 @@ _MAX_INPUT_BYTES = 10 * 1024 * 1024
 _MAX_CACHE_ITEMS = 128
 _text_cache: dict[str, tuple[str, bytes]] = {}
 _edit_cache: dict[str, tuple[str, bytes]] = {}
+_TEXT2IMG_URL = f"{QWEN_DASHSCOPE_API_V1_BASE}/services/aigc/text2image/image-synthesis"
+_IMG2IMG_URL = f"{QWEN_DASHSCOPE_API_V1_BASE}/services/aigc/image2image/image-synthesis"
+_TASK_URL = f"{QWEN_DASHSCOPE_API_V1_BASE}/tasks/{{task_id}}"
 
 
 def is_qwen_image_configured() -> bool:
@@ -49,6 +52,10 @@ def format_qwen_image_user_error(exc: BaseException) -> str:
 
 def _multimodal_url() -> str:
     return f"{QWEN_DASHSCOPE_API_V1_BASE}/services/aigc/multimodal-generation/generation"
+
+
+def _is_wan_model(model: str) -> bool:
+    return str(model or "").strip().lower().startswith("wan2.7")
 
 
 def _guess_mime(image_bytes: bytes) -> str:
@@ -114,6 +121,66 @@ async def _post_multimodal_and_download(body: dict[str, Any]) -> tuple[str, byte
         ir = await client.get(img_url)
         ir.raise_for_status()
         return img_url, ir.content
+
+
+async def _upload_to_telegraph(image_bytes: bytes) -> str:
+    timeout = httpx.Timeout(60.0, connect=20.0)
+    files = {"file": ("image.jpg", image_bytes, _guess_mime(image_bytes))}
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        r = await client.post("https://telegra.ph/upload", files=files)
+        r.raise_for_status()
+        data = r.json()
+    if not isinstance(data, list) or not data or "src" not in data[0]:
+        raise RuntimeError("Не удалось загрузить изображение для WAN-edit.")
+    return f"https://telegra.ph{data[0]['src']}"
+
+
+async def _wan_submit_task(endpoint: str, payload: dict[str, Any]) -> str:
+    if not DASHSCOPE_API_KEY:
+        raise RuntimeError("Не задан DASHSCOPE_API_KEY")
+    headers = {
+        "Authorization": f"Bearer {DASHSCOPE_API_KEY}",
+        "Content-Type": "application/json",
+        "X-DashScope-Async": "enable",
+    }
+    timeout = httpx.Timeout(120.0, connect=20.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        r = await client.post(endpoint, json=payload, headers=headers)
+        r.raise_for_status()
+        data = r.json()
+    task_id = ((data.get("output") or {}).get("task_id") or "").strip()
+    if not task_id:
+        raise RuntimeError("WAN не вернул task_id.")
+    return task_id
+
+
+async def _wan_poll_task_result_url(task_id: str, attempts: int = 45, delay_s: float = 2.0) -> str:
+    headers = {"Authorization": f"Bearer {DASHSCOPE_API_KEY}"}
+    timeout = httpx.Timeout(120.0, connect=20.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for _ in range(attempts):
+            await asyncio.sleep(delay_s)
+            r = await client.get(_TASK_URL.format(task_id=task_id), headers=headers)
+            r.raise_for_status()
+            data = r.json()
+            out = data.get("output") or {}
+            status = str(out.get("task_status") or "").upper()
+            if status == "SUCCEEDED":
+                results = out.get("results") or []
+                if results and isinstance(results[0], dict) and results[0].get("url"):
+                    return str(results[0]["url"])
+                raise RuntimeError("WAN task SUCCEEDED, но URL результата пуст.")
+            if status in ("FAILED", "CANCELED"):
+                raise RuntimeError(out.get("message") or f"WAN task {status}")
+    raise TimeoutError("Превышено время ожидания WAN генерации.")
+
+
+async def _download_image_bytes(image_url: str) -> bytes:
+    timeout = httpx.Timeout(180.0, connect=30.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        ir = await client.get(image_url)
+        ir.raise_for_status()
+        return ir.content
 
 
 def _gen_parameters() -> dict[str, Any]:
@@ -199,25 +266,59 @@ async def _post_multimodal_and_download_with_retry(
     raise RuntimeError("Wan task failed without exception")
 
 
+async def _wan_generate_with_retry(endpoint: str, payload: dict[str, Any], max_attempts: int = 4) -> tuple[str, bytes]:
+    last_exc: BaseException | None = None
+    for attempt in range(max_attempts):
+        try:
+            task_id = await _wan_submit_task(endpoint, payload)
+            img_url = await _wan_poll_task_result_url(task_id)
+            data = await _download_image_bytes(img_url)
+            return img_url, data
+        except Exception as exc:
+            last_exc = exc
+            if attempt >= max_attempts - 1 or not _is_retryable_error(exc):
+                raise
+            delay = 1.0 * (2**attempt)
+            logger.warning(
+                "WAN async retry %s/%s in %.1fs: %s",
+                attempt + 1,
+                max_attempts,
+                delay,
+                exc,
+            )
+            await asyncio.sleep(delay)
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("WAN async task failed without exception")
+
+
 async def qwen_text_to_image_bytes(prompt: str) -> bytes:
     text = (prompt or "").strip()[:800]
     cache_key = f"{QWEN_IMAGE_MODEL}|{QWEN_IMAGE_SIZE}|{_normalize_prompt(text)}"
     cached = _text_cache.get(cache_key)
     if cached:
         return cached[1]
-    body: dict[str, Any] = {
-        "model": QWEN_IMAGE_MODEL,
-        "input": {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [{"text": text}],
-                }
-            ]
-        },
-        "parameters": _gen_parameters(),
-    }
-    img_url, data = await _post_multimodal_and_download_with_retry(body)
+    if _is_wan_model(QWEN_IMAGE_MODEL):
+        payload = {
+            "model": QWEN_IMAGE_MODEL,
+            "input": {"prompt": text},
+            "parameters": {"size": QWEN_IMAGE_SIZE, "n": 1},
+        }
+        img_url, data = await _wan_generate_with_retry(_TEXT2IMG_URL, payload)
+    else:
+        body: dict[str, Any] = {
+            "model": QWEN_IMAGE_MODEL,
+            "input": {
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [{"text": text}],
+                    }
+                ]
+            },
+            "parameters": _gen_parameters(),
+        }
+        img_url, data = await _post_multimodal_and_download_with_retry(body)
     _cache_put(_text_cache, cache_key, (img_url, data))
     return data
 
@@ -233,21 +334,33 @@ async def qwen_edit_image_bytes(image_bytes: bytes, prompt: str) -> bytes:
     cached = _edit_cache.get(cache_key)
     if cached:
         return cached[1]
-    body: dict[str, Any] = {
-        "model": model,
-        "input": {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"image": _bytes_to_data_url(image_bytes)},
-                        {"text": text},
-                    ],
-                }
-            ]
-        },
-        "parameters": _edit_parameters(model),
-    }
-    img_url, data = await _post_multimodal_and_download_with_retry(body)
+    if _is_wan_model(model):
+        public_url = await _upload_to_telegraph(image_bytes)
+        params: dict[str, Any] = {"n": 1}
+        if QWEN_IMAGE_EDIT_SIZE:
+            params["size"] = QWEN_IMAGE_EDIT_SIZE
+        payload = {
+            "model": model,
+            "input": {"prompt": text, "image_url": public_url},
+            "parameters": params,
+        }
+        img_url, data = await _wan_generate_with_retry(_IMG2IMG_URL, payload)
+    else:
+        body: dict[str, Any] = {
+            "model": model,
+            "input": {
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"image": _bytes_to_data_url(image_bytes)},
+                            {"text": text},
+                        ],
+                    }
+                ]
+            },
+            "parameters": _edit_parameters(model),
+        }
+        img_url, data = await _post_multimodal_and_download_with_retry(body)
     _cache_put(_edit_cache, cache_key, (img_url, data))
     return data
