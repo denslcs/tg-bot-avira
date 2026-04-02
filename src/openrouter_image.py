@@ -19,6 +19,14 @@ from src.config import (
 logger = logging.getLogger(__name__)
 
 
+class OpenRouterApiError(RuntimeError):
+    """Ответ OpenRouter с HTTP ≥ 400 — ожидаемая ситуация для логов без traceback."""
+
+    def __init__(self, message: str, *, http_status: int) -> None:
+        super().__init__(message)
+        self.http_status = http_status
+
+
 def is_openrouter_image_configured() -> bool:
     return bool(OPENROUTER_API_KEY)
 
@@ -110,7 +118,7 @@ async def openrouter_text_to_image_bytes(prompt: str, *, model: str | None = Non
                 if isinstance(err, dict):
                     msg = str(err.get("message") or err.get("metadata") or "")
                 logger.warning("OpenRouter error status=%s body=%s", resp.status_code, data)
-                raise RuntimeError(msg or f"HTTP {resp.status_code}")
+                raise OpenRouterApiError(msg or f"HTTP {resp.status_code}", http_status=resp.status_code)
             if not isinstance(data, dict):
                 raise RuntimeError("Неожиданный формат ответа")
             try:

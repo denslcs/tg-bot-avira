@@ -53,6 +53,7 @@ from src.gemini_image import (
     is_gemini_configured,
 )
 from src.openrouter_image import (
+    OpenRouterApiError,
     format_openrouter_image_user_error,
     is_openrouter_image_configured,
     openrouter_text_to_image_bytes,
@@ -373,11 +374,19 @@ async def _execute_text_generation(
         else:
             image_bytes = await generate_image_png(prompt, model=model)
     except Exception as exc:
-        logging.exception(
-            "Image text generation failed user_id=%s backend=%s",
-            user_id,
-            backend,
-        )
+        if isinstance(exc, OpenRouterApiError):
+            logging.warning(
+                "OpenRouter отказ user_id=%s http=%s: %s",
+                user_id,
+                exc.http_status,
+                exc,
+            )
+        else:
+            logging.exception(
+                "Image text generation failed user_id=%s backend=%s",
+                user_id,
+                backend,
+            )
         if not is_admin:
             await release_daily_image_generation(user_id, usage_kind)
         if charge:

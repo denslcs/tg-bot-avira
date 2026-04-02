@@ -90,10 +90,19 @@ def _plans_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=f"{p.title} — +{p.bonus_credits} кр. · {p.price_rub} ₽",
                     callback_data=f"{CB_PAY_PLAN_PREFIX}{pid}",
+                    style=BTN_PRIMARY,
                 )
             ]
         )
-    rows.append([InlineKeyboardButton(text="🎁 Пакеты бонусов", callback_data=CB_PAY_BONUS_MENU)])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="🎁 Пакеты бонусов",
+                callback_data=CB_PAY_BONUS_MENU,
+                style=BTN_SUCCESS,
+            )
+        ]
+    )
     rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -189,17 +198,51 @@ def _bonus_packs_caption() -> str:
 
 
 def _bonus_packs_keyboard() -> InlineKeyboardMarkup:
+    """Сверху зелёные (два младших пакета в ряд), ниже синий крупный, внизу нейтральный «Назад»."""
     rows: list[list[InlineKeyboardButton]] = []
-    for bid in BONUS_PACKS_ORDER:
-        b = BONUS_PACKS[bid]
+    order = list(BONUS_PACKS_ORDER)
+    if not order:
+        rows.append([InlineKeyboardButton(text="⬅️ Назад к тарифам", callback_data=CB_PAY_MENU)])
+        return InlineKeyboardMarkup(inline_keyboard=rows)
+    if len(order) == 1:
+        b = BONUS_PACKS[order[0]]
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"Купить {b.credits} кр. — {b.price_rub} ₽",
-                    callback_data=f"{CB_PAY_PACK_PREFIX}{bid}",
+                    text=f"🎁 {b.credits} кр. · {b.price_rub} ₽",
+                    callback_data=f"{CB_PAY_PACK_PREFIX}{order[0]}",
+                    style=BTN_PRIMARY,
                 )
             ]
         )
+    else:
+        b0 = BONUS_PACKS[order[0]]
+        b1 = BONUS_PACKS[order[1]]
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"🎁 {b0.credits} кр. · {b0.price_rub} ₽",
+                    callback_data=f"{CB_PAY_PACK_PREFIX}{order[0]}",
+                    style=BTN_SUCCESS,
+                ),
+                InlineKeyboardButton(
+                    text=f"🎁 {b1.credits} кр. · {b1.price_rub} ₽",
+                    callback_data=f"{CB_PAY_PACK_PREFIX}{order[1]}",
+                    style=BTN_SUCCESS,
+                ),
+            ]
+        )
+        for bid in order[2:]:
+            b = BONUS_PACKS[bid]
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=f"⭐ {b.credits} кр. · {b.price_rub} ₽",
+                        callback_data=f"{CB_PAY_PACK_PREFIX}{bid}",
+                        style=BTN_PRIMARY,
+                    )
+                ]
+            )
     rows.append([InlineKeyboardButton(text="⬅️ Назад к тарифам", callback_data=CB_PAY_MENU)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
