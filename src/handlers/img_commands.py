@@ -77,6 +77,7 @@ from src.keyboards.callback_data import (
     CB_READY_IDEAS,
     CB_REGEN,
 )
+from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 from src.subscription_catalog import UNLIMITED_DAILY_IMAGE_GENERATIONS
 
 router = Router(name="img_commands")
@@ -85,6 +86,7 @@ router = Router(name="img_commands")
 MODEL_NANO_DISPLAY = "🍌 Nano Banana"
 MODEL_NANO2_DISPLAY = "🍌🍌 Nano Banana 2"
 MODEL_QWEN_DISPLAY = "🧠 Wan 2.7 Image"
+MODEL_FLUX_DISPLAY = "🌲 FLUX Klein 4B"
 
 _IMAGE_GEN_MISSING_TEXT = (
     "<b>Генерация картинок выключена.</b>\n\n"
@@ -92,6 +94,7 @@ _IMAGE_GEN_MISSING_TEXT = (
     "<code>IMAGE_GEN_BACKEND=gemini</code> (по умолчанию).</blockquote>\n"
     "<blockquote><i>Wan 2.7 (текст→картинка и правка фото):</i> "
     "<code>IMAGE_GEN_BACKEND=qwen</code> и <code>DASHSCOPE_API_KEY</code>.</blockquote>\n"
+    "<blockquote><i>OpenRouter (FLUX, текст→картинка):</i> <code>OPENROUTER_API_KEY</code>.</blockquote>\n"
     "Для Wan-правки задай <code>QWEN_IMAGE_EDIT_MODEL</code> (см. .env.example)."
 )
 
@@ -153,24 +156,28 @@ def image_menu_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=f"🍌 Nano Banana — {GEMINI_NANO_COST_CREDITS} кредитов",
                     callback_data=CB_PICK_NANO,
+                    style=BTN_PRIMARY,
                 )
             ],
             [
                 InlineKeyboardButton(
                     text=f"🍌🍌 Nano Banana 2 — {GEMINI_IMAGE_COST_CREDITS} кредитов",
                     callback_data=CB_PICK_NANO_2,
+                    style=BTN_PRIMARY,
                 )
             ],
             [
                 InlineKeyboardButton(
                     text=f"🧠 Wan 2.7 — {QWEN_IMAGE_COST_CREDITS} кредитов",
                     callback_data=CB_PICK_QWEN,
+                    style=BTN_PRIMARY,
                 )
             ],
             [
                 InlineKeyboardButton(
                     text=f"🌲 FLUX Klein — {OPENROUTER_IMAGE_COST_CREDITS} кредитов",
                     callback_data=CB_PICK_FLUX,
+                    style=BTN_PRIMARY,
                 )
             ],
             _BACK_MAIN,
@@ -181,8 +188,20 @@ def image_menu_keyboard() -> InlineKeyboardMarkup:
 def mode_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="✏️ Сгенерировать картинку текстом", callback_data=CB_GEN_TEXT)],
-            [InlineKeyboardButton(text="🖼 Изменить картинку (фото + текст)", callback_data=CB_GEN_EDIT)],
+            [
+                InlineKeyboardButton(
+                    text="✏️ Сгенерировать картинку текстом",
+                    callback_data=CB_GEN_TEXT,
+                    style=BTN_PRIMARY,
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🖼 Изменить картинку (фото + текст)",
+                    callback_data=CB_GEN_EDIT,
+                    style=BTN_SUCCESS,
+                )
+            ],
             _BACK_MODELS,
         ]
     )
@@ -266,7 +285,7 @@ async def _prepare_image_charge_and_daily_slot(
 def _regen_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🔄 Ещё раз", callback_data=CB_REGEN)],
+            [InlineKeyboardButton(text="🔄 Ещё раз", callback_data=CB_REGEN, style=BTN_SUCCESS)],
             _BACK_MAIN,
         ],
     )
@@ -496,7 +515,15 @@ def _credits_word(n: int) -> str:
 def ready_ideas_keyboard() -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for idx, (title, _) in enumerate(READY_IDEAS):
-        rows.append([InlineKeyboardButton(text=title, callback_data=f"{CB_APPLY_READY_PREFIX}{idx}")])
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=title[:30],
+                    callback_data=f"{CB_APPLY_READY_PREFIX}{idx}",
+                    style=BTN_PRIMARY,
+                )
+            ]
+        )
     rows.append(_BACK_MAIN)
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -516,7 +543,7 @@ async def back_to_image_models(callback: CallbackQuery, state: FSMContext) -> No
     await ensure_user(callback.from_user.id, callback.from_user.username)
     await state.clear()
     await callback.message.answer(
-        "<b>Выбери модель ИИ</b>\n<blockquote><i>Доступны Gemini (Nano Banana) и Qwen.</i></blockquote>",
+        "<b>Выбери модель ИИ</b>\n<blockquote><i>Gemini, Wan 2.7, OpenRouter (FLUX).</i></blockquote>",
         reply_markup=image_menu_keyboard(),
         parse_mode=HTML,
     )
