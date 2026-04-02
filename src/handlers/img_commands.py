@@ -628,9 +628,15 @@ async def pick_flux(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer("Сообщение недоступно.", show_alert=True)
         return
     if not is_openrouter_image_configured():
-        await callback.answer()
+        await callback.answer(
+            "Нет ключа: добавь OPENROUTER_API_KEY в .env и перезапусти бота.",
+            show_alert=True,
+        )
         await callback.message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_gemini_missing_kb(), parse_mode=HTML)
         return
+    # Сразу отвечаем на callback — иначе в Telegram «вечные часики» при ошибке ниже.
+    await callback.answer()
+    await state.clear()
     await ensure_user(callback.from_user.id, callback.from_user.username)
     await state.update_data(
         selected_model=OPENROUTER_IMAGE_MODEL,
@@ -645,7 +651,6 @@ async def pick_flux(callback: CallbackQuery, state: FSMContext) -> None:
         reply_markup=mode_keyboard(),
         parse_mode=HTML,
     )
-    await callback.answer()
 
 
 @router.callback_query(F.data == CB_PICK_QWEN)
