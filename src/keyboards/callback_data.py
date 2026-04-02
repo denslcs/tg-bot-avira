@@ -21,6 +21,7 @@ CB_GEN_EDIT = "img:mode:edit"
 CB_PICK_NANO = "img:pick_nano"
 CB_PICK_NANO_2 = "img:pick_nano2"
 CB_PICK_QWEN = "img:pick_qwen"
+CB_PICK_FLUX = "img:pick_flux"
 CB_READY_IDEAS = "menu:ready_ideas"
 CB_APPLY_READY_PREFIX = "img:idea:"
 CB_REGEN = "img:regen"
@@ -59,6 +60,7 @@ __all__ = [
     "CB_PICK_NANO",
     "CB_PICK_NANO_2",
     "CB_PICK_QWEN",
+    "CB_PICK_FLUX",
     "CB_READY_IDEAS",
     "CB_REGEN",
 ]

@@ -111,6 +111,21 @@ QWEN_IMAGE_EDIT_MODEL: str = (
 )
 QWEN_IMAGE_EDIT_SIZE: str = os.getenv("QWEN_IMAGE_EDIT_SIZE", "").strip()
 
+# OpenRouter: FLUX и др. image-модели (chat/completions + modalities: image)
+OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "").strip()
+OPENROUTER_API_BASE: str = (
+    os.getenv("OPENROUTER_API_BASE", "https://openrouter.ai/api/v1").strip().rstrip("/")
+    or "https://openrouter.ai/api/v1"
+)
+OPENROUTER_IMAGE_MODEL: str = (
+    os.getenv("OPENROUTER_IMAGE_MODEL", "black-forest-labs/flux.2-klein-4b").strip()
+    or "black-forest-labs/flux.2-klein-4b"
+)
+OPENROUTER_IMAGE_COST_CREDITS: int = max(1, _parse_int(os.getenv("OPENROUTER_IMAGE_COST_CREDITS", "6"), 6))
+# Опционально для статистики OpenRouter (см. документацию)
+OPENROUTER_HTTP_REFERER: str = os.getenv("OPENROUTER_HTTP_REFERER", "").strip()
+OPENROUTER_APP_TITLE: str = os.getenv("OPENROUTER_APP_TITLE", "Tg_bot_AVIRA").strip() or "Tg_bot_AVIRA"
+
 # Оплата подписки: внешние ссылки (YooKassa / Stripe / crypto-касса). Пусто — бот предложит поддержку.
 PAY_URL_CARD_RU: str = os.getenv("PAY_URL_CARD_RU", "").strip()
 PAY_URL_CARD_INTL: str = os.getenv("PAY_URL_CARD_INTL", "").strip()

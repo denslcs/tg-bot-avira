@@ -26,6 +26,8 @@ from src.config import (
     GEMINI_NANO_MODEL,
     IMAGE_READY_IDEAS_COST_CREDITS,
     MAX_USER_MESSAGE_CHARS,
+    OPENROUTER_IMAGE_COST_CREDITS,
+    OPENROUTER_IMAGE_MODEL,
     QWEN_IMAGE_COST_CREDITS,
     QWEN_IMAGE_EDIT_MODEL,
     QWEN_IMAGE_MODEL,
@@ -50,6 +52,11 @@ from src.gemini_image import (
     generate_image_png,
     is_gemini_configured,
 )
+from src.openrouter_image import (
+    format_openrouter_image_user_error,
+    is_openrouter_image_configured,
+    openrouter_text_to_image_bytes,
+)
 from src.qwen_image import (
     format_qwen_image_user_error,
     is_qwen_image_configured,
@@ -65,6 +72,7 @@ from src.keyboards.callback_data import (
     CB_MENU_BACK_START,
     CB_PICK_NANO,
     CB_PICK_NANO_2,
+    CB_PICK_FLUX,
     CB_PICK_QWEN,
     CB_READY_IDEAS,
     CB_REGEN,
@@ -89,12 +97,18 @@ _IMAGE_GEN_MISSING_TEXT = (
 
 
 def _text_to_image_configured() -> bool:
-    return is_gemini_configured() or is_qwen_image_configured()
+    return (
+        is_gemini_configured()
+        or is_qwen_image_configured()
+        or is_openrouter_image_configured()
+    )
 
 
 def _text_to_image_configured_for(backend: str) -> bool:
     if backend == "qwen":
         return is_qwen_image_configured()
+    if backend == "openrouter":
+        return is_openrouter_image_configured()
     return is_gemini_configured()
 
 
@@ -151,6 +165,12 @@ def image_menu_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=f"🧠 Wan 2.7 — {QWEN_IMAGE_COST_CREDITS} кредитов",
                     callback_data=CB_PICK_QWEN,
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"🌲 FLUX Klein — {OPENROUTER_IMAGE_COST_CREDITS} кредитов",
+                    callback_data=CB_PICK_FLUX,
                 )
             ],
             _BACK_MAIN,
@@ -329,6 +349,8 @@ async def _execute_text_generation(
     try:
         if backend == "qwen":
             image_bytes = await qwen_text_to_image_bytes(prompt)
+        elif backend == "openrouter":
+            image_bytes = await openrouter_text_to_image_bytes(prompt, model=model)
         else:
             image_bytes = await generate_image_png(prompt, model=model)
     except Exception as exc:
@@ -341,21 +363,25 @@ async def _execute_text_generation(
             await release_daily_image_generation(user_id, usage_kind)
         if charge:
             await add_credits(user_id, cost)
-        err = (
-            format_qwen_image_user_error(exc)
-            if backend == "qwen"
-            else format_gemini_user_error(exc)
-        )
+        if backend == "qwen":
+            err = format_qwen_image_user_error(exc)
+        elif backend == "openrouter":
+            err = format_openrouter_image_user_error(exc)
+        else:
+            err = format_gemini_user_error(exc)
         await wait_msg.edit_text(
             err,
-            parse_mode=HTML if backend == "gemini" else None,
+            parse_mode=HTML if backend in ("gemini", "openrouter") else None,
             disable_web_page_preview=True,
         )
         return
     await wait_msg.delete()
-    caption_model_name = (
-        f"Wan 2.7 ({QWEN_IMAGE_MODEL})" if backend == "qwen" else model_name
-    )
+    if backend == "qwen":
+        caption_model_name = f"Wan 2.7 ({QWEN_IMAGE_MODEL})"
+    elif backend == "openrouter":
+        caption_model_name = model_name
+    else:
+        caption_model_name = model_name
     await _send_result_photo_with_regen(
         message,
         state,
@@ -512,7 +538,7 @@ async def open_image_menu(callback: CallbackQuery, state: FSMContext) -> None:
     await ensure_user(callback.from_user.id, callback.from_user.username)
     await state.clear()
     await callback.message.answer(
-        "<b>Выбери модель ИИ</b>\n<blockquote><i>Доступны Gemini (Nano Banana) и Qwen.</i></blockquote>",
+        "<b>Выбери модель ИИ</b>\n<blockquote><i>Gemini, Wan 2.7, OpenRouter (FLUX).</i></blockquote>",
         reply_markup=image_menu_keyboard(),
         parse_mode=HTML,
     )
@@ -593,6 +619,35 @@ async def pick_nano_2(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
+@router.callback_query(F.data == CB_PICK_FLUX)
+async def pick_flux(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.from_user is None:
+        await callback.answer("Ошибка запроса.", show_alert=True)
+        return
+    if callback.message is None:
+        await callback.answer("Сообщение недоступно.", show_alert=True)
+        return
+    if not is_openrouter_image_configured():
+        await callback.answer()
+        await callback.message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_gemini_missing_kb(), parse_mode=HTML)
+        return
+    await ensure_user(callback.from_user.id, callback.from_user.username)
+    await state.update_data(
+        selected_model=OPENROUTER_IMAGE_MODEL,
+        selected_name=MODEL_FLUX_DISPLAY,
+        selected_cost=OPENROUTER_IMAGE_COST_CREDITS,
+        selected_backend="openrouter",
+    )
+    await state.set_state(ImageGenState.waiting_mode)
+    await callback.message.answer(
+        "<b>Выбери режим</b>\n<blockquote><i>FLUX Klein — только генерация по тексту. "
+        "Правка фото — через Wan или Gemini.</i></blockquote>",
+        reply_markup=mode_keyboard(),
+        parse_mode=HTML,
+    )
+    await callback.answer()
+
+
 @router.callback_query(F.data == CB_PICK_QWEN)
 async def pick_qwen(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.from_user is None:
@@ -642,6 +697,13 @@ async def mode_edit(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
     data = await state.get_data()
     backend = str(data.get("selected_backend") or "gemini")
+    if backend == "openrouter":
+        await callback.message.answer(
+            "<b>Режим «фото + текст» недоступен для FLUX Klein.</b>\n"
+            "<blockquote><i>Выбери Wan 2.7 или Gemini в меню моделей — там есть правка по фото.</i></blockquote>",
+            parse_mode=HTML,
+        )
+        return
     if not _edit_flow_configured_for(backend):
         await callback.message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_gemini_missing_kb(), parse_mode=HTML)
         return
@@ -810,7 +872,13 @@ async def regenerate_same(callback: CallbackQuery, _state: FSMContext) -> None:
         return
     await callback.answer()
     if ctx.kind == "text":
-        backend = "qwen" if "Wan 2.7" in (ctx.model_name or "") else "gemini"
+        mn = ctx.model_name or ""
+        if "Wan 2.7" in mn:
+            backend = "qwen"
+        elif "FLUX" in mn:
+            backend = "openrouter"
+        else:
+            backend = "gemini"
         await _execute_text_generation(
             callback.message,
             None,
