@@ -13,16 +13,13 @@ from src.config import (
     SUPPORT_CHAT_ID,
 )
 from src.database import (
-    add_credits,
     add_dialog_message,
     ensure_user,
-    get_credits,
     get_daily_user_messages,
     get_open_ticket_by_id,
     get_open_ticket_by_thread,
     get_user_admin_profile,
     increment_daily_user_messages,
-    spend_one_credit,
     subscription_is_active,
 )
 from src.keyboards.main_menu import start_menu_keyboard
@@ -152,40 +149,20 @@ async def any_message(message: Message, state: FSMContext) -> None:
                 await message.answer(spam_reply)
             return
 
-    sub_free = (
+    sub_skips_daily = (
         not is_admin
         and profile_for_balance is not None
         and subscription_is_active(profile_for_balance.subscription_ends_at)
     )
 
-    if not is_admin and not sub_free:
-        if FREE_DAILY_MESSAGE_LIMIT > 0:
-            cur_day = await get_daily_user_messages(user_id)
-            if cur_day >= FREE_DAILY_MESSAGE_LIMIT:
-                await message.answer(
-                    f"Достигнут дневной лимит сообщений ({FREE_DAILY_MESSAGE_LIMIT} в сутки по UTC). "
-                    "Завтра лимит обнулится. С подпиской лимит не действует."
-                )
-                return
-        balance_pre = await get_credits(user_id)
-        if balance_pre < 1:
+    if not is_admin and not sub_skips_daily and FREE_DAILY_MESSAGE_LIMIT > 0:
+        cur_day = await get_daily_user_messages(user_id)
+        if cur_day >= FREE_DAILY_MESSAGE_LIMIT:
             await message.answer(
-                "У тебя закончились кредиты 😔\n"
-                f"Текущий баланс: {balance_pre}.\n"
-                "Скоро добавим пополнение."
+                f"Достигнут дневной лимит сообщений ({FREE_DAILY_MESSAGE_LIMIT} в сутки по UTC). "
+                "Завтра лимит обнулится. С подпиской лимит не действует."
             )
             return
-
-    charged = False
-    if not is_admin and not sub_free:
-        if not await spend_one_credit(user_id):
-            balance = await get_credits(user_id)
-            await message.answer(
-                "Не удалось списать кредит (возможно, параллельный запрос). Попробуй ещё раз.\n"
-                f"Баланс: {balance}."
-            )
-            return
-        charged = True
 
     try:
         await add_dialog_message(user_id, "user", text)
@@ -195,24 +172,10 @@ async def any_message(message: Message, state: FSMContext) -> None:
         )
         await add_dialog_message(user_id, "assistant", reply_text)
     except Exception:
-        if charged:
-            await add_credits(user_id, 1)
         raise
 
-    if not is_admin and not sub_free and FREE_DAILY_MESSAGE_LIMIT > 0:
+    if not is_admin and not sub_skips_daily and FREE_DAILY_MESSAGE_LIMIT > 0:
         await increment_daily_user_messages(user_id)
 
-    kb = start_menu_keyboard()
-    if is_admin:
-        await message.answer(
-            f"{reply_text}\n\nРежим админа: безлимит кредитов.",
-            reply_markup=kb,
-        )
-        return
-
-    sub_note = ""
-    if profile_for_balance and subscription_is_active(profile_for_balance.subscription_ends_at):
-        sub_note = "\n(Запрос не списал кредит: активна подписка.)"
-    balance = await get_credits(user_id)
-    await message.answer(f"{reply_text}\n\nОсталось кредитов: {balance}{sub_note}", reply_markup=kb)
+    await message.answer(reply_text, reply_markup=start_menu_keyboard())
 
