@@ -80,7 +80,7 @@ async def polza_text_to_image_bytes(
 ) -> bytes:
     """
     Текст → PNG/JPEG bytes. POST /v1/media, при pending — опрос GET /v1/media/{id}.
-    aspect_ratio 1:1 + image_resolution 1K (если задан в конфиге) — ориентир на ~1 Мп.
+    aspect_ratio 1:1; image_resolution — только если POLZA_IMAGE_INPUT_RESOLUTION задан (GPT Image его не поддерживает).
     Поле user — Telegram user_id для учёта у Polza; доступ по тарифу проверяется в боте до вызова.
     """
     if not POLZAAI_API_KEY:

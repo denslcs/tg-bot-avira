@@ -148,8 +148,9 @@ POLZA_IMAGE_GPT5_IMAGE_COST_CREDITS: int = max(
 POLZA_IMAGE_MODEL_IDS: frozenset[str] = frozenset(
     {POLZA_IMAGE_MODEL_GPT_IMAGE_15, POLZA_IMAGE_MODEL_GPT5_IMAGE}
 )
-# Polza Media input.image_resolution: 1K ≈ ориентир на ~1 Мп; пусто — дефолт провайдера (может быть выше).
-_polza_res = os.getenv("POLZA_IMAGE_INPUT_RESOLUTION", "1K").strip()
+# Polza Media: openai/gpt-image-* на Polza не принимают input.image_resolution (ошибка API).
+# Задай значение только если документация модели явно поддерживает поле; иначе оставь пусто.
+_polza_res = os.getenv("POLZA_IMAGE_INPUT_RESOLUTION", "").strip()
 POLZA_IMAGE_INPUT_RESOLUTION: str | None = _polza_res if _polza_res else None
 
 # Оплата подписки: внешние ссылки (YooKassa / Stripe / crypto-касса). Пусто — бот предложит поддержку.
