@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 
 from aiogram import F, Router
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -19,7 +20,6 @@ from aiogram.types import (
 
 from src.config import (
     ADMIN_IDS,
-    MAX_USER_MESSAGE_CHARS,
     OPENROUTER_IMAGE_COST_CREDITS,
     OPENROUTER_IMAGE_MODEL,
 )
@@ -41,8 +41,15 @@ from src.database import (
     try_reserve_nonsub_image_quota_slot,
 )
 from src.formatting import HTML, esc
-from src.keyboards.callback_data import CB_BACK_IMAGE_MODELS, CB_CREATE_IMAGE, CB_MENU_BACK_START, CB_REGEN
-from src.keyboards.styles import BTN_SUCCESS
+from src.keyboards.callback_data import (
+    CB_APPLY_READY_PREFIX,
+    CB_BACK_IMAGE_MODELS,
+    CB_CREATE_IMAGE,
+    CB_MENU_BACK_START,
+    CB_READY_IDEAS,
+    CB_REGEN,
+)
+from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 from src.openrouter_image import (
     OpenRouterApiError,
     format_openrouter_image_user_error,
@@ -53,12 +60,17 @@ from src.subscription_catalog import NONSUB_IMAGE_WINDOW_DAYS, NONSUB_IMAGE_WIND
 
 router = Router(name="img_commands")
 
-MODEL_FLUX_DISPLAY = "🌲 FLUX Klein 4B"
+# Готовые промпты: (текст на кнопке, полный текст для генерации). Пока пусто — дополни сам.
+# Пример: ("🥤 Коллаж напитков", "coca cola and pepsi bottles, studio photo...")
+READY_IDEAS: list[tuple[str, str]] = []
+
+# Подпись для внутреннего контекста «Ещё раз» (пользователю не показываем).
+_IMAGE_CONTEXT_LABEL = "text2img"
 
 _IMAGE_GEN_MISSING_TEXT = (
     "<b>Генерация картинок выключена.</b>\n\n"
-    "<blockquote>Нужен ключ <code>OPENROUTER_API_KEY</code> в <code>.env</code> "
-    "и модель в <code>OPENROUTER_IMAGE_MODEL</code> (см. .env.example).</blockquote>"
+    "<blockquote>Администратору: задай <code>OPENROUTER_API_KEY</code> и при необходимости "
+    "<code>OPENROUTER_IMAGE_MODEL</code> в <code>.env</code> (см. .env.example).</blockquote>"
 )
 
 _BACK_MAIN = [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)]
@@ -145,6 +157,22 @@ async def _prepare_image_charge_and_daily_slot(
     return True, meta
 
 
+def ready_ideas_keyboard() -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for idx, (title, _) in enumerate(READY_IDEAS):
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=title[:64],
+                    callback_data=f"{CB_APPLY_READY_PREFIX}{idx}",
+                    style=BTN_PRIMARY,
+                )
+            ]
+        )
+    rows.append(_BACK_MAIN)
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def _regen_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -175,14 +203,14 @@ async def _send_result_photo_with_regen(
     filename: str,
     prompt: str,
     model: str,
-    model_name: str,
     cost: int,
     is_admin: bool,
     charge: bool,
     deducted_credits: bool,
+    served_from_cache: bool = False,
 ) -> None:
     await save_last_image_context(
-        user_id, "text", prompt, model, cost, model_name, None
+        user_id, "text", prompt, model, cost, _IMAGE_CONTEXT_LABEL, None
     )
     if is_admin:
         day_note = ""
@@ -196,9 +224,11 @@ async def _send_result_photo_with_regen(
             )
         else:
             day_note = ""
-    mn = esc(model_name)
     if is_admin:
-        caption = f"<b>Готово ✅</b>\n<b>ИИ:</b> {mn}\n<i>Режим админа — кредиты не списывались.</i>"
+        cache_note = ""
+        if served_from_cache:
+            cache_note = "\n<i>Кэш: тот же промпт+модель — файл с диска, запрос к API не уходил.</i>"
+        caption = f"<b>Готово ✅</b>\n<i>Режим админа — кредиты не списывались.</i>{cache_note}"
     else:
         balance = await get_credits(user_id)
         spent = ""
@@ -206,7 +236,7 @@ async def _send_result_photo_with_regen(
             cw = _credits_word(cost)
             spent = f"Списано: <b>{esc(cost)}</b> {cw}.\n"
         caption = (
-            f"<b>Готово ✅</b>\n<b>ИИ:</b> {mn}\n"
+            f"<b>Готово ✅</b>\n"
             f"{spent}"
             f"<blockquote><i>💰 Баланс:</i> <b>{esc(balance)}</b></blockquote>{day_note}"
         )
@@ -228,7 +258,6 @@ async def _execute_text_generation(
     username: str | None,
     prompt: str,
     model: str,
-    model_name: str,
     cost: int,
     usage_kind: str = "self",
     use_image_cache: bool = True,
@@ -247,7 +276,7 @@ async def _execute_text_generation(
         return
     wait_msg = await message.answer("Идет генерация картинки")
     try:
-        image_bytes = await openrouter_text_to_image_bytes(
+        image_bytes, from_cache = await openrouter_text_to_image_bytes(
             prompt, model=model, use_cache=use_image_cache
         )
     except Exception as exc:
@@ -278,11 +307,11 @@ async def _execute_text_generation(
         filename="image.png",
         prompt=prompt,
         model=model,
-        model_name=model_name,
         cost=cost,
         is_admin=is_admin,
         charge=charge,
         deducted_credits=meta.credit_charged,
+        served_from_cache=from_cache,
     )
 
 
@@ -294,12 +323,11 @@ async def _start_image_flow(message: Message, state: FSMContext, user_id: int, u
     await state.clear()
     await state.update_data(
         selected_model=OPENROUTER_IMAGE_MODEL,
-        selected_name=MODEL_FLUX_DISPLAY,
         selected_cost=OPENROUTER_IMAGE_COST_CREDITS,
     )
     await state.set_state(ImageGenState.waiting_prompt)
     await message.answer(
-        "<b>FLUX Klein (OpenRouter)</b>\n"
+        "<b>🎨 Картинка по описанию</b>\n"
         "<blockquote><i>Напиши одним сообщением, что должно быть на картинке.</i></blockquote>",
         parse_mode=HTML,
     )
@@ -312,6 +340,85 @@ async def back_to_image_flow(callback: CallbackQuery, state: FSMContext) -> None
         return
     await callback.answer()
     await _start_image_flow(callback.message, state, callback.from_user.id, callback.from_user.username)
+
+
+async def _send_ready_ideas_screen(message: Message, state: FSMContext, user_id: int, username: str | None) -> None:
+    await state.clear()
+    if not is_openrouter_image_configured():
+        await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
+        return
+    await ensure_user(user_id, username)
+    if READY_IDEAS:
+        sub = (
+            "<blockquote><i>Нажми вариант — сразу запустится генерация по готовому тексту.</i></blockquote>"
+        )
+    else:
+        sub = (
+            "<blockquote><i>Пока нет заготовок — список добавит администратор. "
+            "Можно описать картинку вручную: «Создать картинку».</i></blockquote>"
+        )
+    await message.answer(
+        f"<b>💡 Готовые идеи</b>\n{sub}",
+        reply_markup=ready_ideas_keyboard(),
+        parse_mode=HTML,
+    )
+
+
+@router.callback_query(F.data == CB_READY_IDEAS)
+async def open_ready_ideas(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.from_user is None or callback.message is None:
+        await callback.answer("Ошибка запроса.", show_alert=True)
+        return
+    await callback.answer()
+    await _send_ready_ideas_screen(
+        callback.message, state, callback.from_user.id, callback.from_user.username
+    )
+
+
+@router.message(Command("ideas"))
+async def cmd_ready_ideas(message: Message, state: FSMContext) -> None:
+    if not message.from_user:
+        return
+    await _send_ready_ideas_screen(message, state, message.from_user.id, message.from_user.username)
+
+
+@router.callback_query(F.data.startswith(CB_APPLY_READY_PREFIX))
+async def apply_ready_idea(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.from_user is None or callback.message is None or not callback.data:
+        await callback.answer("Ошибка запроса.", show_alert=True)
+        return
+    if not READY_IDEAS:
+        await callback.answer("Список готовых идей пока пуст.", show_alert=True)
+        return
+    if not is_openrouter_image_configured():
+        await callback.answer()
+        await callback.message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
+        return
+    try:
+        idx = int(callback.data.replace(CB_APPLY_READY_PREFIX, ""))
+        _, prompt = READY_IDEAS[idx]
+    except (ValueError, IndexError):
+        await callback.answer("Некорректный вариант.", show_alert=True)
+        return
+    prompt = (prompt or "").strip()
+    if not prompt:
+        await callback.answer("Пустой промпт в этой идее.", show_alert=True)
+        return
+    await callback.answer()
+    await state.clear()
+    user_id = callback.from_user.id
+    await ensure_user(user_id, callback.from_user.username)
+    await _execute_text_generation(
+        callback.message,
+        None,
+        user_id=user_id,
+        username=callback.from_user.username,
+        prompt=prompt,
+        model=OPENROUTER_IMAGE_MODEL,
+        cost=OPENROUTER_IMAGE_COST_CREDITS,
+        usage_kind="self",
+        use_image_cache=True,
+    )
 
 
 @router.callback_query(F.data == CB_CREATE_IMAGE)
@@ -342,7 +449,6 @@ async def create_image_from_prompt(message: Message, state: FSMContext) -> None:
     user_id = message.from_user.id
     data = await state.get_data()
     model = str(data.get("selected_model") or OPENROUTER_IMAGE_MODEL)
-    model_name = str(data.get("selected_name") or MODEL_FLUX_DISPLAY)
     cost = int(data.get("selected_cost") or OPENROUTER_IMAGE_COST_CREDITS)
     await _execute_text_generation(
         message,
@@ -351,7 +457,6 @@ async def create_image_from_prompt(message: Message, state: FSMContext) -> None:
         username=message.from_user.username,
         prompt=prompt,
         model=model,
-        model_name=model_name,
         cost=cost,
         usage_kind="self",
     )
@@ -381,7 +486,6 @@ async def regenerate_same(callback: CallbackQuery, _state: FSMContext) -> None:
         username=callback.from_user.username,
         prompt=ctx.prompt,
         model=ctx.model,
-        model_name=ctx.model_name,
         cost=ctx.cost,
         usage_kind="self",
         use_image_cache=False,

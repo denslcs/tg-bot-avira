@@ -44,17 +44,18 @@ def format_openrouter_image_user_error(exc: BaseException) -> str:
     text = str(exc).lower()
     if "401" in text or ("invalid" in text and "key" in text):
         return (
-            "Ошибка ключа OpenRouter: проверь <code>OPENROUTER_API_KEY</code> в .env "
-            "(ключ без лишних пробелов и кавычек)."
+            "Ошибка доступа к генерации картинок. Администратору: проверь ключ в "
+            "<code>.env</code> (без лишних пробелов и кавычек)."
         )
     if "402" in text or "payment" in text or "credits" in text:
         return (
-            "На балансе OpenRouter не хватает кредитов. Пополни счёт в "
-            "<a href=\"https://openrouter.ai\">openrouter.ai</a>."
+            "На стороне сервиса генерации не хватает средств. "
+            "Пополни баланс на <a href=\"https://openrouter.ai\">openrouter.ai</a> "
+            "(или напиши в поддержку)."
         )
     if "429" in text or "rate" in text:
-        return "OpenRouter перегружен или лимит запросов. Попробуй через минуту."
-    return "Не удалось сгенерировать картинку через OpenRouter. Попробуй позже или смени формулировку."
+        return "Сервис генерации перегружен или сработал лимит. Попробуй через минуту."
+    return "Не удалось сгенерировать картинку. Попробуй позже или смени формулировку."
 
 
 def _normalize_prompt_for_cache(text: str) -> str:
@@ -138,9 +139,9 @@ async def openrouter_text_to_image_bytes(
     *,
     model: str | None = None,
     use_cache: bool = True,
-) -> bytes:
+) -> tuple[bytes, bool]:
     """
-    Текст → PNG bytes. OpenRouter отдаёт картинку как data URL (base64).
+    Текст → PNG bytes и флаг «из кэша». OpenRouter отдаёт картинку как data URL (base64).
 
     use_cache=False — всегда новый запрос к API (кнопка «Ещё раз»): кэш не читается и не пишется.
     use_cache=True — при совпадении модели и нормализованного промпта отдаются байты с диска.
@@ -157,7 +158,7 @@ async def openrouter_text_to_image_bytes(
             cached = await asyncio.to_thread(_read_cache_file_sync, path)
         if cached:
             logger.info("OpenRouter image cache hit model=%s key=%s…", m, key[:12])
-            return cached
+            return cached, True
 
     url = f"{OPENROUTER_API_BASE}/chat/completions"
     headers: dict[str, str] = {
@@ -222,4 +223,4 @@ async def openrouter_text_to_image_bytes(
         async with _cache_io_lock:
             await asyncio.to_thread(_write_cache_file_sync, path, result)
 
-    return result
+    return result, False
