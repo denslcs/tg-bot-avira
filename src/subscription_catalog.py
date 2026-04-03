@@ -32,6 +32,8 @@ FREE_DAILY_READY_IMAGE_GENERATIONS: int = 4
 
 # Ровно 30 календарных дней с момента оплаты (или продления от текущего срока).
 SUBSCRIPTION_PERIOD_DAYS: int = 30
+# Между двумя *оплаченными* подписками (Stars и т.д.) — не чаще чем раз в столько дней (анти-абуз).
+SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS: int = SUBSCRIPTION_PERIOD_DAYS
 
 
 @dataclass(frozen=True)

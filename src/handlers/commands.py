@@ -32,6 +32,7 @@ from src.database import (
 from src.subscription_catalog import NONSUB_IMAGE_WINDOW_DAYS, PLANS
 from src.formatting import HTML, esc, format_subscription_ends_at
 from src.keyboards.callback_data import (
+    CB_IMG_OK,
     CB_MENU_ABOUT,
     CB_MENU_BACK_START,
     CB_MENU_PROFILE,
@@ -97,7 +98,8 @@ def _is_generated_image_result_message(message: Message) -> bool:
     if kb and kb.inline_keyboard:
         for row in kb.inline_keyboard:
             for btn in row:
-                if getattr(btn, "callback_data", None) == CB_REGEN:
+                cd = getattr(btn, "callback_data", None)
+                if cd in (CB_REGEN, CB_IMG_OK, "img:save"):
                     return True
     return False
 

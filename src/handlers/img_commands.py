@@ -57,7 +57,7 @@ from src.keyboards.callback_data import (
     CB_CREATE_IMAGE,
     CB_IMG_CANCEL,
     CB_IMG_MODEL_SEL_PREFIX,
-    CB_IMG_SAVE,
+    CB_IMG_OK,
     CB_MENU_BACK_START,
     CB_READY_IDEAS,
     CB_REGEN,
@@ -295,7 +295,7 @@ def _regen_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="💾 Сохранить", callback_data=CB_IMG_SAVE, style=BTN_SUCCESS
+                    text="✅ Ок", callback_data=CB_IMG_OK, style=BTN_SUCCESS
                 ),
             ],
             [
@@ -303,7 +303,6 @@ def _regen_keyboard() -> InlineKeyboardMarkup:
                     text="🔄 Ещё раз", callback_data=CB_REGEN, style=BTN_PRIMARY
                 ),
             ],
-            _BACK_MAIN,
         ],
     )
 
@@ -818,33 +817,24 @@ async def create_image_from_prompt(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.callback_query(F.data == CB_IMG_SAVE)
-async def save_generated_image(callback: CallbackQuery, _state: FSMContext) -> None:
-    """Убрать клавиатуру, дописать в подпись; сообщение помечается как защищённое от автоудаления."""
+@router.callback_query(F.data.in_({CB_IMG_OK, "img:save"}))
+async def result_ok_to_main_menu(callback: CallbackQuery, state: FSMContext) -> None:
+    """Закрыть сценарий и показать главное меню (сообщение с картинкой не удаляем)."""
     if not callback.from_user or not callback.message:
         await callback.answer()
         return
-    msg = callback.message
-    if not msg.photo:
-        await callback.answer()
-        return
-    cap = msg.caption or ""
-    if "Картинка сохранена" in cap:
-        await callback.answer("Уже сохранено.", show_alert=True)
-        return
-    try:
-        base_html = msg.html_text
-        new_caption = f"{base_html}\n\n<i>Картинка сохранена</i>"
-        await msg.edit_caption(caption=new_caption, parse_mode=HTML, reply_markup=None)
-    except Exception:
-        logging.exception("save_generated_image: edit_caption failed")
-        await callback.answer("Не удалось обновить сообщение.", show_alert=True)
-        return
+    await state.clear()
     await callback.answer()
+    await restore_main_menu_message(
+        callback.message,
+        callback.from_user.id,
+        callback.from_user.username,
+    )
 
 
 @router.callback_query(F.data == CB_REGEN)
-async def regenerate_same(callback: CallbackQuery, _state: FSMContext) -> None:
+async def regenerate_new_prompt(callback: CallbackQuery, state: FSMContext) -> None:
+    """Та же модель и цена — пользователь вводит новый промпт."""
     if not callback.from_user or not callback.message:
         await callback.answer()
         return
@@ -852,23 +842,20 @@ async def regenerate_same(callback: CallbackQuery, _state: FSMContext) -> None:
     ctx = await get_last_image_context(user_id)
     if not ctx:
         await callback.answer(
-            "Нет сохранённого запроса. Сначала сгенерируй картинку.",
+            "Нет данных о последней генерации. Открой «Создать картинку» в меню.",
             show_alert=True,
         )
         return
     if ctx.kind != "text":
-        await callback.answer("Этот режим больше не поддерживается. Создай картинку текстом.", show_alert=True)
+        await callback.answer("Создай картинку через меню.", show_alert=True)
         return
     await callback.answer()
-    await _execute_text_generation(
-        callback.message,
-        None,
-        user_id=user_id,
-        username=callback.from_user.username,
-        prompt=ctx.prompt,
-        model=ctx.model,
-        cost=ctx.cost,
-        usage_kind="self",
-        use_image_cache=False,
+    await state.update_data(selected_model=ctx.model, selected_cost=ctx.cost)
+    await state.set_state(ImageGenState.waiting_prompt)
+    await callback.message.answer(
+        f"{_WAITING_PROMPT_HTML}\n\n"
+        "<blockquote><i>Будут использованы та же модель и стоимость. Опиши <b>новую</b> картинку.</i></blockquote>",
+        reply_markup=_waiting_prompt_keyboard(),
+        parse_mode=HTML,
     )
 

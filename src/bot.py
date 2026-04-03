@@ -31,6 +31,8 @@ _ADMIN_COMMANDS = [
     BotCommand(command="addcredits", description="➕ Начислить кредиты"),
     BotCommand(command="takecredits", description="➖ Списать кредиты"),
     BotCommand(command="setsub", description="📅 Подписка (дни)"),
+    BotCommand(command="setplan", description="📅 Тариф без продления"),
+    BotCommand(command="clearsub", description="📅 Снять подписку"),
     BotCommand(command="wipechat", description="🧹 Очистить диалог пользователя"),
 ]
 

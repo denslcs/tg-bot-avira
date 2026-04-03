@@ -23,10 +23,10 @@ from src.config import PAY_URL_CARD_INTL, PAY_URL_CARD_RU, PAY_URL_CRYPTO, PROJE
 from src.database import (
     add_credits,
     ensure_user,
-    get_user_admin_profile,
+    record_subscription_purchase_now,
     reset_subscription_days,
     release_star_payment_claim,
-    subscription_is_active,
+    subscription_can_purchase_new_plan,
     try_claim_star_payment,
 )
 from src.formatting import HTML, esc, format_subscription_ends_at
@@ -52,19 +52,15 @@ from src.subscription_catalog import (
     PLANS,
     PLANS_ORDER,
     SUBSCRIPTION_PERIOD_DAYS,
+    SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS,
 )
 
 router = Router(name="payments")
 
 
 async def _can_buy_plan(user_id: int, plan_id: str) -> tuple[bool, str | None]:
-    profile = await get_user_admin_profile(user_id)
-    if not profile:
-        return True, None
-    active = subscription_is_active(profile.subscription_ends_at)
-    if active:
-        return False, "Подписка уже активна. Продлить можно после окончания срока."
-    return True, None
+    _ = plan_id
+    return await subscription_can_purchase_new_plan(user_id)
 
 
 def _subscriptions_pricing_image_path() -> Path | None:
@@ -77,6 +73,8 @@ def _plans_menu_caption() -> str:
         "<b>Тарифы</b> — при оплате на баланс начисляются <b>кредиты</b> "
         f"(срок подписки <b>{esc(SUBSCRIPTION_PERIOD_DAYS)}</b> дн.). "
         "Ограничений на количество генераций по подписке нет — всё зависит от баланса кредитов.\n\n"
+        f"<blockquote><i>Оплата подписки:</i> не чаще <b>одного раза в {esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дней "
+        f"(с момента последней покупки). При активной подписке новый тариф недоступен до окончания срока.</blockquote>\n\n"
         f"<blockquote><i>Без подписки:</i> не более <b>{esc(NONSUB_IMAGE_WINDOW_MAX)}</b> генераций картинок "
         f"за <b>{esc(NONSUB_IMAGE_WINDOW_DAYS)}</b> дней (UTC), каждая за кредиты; дальше — только подписка или сброс окна.</blockquote>"
     )
@@ -163,6 +161,8 @@ def _pay_methods_text(plan_id: str) -> str:
         f"<i>Кредиты на баланс:</i> <b>+{esc(p.bonus_credits)}</b>\n"
         f"Срок: <b>{esc(SUBSCRIPTION_PERIOD_DAYS)}</b> дн.\n"
         "<blockquote><i>С подпиской</i> — ограничений на число генераций нет: списываются кредиты.</blockquote>\n"
+        f"<blockquote><i>Оплата подписки не чаще одного раза в {esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)} дней</i> "
+        f"(после последней покупки). Оплата ⭐ учитывается автоматически.</blockquote>\n"
         f"<blockquote><i>Без подписки:</i> не более <b>{esc(NONSUB_IMAGE_WINDOW_MAX)}</b> генераций за "
         f"<b>{esc(NONSUB_IMAGE_WINDOW_DAYS)}</b> дней (UTC), каждая за кредиты; дальше — подписка или сброс окна.</blockquote>\n\n"
         "<i>Оформляя оплату, ты соглашаешься с условиями сервиса и политикой возврата "
@@ -537,6 +537,10 @@ async def pre_checkout(q: PreCheckoutQuery) -> None:
         if item_id not in PLANS:
             await q.answer(ok=False, error_message="Неизвестный тариф. Запроси новый счёт.")
             return
+        allowed, reason = await subscription_can_purchase_new_plan(q.from_user.id)
+        if not allowed:
+            await q.answer(ok=False, error_message=(reason or "Покупка подписки сейчас недоступна.")[:250])
+            return
         amount_expected = PLANS[item_id].stars
     else:
         if item_id not in BONUS_PACKS:
@@ -577,6 +581,16 @@ async def successful_payment(message: Message) -> None:
             await release_star_payment_claim(charge_id)
             await message.answer("Оплата получена, но тариф не найден. Напиши в поддержку.")
             return
+        allowed, reason = await subscription_can_purchase_new_plan(message.from_user.id)
+        if not allowed:
+            await release_star_payment_claim(charge_id)
+            await message.answer(
+                "<b>Платёж получен</b>, но оформить подписку сейчас нельзя: "
+                f"{esc(reason or 'условия сервиса')}.\n\n"
+                "<blockquote><i>Если Stars уже списались, напиши в поддержку — подскажем, что делать.</i></blockquote>",
+                parse_mode=HTML,
+            )
+            return
         p = PLANS[item_id]
         new_end = await reset_subscription_days(message.from_user.id, SUBSCRIPTION_PERIOD_DAYS, item_id)
         if not new_end:
@@ -585,6 +599,7 @@ async def successful_payment(message: Message) -> None:
                 "Ошибка записи подписки в базу. Сохрани это сообщение и напиши в поддержку — проверим оплату."
             )
             return
+        await record_subscription_purchase_now(message.from_user.id)
         credited = await add_credits(message.from_user.id, p.bonus_credits)
         end_h = format_subscription_ends_at(new_end)
         q_lines = [

@@ -6,8 +6,10 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from src.config import ADMIN_IDS
 from src.database import (
-    extend_subscription,
     clear_dialog_messages,
+    clear_subscription,
+    ensure_user,
+    extend_subscription,
     count_dialog_messages,
     count_dialog_messages_total,
     count_new_users_days,
@@ -19,6 +21,7 @@ from src.database import (
     get_support_rating_rollups,
     get_user_admin_profile,
     list_open_tickets_preview,
+    set_subscription_plan_only,
     subscription_is_active,
     sum_users_credits,
 )
@@ -70,6 +73,8 @@ async def cmd_admin_panel(message: Message) -> None:
         "• /addcredits ID сумма — начислить кредиты\n"
         "• /takecredits ID сумма — списать кредиты\n"
         f"• /setsub ID дни [{_plans_hint()}] — продлить подписку; бонусы по тарифу <b>не</b> начисляются (только при оплате)\n"
+        f"• /setplan ID [{_plans_hint()}] — сменить тариф в БД <b>без</b> продления срока\n"
+        "• /clearsub ID — снять подписку (срок и тариф)\n"
         "• /wipechat ID — очистить историю диалога у пользователя\n"
         "• /stats — сводка по пользователям, подпискам и кредитам",
         reply_markup=_main_kb(),
@@ -90,6 +95,8 @@ async def adm_help(callback: CallbackQuery) -> None:
         "/takecredits 123 20\n"
         "/setsub 123 30 — +30 дней (тариф в БД не трогаем); бонусы не начисляются\n"
         f"/setsub 123 30 {_plans_hint().split('|')[0]} — +30 дней и запись тарифа; бонусы не начисляются\n"
+        f"/setplan 123 {_plans_hint().split('|')[0]} — только тариф, дата окончания без изменений\n"
+        "/clearsub 123 — обнулить подписку\n"
         "/wipechat 123 — очистить dialog_messages\n"
         "/faq — шаблоны ответов для пользователей\n"
         "/chatid — id чата (в группе)"
@@ -192,7 +199,8 @@ async def cmd_user_lookup(message: Message) -> None:
     active = subscription_is_active(profile.subscription_ends_at)
     sub_human = "активна" if active else "не активна"
     plan = profile.subscription_plan or "—"
-    sub_line = f"Подписка: {sub_human}, до: {sub}, тариф: {plan}"
+    last_buy = profile.subscription_last_purchase_at or "—"
+    sub_line = f"Подписка: {sub_human}, до: {sub}, тариф: {plan}\nПоследняя покупка подписки (UTC): {last_buy}"
     ticket = await get_open_ticket_by_user(uid)
     ticket_line = (
         f"Открытый тикет: #{ticket.ticket_id}" if ticket else "Открытых тикетов нет"
@@ -282,6 +290,76 @@ async def cmd_setsub(message: Message) -> None:
         )
     except Exception:
         logging.warning("setsub: не удалось уведомить пользователя uid=%s", uid, exc_info=True)
+
+
+@router.message(Command("clearsub"))
+async def cmd_clearsub(message: Message) -> None:
+    if not message.from_user or message.from_user.id not in ADMIN_IDS:
+        await message.answer("Только для администраторов.")
+        return
+    parts = (message.text or "").split()
+    if len(parts) != 2 or not parts[1].isdigit():
+        await message.answer("Формат:\n/clearsub USER_ID")
+        return
+    uid = int(parts[1])
+    await ensure_user(uid, None)
+    await clear_subscription(uid)
+    await message.answer(
+        f"Подписка у пользователя <code>{uid}</code> снята (срок и тариф в БД обнулены).",
+        parse_mode=HTML,
+    )
+    try:
+        await message.bot.send_message(
+            uid,
+            "<b>Подписка снята администратором.</b> Доступ по тарифу отключён.",
+            parse_mode=HTML,
+        )
+    except Exception:
+        logging.warning("clearsub: не удалось уведомить uid=%s", uid, exc_info=True)
+
+
+@router.message(Command("setplan"))
+async def cmd_setplan(message: Message) -> None:
+    if not message.from_user or message.from_user.id not in ADMIN_IDS:
+        await message.answer("Только для администраторов.")
+        return
+    raw = (message.text or "").split()
+    if len(raw) != 3:
+        await message.answer(
+            "Формат:\n"
+            f"/setplan USER_ID {_plans_hint()}"
+        )
+        return
+    if not raw[1].isdigit():
+        await message.answer("USER_ID должен быть числом.")
+        return
+    plan = raw[2].strip().lower()
+    if plan not in PLANS:
+        await message.answer(
+            "Неизвестный тариф.\n"
+            f"Доступно: {', '.join(PLANS_ORDER)}"
+        )
+        return
+    uid = int(raw[1])
+    await ensure_user(uid, None)
+    if not await set_subscription_plan_only(uid, plan):
+        await message.answer("Не удалось обновить тариф.")
+        return
+    title = PLANS[plan].title
+    await message.answer(
+        f"Тариф пользователя <code>{uid}</code> установлен: <b>{esc(title)}</b> (<code>{esc(plan)}</code>). "
+        "<blockquote><i>Срок окончания подписки не менялся — только поле тарифа в БД.</i></blockquote>",
+        parse_mode=HTML,
+    )
+    try:
+        await message.bot.send_message(
+            uid,
+            f"<b>Тариф в профиле обновлён администратором:</b> {esc(title)}.\n"
+            "<i>Дата окончания подписки не продлевалась.</i>",
+            parse_mode=HTML,
+        )
+    except Exception:
+        logging.warning("setplan: не удалось уведомить uid=%s", uid, exc_info=True)
 
 
 @router.message(Command("wipechat"))

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -12,6 +13,7 @@ from src.subscription_catalog import (
     NONSUB_IMAGE_WINDOW_DAYS,
     NONSUB_IMAGE_WINDOW_MAX,
     PLANS,
+    SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS,
     daily_image_generation_limit,
 )
 
@@ -39,6 +41,7 @@ class UserAdminProfile:
     created_at: str
     subscription_ends_at: str | None
     subscription_plan: str | None
+    subscription_last_purchase_at: str | None = None
 
 
 @dataclass
@@ -115,6 +118,13 @@ async def _migrate_free_image_window(db: aiosqlite.Connection) -> None:
         await db.execute(
             "ALTER TABLE users ADD COLUMN free_image_window_count INTEGER NOT NULL DEFAULT 0"
         )
+
+
+async def _migrate_subscription_last_purchase(db: aiosqlite.Connection) -> None:
+    async with db.execute("PRAGMA table_info(users)") as cur:
+        cols = {row[1] for row in await cur.fetchall()}
+    if "subscription_last_purchase_at" not in cols:
+        await db.execute("ALTER TABLE users ADD COLUMN subscription_last_purchase_at TEXT")
 
 
 async def init_db() -> None:
@@ -252,6 +262,7 @@ async def init_db() -> None:
         await _migrate_support_ratings_feedback(db)
         await _migrate_subscription_plan(db)
         await _migrate_free_image_window(db)
+        await _migrate_subscription_last_purchase(db)
         await db.commit()
 
 
@@ -686,6 +697,22 @@ def subscription_is_active(ends_at: str | None) -> bool:
         return _parse_dt_utc(ends_at) > datetime.now(timezone.utc)
     except ValueError:
         return False
+
+
+def subscription_cooldown_days_remaining(last_purchase_iso: str | None) -> int:
+    """0 — можно оформить новую подписку; иначе оценка дней до следующей покупки."""
+    if not last_purchase_iso:
+        return 0
+    try:
+        dt = _parse_dt_utc(last_purchase_iso)
+    except ValueError:
+        return 0
+    now = datetime.now(timezone.utc)
+    end = dt + timedelta(days=SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)
+    if now >= end:
+        return 0
+    left = end - now
+    return max(1, math.ceil(left.total_seconds() / 86400))
 
 
 def _month_utc_now() -> str:
@@ -1260,7 +1287,8 @@ async def get_user_admin_profile(user_id: int) -> UserAdminProfile | None:
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             """
-            SELECT user_id, username, credits, created_at, subscription_ends_at, subscription_plan
+            SELECT user_id, username, credits, created_at, subscription_ends_at, subscription_plan,
+                   subscription_last_purchase_at
             FROM users
             WHERE user_id = ?
             """,
@@ -1276,7 +1304,48 @@ async def get_user_admin_profile(user_id: int) -> UserAdminProfile | None:
         created_at=str(row[3]),
         subscription_ends_at=row[4] if row[4] else None,
         subscription_plan=row[5] if row[5] else None,
+        subscription_last_purchase_at=row[6] if row[6] else None,
     )
+
+
+async def subscription_can_purchase_new_plan(user_id: int) -> tuple[bool, str | None]:
+    """Перед оплатой тарифа: активная подписка или анти-абуз по интервалу между покупками."""
+    profile = await get_user_admin_profile(user_id)
+    if not profile:
+        return True, None
+    if subscription_is_active(profile.subscription_ends_at):
+        return False, "Подписка уже активна. Продлить можно после окончания срока."
+    rem = subscription_cooldown_days_remaining(profile.subscription_last_purchase_at)
+    if rem > 0:
+        return False, (
+            f"Повторную подписку можно оформить через {rem} дн. "
+            f"(не чаще одного раза в {SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS} дней)."
+        )
+    return True, None
+
+
+async def record_subscription_purchase_now(user_id: int) -> None:
+    """Вызывать после успешной оплаты подписки (Stars и т.д.)."""
+    iso = datetime.now(timezone.utc).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET subscription_last_purchase_at = ? WHERE user_id = ?",
+            (iso, user_id),
+        )
+        await db.commit()
+
+
+async def set_subscription_plan_only(user_id: int, plan: str) -> bool:
+    """Сменить тариф в БД без изменения срока окончания."""
+    if plan not in PLANS:
+        return False
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET subscription_plan = ? WHERE user_id = ?",
+            (plan, user_id),
+        )
+        await db.commit()
+    return True
 
 
 async def record_support_rating(
