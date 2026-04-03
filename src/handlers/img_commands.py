@@ -85,7 +85,6 @@ def _waiting_prompt_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="💡 Готовые идеи", callback_data=CB_READY_IDEAS, style=BTN_SUCCESS
                 ),
-                InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START),
             ],
             [
                 InlineKeyboardButton(
