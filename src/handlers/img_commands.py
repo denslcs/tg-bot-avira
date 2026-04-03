@@ -22,6 +22,7 @@ from src.config import (
     ADMIN_IDS,
     OPENROUTER_IMAGE_COST_CREDITS,
     OPENROUTER_IMAGE_MODEL,
+    OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS,
 )
 from src.database import (
     ImageChargeMeta,
@@ -444,7 +445,7 @@ async def apply_ready_idea(callback: CallbackQuery, state: FSMContext) -> None:
         username=callback.from_user.username,
         prompt=prompt,
         model=OPENROUTER_IMAGE_MODEL,
-        cost=OPENROUTER_IMAGE_COST_CREDITS,
+        cost=OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS,
         usage_kind="self",
         use_image_cache=True,
     )

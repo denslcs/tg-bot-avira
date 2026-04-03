@@ -2,22 +2,28 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from src.config import OPENROUTER_IMAGE_COST_CREDITS, OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS
 from src.formatting import HTML, esc
 from src.keyboards.callback_data import CB_MENU_BACK_START
-from src.keyboards.styles import BTN_DANGER, BTN_PRIMARY
+from src.keyboards.styles import BTN_PRIMARY
 
 router = Router(name="faq")
+
+_CREDITS_FAQ_BODY = (
+    "• Сообщение боту в личке — 1 кредит за ответный цикл (у администраторов кредиты не списываются).\n"
+    "• При активной подписке обычные текстовые сообщения в личке кредиты не тратят.\n"
+    f"• Картинка по своему описанию («Создать картинку») — {OPENROUTER_IMAGE_COST_CREDITS} кредитов за генерацию.\n"
+    f"• Картинка по готовому промпту из раздела «Готовые идеи» — {OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS} кредитов за генерацию.\n"
+    "• Без подписки дополнительно действует лимит: не больше 3 генераций за 30 суток по UTC, "
+    "даже если кредитов много — дальше нужна подписка или ожидание сброса окна.\n"
+    "Баланс и лимиты: /profile. Очистить историю диалога: /newchat."
+)
 
 _FAQ: list[tuple[str, str, str]] = [
     (
         "credits",
         "Как работают кредиты?",
-        "• Сообщение боту в личке — 1 кредит за ответный цикл (у администраторов кредиты не списываются).\n"
-        "• При активной подписке обычные текстовые сообщения в личке кредиты не тратят.\n"
-        "• Генерация картинки — отдельное списание с баланса (размер видно после успешной генерации). "
-        "Без подписки дополнительно действует лимит: не больше 3 генераций за 30 суток по UTC, "
-        "даже если кредитов много — дальше нужна подписка или ожидание сброса окна.\n"
-        "Баланс и лимиты: /profile. Очистить историю диалога: /newchat.",
+        _CREDITS_FAQ_BODY,
     ),
     (
         "support",
@@ -54,13 +60,7 @@ def _faq_keyboard() -> InlineKeyboardMarkup:
             row = []
     if row:
         rows.append(row)
-    rows.append(
-        [
-            InlineKeyboardButton(
-                text="❌ Отмена", callback_data=CB_MENU_BACK_START, style=BTN_DANGER
-            )
-        ]
-    )
+    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

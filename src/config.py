@@ -92,6 +92,9 @@ OPENROUTER_IMAGE_MODEL: str = (
     or "black-forest-labs/flux.2-klein-4b"
 )
 OPENROUTER_IMAGE_COST_CREDITS: int = max(1, _parse_int(os.getenv("OPENROUTER_IMAGE_COST_CREDITS", "5"), 5))
+OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS: int = max(
+    1, _parse_int(os.getenv("OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS", "20"), 20)
+)
 # Соотношение сторон для OpenRouter image_config: "1:1" → 1024×1024 (документация OpenRouter). Пусто — не передавать.
 OPENROUTER_IMAGE_ASPECT_RATIO: str = os.getenv("OPENROUTER_IMAGE_ASPECT_RATIO", "1:1").strip()
 # Кэш сгенерированных картинок на диске (ключ: модель + нормализованный промпт). 0 = выкл.
