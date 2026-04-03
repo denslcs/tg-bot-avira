@@ -6,7 +6,6 @@ from aiogram.types import Message
 from src.antispam_state import check_spam_private_message
 from src.config import (
     ADMIN_IDS,
-    FREE_DAILY_MESSAGE_LIMIT,
     MAIN_BOT_RELAY_SUPPORT_TOPICS,
     MAX_SUPPORT_DRAFT_TOTAL_CHARS,
     MAX_USER_MESSAGE_CHARS,
@@ -15,12 +14,8 @@ from src.config import (
 from src.database import (
     add_dialog_message,
     ensure_user,
-    get_daily_user_messages,
     get_open_ticket_by_id,
     get_open_ticket_by_thread,
-    get_user_admin_profile,
-    increment_daily_user_messages,
-    subscription_is_active,
 )
 from src.keyboards.main_menu import start_menu_keyboard
 from src.private_rate_limit import check_private_message_rate
@@ -137,7 +132,6 @@ async def any_message(message: Message, state: FSMContext) -> None:
         return
 
     is_admin = user_id in ADMIN_IDS
-    profile_for_balance = await get_user_admin_profile(user_id) if not is_admin else None
     if not is_admin:
         rate_blocked, rate_msg = check_private_message_rate(user_id)
         if rate_blocked:
@@ -149,21 +143,6 @@ async def any_message(message: Message, state: FSMContext) -> None:
                 await message.answer(spam_reply)
             return
 
-    sub_skips_daily = (
-        not is_admin
-        and profile_for_balance is not None
-        and subscription_is_active(profile_for_balance.subscription_ends_at)
-    )
-
-    if not is_admin and not sub_skips_daily and FREE_DAILY_MESSAGE_LIMIT > 0:
-        cur_day = await get_daily_user_messages(user_id)
-        if cur_day >= FREE_DAILY_MESSAGE_LIMIT:
-            await message.answer(
-                f"Достигнут дневной лимит сообщений ({FREE_DAILY_MESSAGE_LIMIT} в сутки по UTC). "
-                "Завтра лимит обнулится. С подпиской лимит не действует."
-            )
-            return
-
     try:
         await add_dialog_message(user_id, "user", text)
         reply_text = (
@@ -173,9 +152,6 @@ async def any_message(message: Message, state: FSMContext) -> None:
         await add_dialog_message(user_id, "assistant", reply_text)
     except Exception:
         raise
-
-    if not is_admin and not sub_skips_daily and FREE_DAILY_MESSAGE_LIMIT > 0:
-        await increment_daily_user_messages(user_id)
 
     await message.answer(reply_text, reply_markup=start_menu_keyboard())
 

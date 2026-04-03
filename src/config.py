@@ -57,9 +57,6 @@ MAIN_BOT_RELAY_SUPPORT_TOPICS: bool = os.getenv("MAIN_BOT_RELAY_SUPPORT_TOPICS",
     "yes",
 )
 
-# Лимит сообщений в личке основного бота в сутки (UTC) для пользователей без подписки. 0 = выкл.
-FREE_DAILY_MESSAGE_LIMIT: int = _parse_int(os.getenv("FREE_DAILY_MESSAGE_LIMIT", "0"), 0)
-
 # SLA: через сколько часов без первого ответа пользователю считать тикет «просроченным» (подсказки и фоновые алерты)
 SLA_WARNING_HOURS: float = float(os.getenv("SLA_WARNING_HOURS", "4"))
 # Интервал между SLA-напоминаниями в общий чат форума (без topic). Часы по умолчанию 8; либо явно минуты (приоритетнее).
