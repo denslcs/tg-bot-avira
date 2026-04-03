@@ -107,9 +107,10 @@ OPENROUTER_IMAGE_GEMINI_MODEL: str = (
 OPENROUTER_IMAGE_GEMINI_COST_CREDITS: int = max(
     1, _parse_int(os.getenv("OPENROUTER_IMAGE_GEMINI_COST_CREDITS", "8"), 8)
 )
-# Всегда не больше ~1 Мп: в API уходит 1:1 (1024×1024 по доке OpenRouter) + при необходимости image_size.
-# Пустой OPENROUTER_IMAGE_OUTPUT_SIZE — не передаём image_size (только aspect_ratio 1:1).
-OPENROUTER_IMAGE_OUTPUT_SIZE: str = os.getenv("OPENROUTER_IMAGE_OUTPUT_SIZE", "1K").strip()
+# В API уходит aspect_ratio 1:1 (~1024×1024, ~1 Мп по доке OpenRouter).
+# Значение вроде «1K» у FLUX на OpenRouter может давать больше мегапикселей и цену ~2.5× к тарифу «$ за Мп».
+# Пустой OPENROUTER_IMAGE_OUTPUT_SIZE — не передаём image_size (только 1:1), ближе к одному мегапикселю в биллинге.
+OPENROUTER_IMAGE_OUTPUT_SIZE: str = os.getenv("OPENROUTER_IMAGE_OUTPUT_SIZE", "").strip()
 # Кэш сгенерированных картинок на диске (ключ: модель + нормализованный промпт). 0 = выкл.
 _openrouter_cache_raw = os.getenv("OPENROUTER_IMAGE_CACHE", "1").strip().lower()
 OPENROUTER_IMAGE_CACHE_ENABLED: bool = _openrouter_cache_raw not in ("0", "false", "no", "off")

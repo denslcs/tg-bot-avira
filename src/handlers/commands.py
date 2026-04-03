@@ -38,6 +38,7 @@ from src.keyboards.callback_data import (
     CB_MENU_REF,
     CB_MENU_REF_LEGACY,
     CB_MENU_SUPPORT,
+    CB_REGEN,
 )
 from src.keyboards.main_menu import back_to_main_menu_keyboard, start_menu_keyboard
 from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
@@ -83,9 +84,27 @@ def _start_banner_path() -> Path | None:
     return p if p.is_file() else None
 
 
+def _is_generated_image_result_message(message: Message) -> bool:
+    """Сообщение с готовой картинкой из генерации — такие не трогаем при смене меню."""
+    if not message.photo:
+        return False
+    cap = message.caption or ""
+    if "Готово" in cap and "✅" in cap:
+        return True
+    kb = message.reply_markup
+    if kb and kb.inline_keyboard:
+        for row in kb.inline_keyboard:
+            for btn in row:
+                if getattr(btn, "callback_data", None) == CB_REGEN:
+                    return True
+    return False
+
+
 async def delete_nav_source_message(message: Message | None) -> None:
     """Удалить сообщение с кнопкой навигации, если API позволяет (чтобы не копить чат)."""
     if message is None:
+        return
+    if _is_generated_image_result_message(message):
         return
     try:
         await message.delete()

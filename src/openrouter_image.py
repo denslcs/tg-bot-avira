@@ -72,7 +72,7 @@ def _cache_key(model: str, normalized_prompt: str) -> str:
 
 
 def _standard_image_config() -> dict[str, str]:
-    """OpenRouter: 1:1 → 1024×1024 (~1 Мп); image_size 1K — ограничение для моделей, где параметр поддерживается."""
+    """OpenRouter: всегда aspect_ratio 1:1; image_size — только если задан в конфиге."""
     cfg: dict[str, str] = {"aspect_ratio": "1:1"}
     if OPENROUTER_IMAGE_OUTPUT_SIZE:
         cfg["image_size"] = OPENROUTER_IMAGE_OUTPUT_SIZE
@@ -161,8 +161,8 @@ async def openrouter_text_to_image_bytes(
     """
     Текст → PNG bytes и флаг «из кэша». OpenRouter отдаёт картинку как data URL (base64).
 
-    Разрешение ограничено ~1 Мп: в запросе всегда aspect_ratio 1:1 (1024×1024 по доке OpenRouter)
-    и при необходимости image_size 1K (см. OPENROUTER_IMAGE_OUTPUT_SIZE).
+    Разрешение: в запросе всегда aspect_ratio 1:1 (≈1024×1024 по доке OpenRouter);
+    image_size передаётся только если задан OPENROUTER_IMAGE_OUTPUT_SIZE (иначе меньше риск лишних Мп в биллинге).
 
     use_cache=False — всегда новый запрос к API (кнопка «Ещё раз»): кэш не читается и не пишется.
     use_cache=True — при совпадении модели и нормализованного промпта отдаются байты с диска.
