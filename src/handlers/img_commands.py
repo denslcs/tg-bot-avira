@@ -111,11 +111,11 @@ class ImageGenState(StatesGroup):
 def _subscriber_image_models() -> list[tuple[str, str, int]]:
     """Подписчики: подпись кнопки, id модели OpenRouter, стоимость."""
     rows: list[tuple[str, str, int]] = [
-        ("⚡ Базовая модель", OPENROUTER_IMAGE_MODEL, OPENROUTER_IMAGE_COST_CREDITS),
+        ("⚡ FLUX Klein (быстрее)", OPENROUTER_IMAGE_MODEL, OPENROUTER_IMAGE_COST_CREDITS),
     ]
     alt = (OPENROUTER_IMAGE_MODEL_ALT or "").strip()
     if alt and alt != OPENROUTER_IMAGE_MODEL:
-        rows.append(("🎨 Расширенная модель", alt, OPENROUTER_IMAGE_ALT_COST_CREDITS))
+        rows.append(("🎨 FLUX Pro (качество)", alt, OPENROUTER_IMAGE_ALT_COST_CREDITS))
     return rows
 
 
