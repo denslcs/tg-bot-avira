@@ -26,7 +26,7 @@ _USER_COMMANDS = [
 _ADMIN_COMMANDS = [
     BotCommand(command="admin", description="⚙️ Админ-панель"),
     BotCommand(command="stats", description="📊 Пользователи и подписки"),
-    BotCommand(command="chatid", description="🗨️ ID чата (в группе)"),
+    BotCommand(command="chatid", description="🗨️ ID чата/темы (.env)"),
     BotCommand(command="user", description="👤 Профиль по ID"),
     BotCommand(command="addcredits", description="➕ Начислить кредиты"),
     BotCommand(command="takecredits", description="➖ Списать кредиты"),

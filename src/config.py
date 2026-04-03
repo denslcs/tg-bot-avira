@@ -157,3 +157,12 @@ POLZA_IMAGE_INPUT_RESOLUTION: str | None = _polza_res if _polza_res else None
 PAY_URL_CARD_RU: str = os.getenv("PAY_URL_CARD_RU", "").strip()
 PAY_URL_CARD_INTL: str = os.getenv("PAY_URL_CARD_INTL", "").strip()
 PAY_URL_CRYPTO: str = os.getenv("PAY_URL_CRYPTO", "").strip()
+
+# Уведомления о покупках (⭐ Stars) в админ-чат с топиками: id супергруппы и id ветки на тариф / бонусы.
+# Бот должен быть участником чата и иметь право писать в темы. 0 = не слать.
+ADMIN_SALES_NOTIFY_CHAT_ID: int = _parse_int(os.getenv("ADMIN_SALES_NOTIFY_CHAT_ID", "0"), 0)
+ADMIN_SALES_THREAD_NOVA: int = _parse_int(os.getenv("ADMIN_SALES_THREAD_NOVA", "0"), 0)
+ADMIN_SALES_THREAD_SUPERNOVA: int = _parse_int(os.getenv("ADMIN_SALES_THREAD_SUPERNOVA", "0"), 0)
+ADMIN_SALES_THREAD_GALAXY: int = _parse_int(os.getenv("ADMIN_SALES_THREAD_GALAXY", "0"), 0)
+ADMIN_SALES_THREAD_UNIVERSE: int = _parse_int(os.getenv("ADMIN_SALES_THREAD_UNIVERSE", "0"), 0)
+ADMIN_SALES_THREAD_BONUS_PACKS: int = _parse_int(os.getenv("ADMIN_SALES_THREAD_BONUS_PACKS", "0"), 0)

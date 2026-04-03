@@ -4,6 +4,7 @@ from __future__ import annotations
 Подписки, бонус-пакеты, Stars и внешние способы оплаты (callback + pre_checkout).
 """
 
+import logging
 from pathlib import Path
 
 from aiogram import F, Router
@@ -16,10 +17,24 @@ from aiogram.types import (
     LabeledPrice,
     Message,
     PreCheckoutQuery,
+    SuccessfulPayment,
+    User,
 )
 from aiogram.enums import ContentType
 
-from src.config import PAY_URL_CARD_INTL, PAY_URL_CARD_RU, PAY_URL_CRYPTO, PROJECT_ROOT, SUPPORT_BOT_USERNAME
+from src.config import (
+    ADMIN_SALES_NOTIFY_CHAT_ID,
+    ADMIN_SALES_THREAD_BONUS_PACKS,
+    ADMIN_SALES_THREAD_GALAXY,
+    ADMIN_SALES_THREAD_NOVA,
+    ADMIN_SALES_THREAD_SUPERNOVA,
+    ADMIN_SALES_THREAD_UNIVERSE,
+    PAY_URL_CARD_INTL,
+    PAY_URL_CARD_RU,
+    PAY_URL_CRYPTO,
+    PROJECT_ROOT,
+    SUPPORT_BOT_USERNAME,
+)
 from src.database import (
     add_credits,
     ensure_user,
@@ -56,6 +71,63 @@ from src.subscription_catalog import (
 )
 
 router = Router(name="payments")
+
+logger = logging.getLogger(__name__)
+
+
+def _admin_sales_thread_for_plan(plan_id: str) -> int:
+    return {
+        "nova": ADMIN_SALES_THREAD_NOVA,
+        "supernova": ADMIN_SALES_THREAD_SUPERNOVA,
+        "galaxy": ADMIN_SALES_THREAD_GALAXY,
+        "universe": ADMIN_SALES_THREAD_UNIVERSE,
+    }.get((plan_id or "").strip().lower(), 0)
+
+
+def _payment_type_label(sp: SuccessfulPayment) -> str:
+    """Канал оплаты для админ-уведомления (по валюте из Telegram Payments)."""
+    cur = (sp.currency or "").strip().upper()
+    if cur == "XTR":
+        return "⭐ Звёзды (Telegram Stars, XTR)"
+    if cur == "RUB":
+        return "₽ Рубли (RUB)"
+    if cur == "USD":
+        return "$ Доллары (USD)"
+    return f"Другое ({esc(cur)})" if cur else "Не указано"
+
+
+def _user_line_html(user: User) -> str:
+    uid = user.id
+    un = (user.username or "").strip().lstrip("@")
+    fn = esc((user.first_name or "").strip() or "—")
+    ln = esc((user.last_name or "").strip())
+    name = f"{fn} {ln}".strip() if ln else fn
+    if un:
+        u_esc = esc(un)
+        return f'{name} · <a href="https://t.me/{un}">@{u_esc}</a> · <code>{uid}</code>'
+    return f'{name} · <a href="tg://user?id={uid}">id {uid}</a>'
+
+
+async def _notify_admin_sales(
+    bot,
+    *,
+    thread_id: int,
+    text: str,
+) -> None:
+    if not ADMIN_SALES_NOTIFY_CHAT_ID:
+        return
+    kwargs: dict = {
+        "chat_id": ADMIN_SALES_NOTIFY_CHAT_ID,
+        "text": text,
+        "parse_mode": HTML,
+        "disable_web_page_preview": True,
+    }
+    if thread_id > 0:
+        kwargs["message_thread_id"] = thread_id
+    try:
+        await bot.send_message(**kwargs)
+    except Exception:
+        logger.exception("Не удалось отправить уведомление о продаже в ADMIN_SALES_NOTIFY_CHAT_ID")
 
 
 async def _can_buy_plan(user_id: int, plan_id: str) -> tuple[bool, str | None]:
@@ -621,6 +693,25 @@ async def successful_payment(message: Message) -> None:
             "<i>Можно снова открыть «Создать картинку» в</i> <code>/start</code>.",
             parse_mode=HTML,
         )
+        stars_amt = int(sp.total_amount or 0)
+        cur = (sp.currency or "XTR").upper()
+        credit_ok = "да" if credited else "нет (проверить вручную)"
+        pay_kind = _payment_type_label(sp)
+        admin_txt = (
+            "<b>Подписка оплачена</b>\n"
+            f"<b>Тип оплаты:</b> {pay_kind}\n"
+            f"Тариф: {esc(p.title)} · <code>{esc(item_id)}</code>\n"
+            f"Пользователь: {_user_line_html(message.from_user)}\n"
+            f"Кредиты по тарифу: <b>+{esc(p.bonus_credits)}</b> · начислено: <i>{esc(credit_ok)}</i>\n"
+            f"До (UTC): <code>{esc(end_h)}</code>\n"
+            f"Сумма: <b>{esc(stars_amt)}</b> {esc(cur)}\n"
+            f"charge: <code>{esc(charge_id)}</code>"
+        )
+        await _notify_admin_sales(
+            message.bot,
+            thread_id=_admin_sales_thread_for_plan(item_id),
+            text=admin_txt,
+        )
         return
     if item_id not in BONUS_PACKS:
         await release_star_payment_claim(charge_id)
@@ -634,6 +725,22 @@ async def successful_payment(message: Message) -> None:
             f"Пакет: <b>{esc(b.title)}</b>\n"
             f"<blockquote><i>Начислено:</i> +{esc(b.credits)} кредитов на баланс.</blockquote>",
             parse_mode=HTML,
+        )
+        stars_amt = int(sp.total_amount or 0)
+        cur = (sp.currency or "XTR").upper()
+        pay_kind = _payment_type_label(sp)
+        admin_txt = (
+            "<b>Пакет бонусов оплачен</b>\n"
+            f"<b>Тип оплаты:</b> {pay_kind}\n"
+            f"Пакет: {esc(b.title)} · <code>{esc(item_id)}</code> · <b>+{esc(b.credits)}</b> кр.\n"
+            f"Пользователь: {_user_line_html(message.from_user)}\n"
+            f"Сумма: <b>{esc(stars_amt)}</b> {esc(cur)}\n"
+            f"charge: <code>{esc(charge_id)}</code>"
+        )
+        await _notify_admin_sales(
+            message.bot,
+            thread_id=ADMIN_SALES_THREAD_BONUS_PACKS,
+            text=admin_txt,
         )
     else:
         await release_star_payment_claim(charge_id)

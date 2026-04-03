@@ -11,7 +11,15 @@ from pathlib import Path
 from aiogram import Bot, F, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import (
+    CallbackQuery,
+    FSInputFile,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    MessageOriginChannel,
+    MessageOriginChat,
+)
 
 from src.config import ADMIN_IDS, PROJECT_ROOT, SUPPORT_BOT_USERNAME
 from src.antispam_state import reset_user_spam
@@ -600,12 +608,68 @@ async def cmd_myid(message: Message) -> None:
 
 @router.message(Command("chatid"))
 async def cmd_chatid(message: Message) -> None:
+    """ID группы и темы для .env (ADMIN_SALES_*): в группе/топике или подсказка в ЛС."""
     if not message.from_user:
         return
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("Эта команда только для администраторов.")
         return
-    await message.answer(f"ID этого чата: {message.chat.id}")
+
+    chat = message.chat
+    if chat.type == "private":
+        o = message.forward_origin
+        cid: int | None = None
+        if o is not None:
+            if isinstance(o, MessageOriginChat) and o.sender_chat:
+                cid = o.sender_chat.id
+            elif isinstance(o, MessageOriginChannel) and o.chat:
+                cid = o.chat.id
+        if cid is None:
+            await message.answer(
+                "<b>Как узнать ID для уведомлений о покупках</b>\n\n"
+                "1) Добавь <b>этого же бота</b> в свою админ-группу (форум с темами).\n"
+                "2) <b>ID группы</b> — напиши в группе команду <code>/chatid</code> "
+                "(можно в любой теме или в «Общем»). Бот пришлёт число вида <code>-100…</code> "
+                "— его клади в <code>ADMIN_SALES_NOTIFY_CHAT_ID</code>.\n"
+                "3) <b>ID каждой темы</b> — зайди <i>внутрь темы</i> (Nova, Galaxy и т.д.) и "
+                "в этой теме снова напиши <code>/chatid</code>. Появится "
+                "<code>message_thread_id</code> — его в соответствующий "
+                "<code>ADMIN_SALES_THREAD_*</code> в <code>.env</code>.\n"
+                "4) Повтори шаг 3 для всех пяти тем.\n"
+                "5) Перезапусти бота.\n\n"
+                "<blockquote><i>Если написать <code>/chatid</code> только в личке без пересылки — "
+                "показывается эта памятка. Пересланное из группы иногда даёт только chat id, "
+                "без id темы — надёжнее писать <code>/chatid</code> прямо в каждой теме.</i></blockquote>",
+                parse_mode=HTML,
+            )
+            return
+        lines = [
+            "<b>Пересланное из группы/канала</b>",
+            f"<b>chat id:</b> <code>{cid}</code>",
+        ]
+        if message.message_thread_id:
+            lines.append(f"<b>message_thread_id:</b> <code>{message.message_thread_id}</code>")
+        else:
+            lines.append(
+                "<i>ID темы обычно не передаётся при пересылке — открой тему в группе и напиши там</i> <code>/chatid</code>."
+            )
+        await message.answer("\n".join(lines), parse_mode=HTML)
+        return
+
+    lines = [
+        f"<b>Тип:</b> <code>{esc(chat.type)}</code>",
+        f"<b>chat id</b> → <code>ADMIN_SALES_NOTIFY_CHAT_ID</code>:\n<code>{chat.id}</code>",
+    ]
+    if message.message_thread_id:
+        lines.append(
+            f"<b>message_thread_id</b> (эта тема) → один из <code>ADMIN_SALES_THREAD_*</code>:\n"
+            f"<code>{message.message_thread_id}</code>"
+        )
+    else:
+        lines.append(
+            "<i>Топик не определён — если это форум, открой нужную <b>тему</b> и повтори <code>/chatid</code> там.</i>"
+        )
+    await message.answer("\n".join(lines), parse_mode=HTML)
 
 
 @router.message(Command("addcredits"))
