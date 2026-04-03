@@ -10,6 +10,7 @@ from src.keyboards.callback_data import (
     CB_MENU_PROFILE,
     CB_MENU_REF,
     CB_MENU_SUPPORT,
+    CB_READY_IDEAS,
 )
 from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 
@@ -18,6 +19,11 @@ def start_menu_keyboard() -> InlineKeyboardMarkup:
     # Сверху — зелёные (success), середина — синие (primary), снизу — нейтральные (без style).
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="💡 Готовые идеи", callback_data=CB_READY_IDEAS, style=BTN_SUCCESS
+                ),
+            ],
             [
                 InlineKeyboardButton(
                     text="👥 Реферальная система", callback_data=CB_MENU_REF, style=BTN_SUCCESS

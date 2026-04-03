@@ -180,12 +180,14 @@ async def cmd_help(message: Message) -> None:
         "💳 <code>/pay</code> — <i>подписка и оплата</i>\n"
         "👤 <code>/profile</code> — <i>статус аккаунта и подписки</i>\n"
         "👥 <code>/ref</code> — <i>реферальная система</i>\n"
+        "💡 <code>/ideas</code> — <i>готовые промпты для картинок</i>\n"
         "📋 <code>/faq</code> — <i>частые вопросы</i>\n"
         "🔄 <code>/newchat</code> или <code>/clear</code> — <i>очистить память диалога</i>\n"
         "💬 <code>/support</code> — <i>обращение в поддержку</i>\n"
         "✅ <code>/resolved</code> — <i>закрыть тикет (в боте поддержки)</i>\n"
         "🆔 <code>/myid</code> — <i>твой Telegram ID</i>\n\n"
         "<blockquote>🎨 Картинки — через кнопки в <code>/start</code>.</blockquote>",
+        reply_markup=back_to_main_menu_keyboard(),
         parse_mode=HTML,
     )
 
@@ -199,7 +201,8 @@ async def menu_about(callback: CallbackQuery) -> None:
     await callback.message.answer(
         "<b>Что умеет бот</b>\n"
         "<blockquote>"
-        "• Сгенерировать картинку по тексту (OpenRouter / FLUX Klein)."
+        "• Сгенерировать картинку по тексту.\n"
+        "• Готовые идеи — пресеты промптов (если добавлены)."
         "</blockquote>",
         reply_markup=back_to_main_menu_keyboard(),
         parse_mode=HTML,
@@ -368,6 +371,7 @@ async def send_profile_card(message: Message, user_id: int, username_raw: str | 
     if user_id in ADMIN_IDS:
         await message.answer(
             "<blockquote><b>Режим админа</b> — безлимит по кредитам.</blockquote>",
+            reply_markup=back_to_main_menu_keyboard(),
             parse_mode=HTML,
         )
         return
@@ -375,6 +379,7 @@ async def send_profile_card(message: Message, user_id: int, username_raw: str | 
     if not profile:
         await message.answer(
             "<blockquote><i>Профиль пока не найден. Нажми</i> <code>/start</code> <i>и попробуй снова.</i></blockquote>",
+            reply_markup=back_to_main_menu_keyboard(),
             parse_mode=HTML,
         )
         return
@@ -417,6 +422,7 @@ async def send_profile_card(message: Message, user_id: int, username_raw: str | 
         f"<i>Дней в боте:</i> <b>{esc(days_in_bot)}</b>\n"
         f"{img_limits_line}"
         "</blockquote>",
+        reply_markup=back_to_main_menu_keyboard(),
         parse_mode=HTML,
     )
 
@@ -432,6 +438,7 @@ async def cmd_newchat(message: Message) -> None:
     await message.answer(
         "<b>Готово ✅</b>\n"
         "<blockquote><i>История этого диалога очищена.</i> Можно начать новую тему.</blockquote>",
+        reply_markup=back_to_main_menu_keyboard(),
         parse_mode=HTML,
     )
 
@@ -443,6 +450,7 @@ async def cmd_resolved_main(message: Message) -> None:
         await message.answer(
             "<blockquote><i>Чат поддержки не подключён.</i> Нужен "
             "<code>SUPPORT_BOT_USERNAME</code> в <code>.env</code>.</blockquote>",
+            reply_markup=back_to_main_menu_keyboard(),
             parse_mode=HTML,
         )
         return
@@ -467,6 +475,7 @@ async def cmd_support(message: Message) -> None:
     if not SUPPORT_BOT_USERNAME:
         await message.answer(
             "<blockquote><i>Поддержка не подключена</i> — проверь <code>SUPPORT_BOT_USERNAME</code> в <code>.env</code>.</blockquote>",
+            reply_markup=back_to_main_menu_keyboard(),
             parse_mode=HTML,
         )
         return
@@ -491,6 +500,7 @@ async def cmd_myid(message: Message) -> None:
         return
     await message.answer(
         f"<blockquote><code>{esc(message.from_user.id)}</code> — <i>твой Telegram ID</i></blockquote>",
+        reply_markup=back_to_main_menu_keyboard(),
         parse_mode=HTML,
     )
 

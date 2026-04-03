@@ -45,11 +45,13 @@ from src.keyboards.callback_data import (
     CB_APPLY_READY_PREFIX,
     CB_BACK_IMAGE_MODELS,
     CB_CREATE_IMAGE,
+    CB_IMG_CANCEL,
     CB_MENU_BACK_START,
     CB_READY_IDEAS,
     CB_REGEN,
 )
-from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
+from src.keyboards.main_menu import start_menu_keyboard
+from src.keyboards.styles import BTN_DANGER, BTN_PRIMARY, BTN_SUCCESS
 from src.openrouter_image import (
     OpenRouterApiError,
     format_openrouter_image_user_error,
@@ -74,6 +76,24 @@ _IMAGE_GEN_MISSING_TEXT = (
 )
 
 _BACK_MAIN = [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)]
+
+
+def _waiting_prompt_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="💡 Готовые идеи", callback_data=CB_READY_IDEAS, style=BTN_SUCCESS
+                ),
+                InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="❌ Отмена", callback_data=CB_IMG_CANCEL, style=BTN_DANGER
+                ),
+            ],
+        ]
+    )
 
 
 def _missing_config_kb() -> InlineKeyboardMarkup:
@@ -329,6 +349,21 @@ async def _start_image_flow(message: Message, state: FSMContext, user_id: int, u
     await message.answer(
         "<b>🎨 Картинка по описанию</b>\n"
         "<blockquote><i>Напиши одним сообщением, что должно быть на картинке.</i></blockquote>",
+        reply_markup=_waiting_prompt_keyboard(),
+        parse_mode=HTML,
+    )
+
+
+@router.callback_query(F.data == CB_IMG_CANCEL)
+async def cancel_image_flow(callback: CallbackQuery, state: FSMContext) -> None:
+    if not callback.from_user or not callback.message:
+        await callback.answer()
+        return
+    await state.clear()
+    await callback.answer()
+    await callback.message.answer(
+        "<blockquote><i>Ок, отменили генерацию. Выбери действие в меню ниже.</i></blockquote>",
+        reply_markup=start_menu_keyboard(),
         parse_mode=HTML,
     )
 
@@ -432,7 +467,10 @@ async def open_image_menu(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(ImageGenState.waiting_prompt, ~F.text)
 async def wrong_type_waiting_prompt(message: Message) -> None:
-    await message.answer("Нужен текстовый промпт: напиши описание картинки одним сообщением.")
+    await message.answer(
+        "Нужен текстовый промпт: напиши описание картинки одним сообщением.",
+        reply_markup=_waiting_prompt_keyboard(),
+    )
 
 
 @router.message(ImageGenState.waiting_prompt)
@@ -441,7 +479,10 @@ async def create_image_from_prompt(message: Message, state: FSMContext) -> None:
         return
     prompt = (message.text or "").strip()
     if not prompt:
-        await message.answer("Нужен текстовый промпт. Попробуй еще раз.")
+        await message.answer(
+            "Нужен текстовый промпт. Попробуй еще раз.",
+            reply_markup=_waiting_prompt_keyboard(),
+        )
         return
     if prompt.startswith("/"):
         return

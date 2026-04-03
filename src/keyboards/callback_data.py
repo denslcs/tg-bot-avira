@@ -25,6 +25,7 @@ CB_PICK_FLUX = "img:pick_flux"
 CB_READY_IDEAS = "menu:ready_ideas"
 CB_APPLY_READY_PREFIX = "img:idea:"
 CB_REGEN = "img:regen"
+CB_IMG_CANCEL = "img:cancel"
 
 # --- Оплата (handlers/payments.py) ---
 CB_PAY_MENU = "pay:menu"
@@ -42,6 +43,7 @@ __all__ = [
     "CB_CREATE_IMAGE",
     "CB_GEN_EDIT",
     "CB_GEN_TEXT",
+    "CB_IMG_CANCEL",
     "CB_MENU_ABOUT",
     "CB_MENU_BACK_START",
     "CB_MENU_PAY",

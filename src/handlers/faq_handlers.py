@@ -84,5 +84,5 @@ async def faq_callback(callback: CallbackQuery) -> None:
         try:
             await callback.message.edit_text(text, reply_markup=_faq_keyboard(), parse_mode=HTML)
         except Exception:
-            await callback.message.answer(text, parse_mode=HTML)
+            await callback.message.answer(text, reply_markup=_faq_keyboard(), parse_mode=HTML)
     await callback.answer()
