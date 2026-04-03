@@ -115,14 +115,6 @@ OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL: str = (
 OPENROUTER_IMAGE_GEMINI_PREVIEW_COST_CREDITS: int = max(
     1, _parse_int(os.getenv("OPENROUTER_IMAGE_GEMINI_PREVIEW_COST_CREDITS", "8"), 8)
 )
-# Пятый слот только Universe.
-OPENROUTER_IMAGE_OPENAI_MODEL: str = (
-    os.getenv("OPENROUTER_IMAGE_OPENAI_MODEL", "openai/gpt-5-image-mini").strip()
-    or "openai/gpt-5-image-mini"
-)
-OPENROUTER_IMAGE_OPENAI_COST_CREDITS: int = max(
-    1, _parse_int(os.getenv("OPENROUTER_IMAGE_OPENAI_COST_CREDITS", "18"), 18)
-)
 # В API уходит aspect_ratio 1:1 (~1024×1024, ~1 Мп по доке OpenRouter).
 # Значение вроде «1K» у FLUX на OpenRouter может давать больше мегапикселей и цену ~2.5× к тарифу «$ за Мп».
 # Пустой OPENROUTER_IMAGE_OUTPUT_SIZE — не передаём image_size (только 1:1), ближе к одному мегапикселю в биллинге.
@@ -135,6 +127,30 @@ OPENROUTER_IMAGE_CACHE_DIR: Path = PROJECT_ROOT / (_cdir or "data/image_cache_op
 # Опционально для статистики OpenRouter (см. документацию)
 OPENROUTER_HTTP_REFERER: str = os.getenv("OPENROUTER_HTTP_REFERER", "").strip()
 OPENROUTER_APP_TITLE: str = os.getenv("OPENROUTER_APP_TITLE", "Tg_bot_AVIRA").strip() or "Tg_bot_AVIRA"
+
+# Polza.ai — GPT Image (Media API); модели из POLZA_IMAGE_MODEL_IDS — Galaxy / Universe (см. img_commands).
+POLZAAI_API_KEY: str = os.getenv("POLZAAI_API_KEY", "").strip()
+POLZAAI_API_BASE: str = (
+    os.getenv("POLZAAI_API_BASE", "https://polza.ai/api").strip().rstrip("/") or "https://polza.ai/api"
+)
+POLZA_IMAGE_MODEL_GPT_IMAGE_15: str = (
+    os.getenv("POLZA_IMAGE_MODEL_GPT_IMAGE_15", "openai/gpt-image-1.5").strip() or "openai/gpt-image-1.5"
+)
+POLZA_IMAGE_MODEL_GPT5_IMAGE: str = (
+    os.getenv("POLZA_IMAGE_MODEL_GPT5_IMAGE", "openai/gpt-5-image").strip() or "openai/gpt-5-image"
+)
+POLZA_IMAGE_GPT_IMAGE_15_COST_CREDITS: int = max(
+    1, _parse_int(os.getenv("POLZA_IMAGE_GPT_IMAGE_15_COST_CREDITS", "15"), 15)
+)
+POLZA_IMAGE_GPT5_IMAGE_COST_CREDITS: int = max(
+    1, _parse_int(os.getenv("POLZA_IMAGE_GPT5_IMAGE_COST_CREDITS", "22"), 22)
+)
+POLZA_IMAGE_MODEL_IDS: frozenset[str] = frozenset(
+    {POLZA_IMAGE_MODEL_GPT_IMAGE_15, POLZA_IMAGE_MODEL_GPT5_IMAGE}
+)
+# Polza Media input.image_resolution: 1K ≈ ориентир на ~1 Мп; пусто — дефолт провайдера (может быть выше).
+_polza_res = os.getenv("POLZA_IMAGE_INPUT_RESOLUTION", "1K").strip()
+POLZA_IMAGE_INPUT_RESOLUTION: str | None = _polza_res if _polza_res else None
 
 # Оплата подписки: внешние ссылки (YooKassa / Stripe / crypto-касса). Пусто — бот предложит поддержку.
 PAY_URL_CARD_RU: str = os.getenv("PAY_URL_CARD_RU", "").strip()

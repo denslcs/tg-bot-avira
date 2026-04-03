@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-Генерация изображений по тексту через OpenRouter (FLUX, Gemini Image и др.).
+Генерация изображений по тексту: OpenRouter (FLUX, Gemini) и Polza.ai (GPT Image).
 """
 
 import logging
@@ -28,9 +28,11 @@ from src.config import (
     OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL,
     OPENROUTER_IMAGE_MODEL,
     OPENROUTER_IMAGE_MODEL_ALT,
-    OPENROUTER_IMAGE_OPENAI_COST_CREDITS,
-    OPENROUTER_IMAGE_OPENAI_MODEL,
     OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS,
+    POLZA_IMAGE_GPT5_IMAGE_COST_CREDITS,
+    POLZA_IMAGE_GPT_IMAGE_15_COST_CREDITS,
+    POLZA_IMAGE_MODEL_GPT5_IMAGE,
+    POLZA_IMAGE_MODEL_GPT_IMAGE_15,
 )
 from src.database import (
     ImageChargeMeta,
@@ -69,6 +71,13 @@ from src.openrouter_image import (
     is_openrouter_image_configured,
     openrouter_text_to_image_bytes,
 )
+from src.polza_image import (
+    PolzaApiError,
+    format_polza_image_user_error,
+    is_polza_configured,
+    is_polza_image_model,
+    polza_text_to_image_bytes,
+)
 from src.subscription_catalog import NONSUB_IMAGE_WINDOW_DAYS, NONSUB_IMAGE_WINDOW_MAX
 
 router = Router(name="img_commands")
@@ -89,6 +98,12 @@ _IMAGE_GEN_MISSING_TEXT = (
     "<b>Генерация картинок выключена.</b>\n\n"
     "<blockquote>Администратору: задай <code>OPENROUTER_API_KEY</code> и при необходимости "
     "<code>OPENROUTER_IMAGE_MODEL</code> в <code>.env</code> (см. .env.example).</blockquote>"
+)
+
+_POLZA_MISSING_TEXT = (
+    "<b>Модель GPT Image (Polza.ai) недоступна.</b>\n\n"
+    "<blockquote>Администратору: задай <code>POLZAAI_API_KEY</code> в <code>.env</code> "
+    "(см. .env.example).</blockquote>"
 )
 
 _BACK_MAIN = [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)]
@@ -130,19 +145,18 @@ def _dedupe_model_choices(items: list[tuple[str, str, int]]) -> list[tuple[str, 
 
 def _model_choices_for_subscription_plan(plan_id: str) -> list[tuple[str, str, int]]:
     """
-    Подпись кнопки, id модели OpenRouter, стоимость в кредитах.
+    Подпись кнопки, id модели (OpenRouter или Polza), стоимость в кредитах.
     Nova: только Klein 4B.
-    SuperNova: Klein 4B + Nano Banana (Gemini Flash) + FLUX Pro.
-    Galaxy: + Nano Banana 2 (Gemini 3.1 preview).
-    Universe: + OpenAI GPT-5 Image Mini.
-    Неизвестный plan_id: полный набор как Universe (миграции/опечатки — не режем OpenAI).
+    SuperNova: Klein 4B + Nano Banana.
+    Galaxy: Klein 4B + Nano Banana + GPT Image 1.5 (Polza).
+    Universe: Klein, Nano Banana, GPT Image 1.5, FLUX Pro, Nano Banana 2, GPT‑5 Image (Polza).
+    Неизвестный plan_id: как Universe.
     Без подписки панель не используется.
     """
     klein_id = (OPENROUTER_IMAGE_MODEL or "").strip() or "black-forest-labs/flux.2-klein-4b"
     pro_id = (OPENROUTER_IMAGE_MODEL_ALT or "").strip() or "black-forest-labs/flux.2-pro"
     gemini_id = (OPENROUTER_IMAGE_GEMINI_MODEL or "").strip() or "google/gemini-2.5-flash-image"
     preview_id = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or "google/gemini-3.1-flash-image-preview"
-    openai_id = (OPENROUTER_IMAGE_OPENAI_MODEL or "").strip() or "openai/gpt-5-image-mini"
 
     klein = ("⚡ FLUX Klein 4B", klein_id, OPENROUTER_IMAGE_COST_CREDITS)
     pro = ("🎨 FLUX Pro", pro_id, OPENROUTER_IMAGE_ALT_COST_CREDITS)
@@ -152,17 +166,25 @@ def _model_choices_for_subscription_plan(plan_id: str) -> list[tuple[str, str, i
         preview_id,
         OPENROUTER_IMAGE_GEMINI_PREVIEW_COST_CREDITS,
     )
-    openai_img = ("🖼 OpenAI GPT-5 Image Mini", openai_id, OPENROUTER_IMAGE_OPENAI_COST_CREDITS)
+    gpt_img_15 = (
+        "🖼 GPT Image 1.5",
+        POLZA_IMAGE_MODEL_GPT_IMAGE_15,
+        POLZA_IMAGE_GPT_IMAGE_15_COST_CREDITS,
+    )
+    gpt5_img = (
+        "🖼 GPT‑5 Image",
+        POLZA_IMAGE_MODEL_GPT5_IMAGE,
+        POLZA_IMAGE_GPT5_IMAGE_COST_CREDITS,
+    )
 
     p = (plan_id or "").strip().lower()
     if p == "nova":
         return _dedupe_model_choices([klein])
     if p == "supernova":
-        return _dedupe_model_choices([klein, gemini, pro])
+        return _dedupe_model_choices([klein, gemini])
     if p == "galaxy":
-        return _dedupe_model_choices([klein, gemini, pro, gemini_preview])
-    # universe и неизвестный plan_id — один полный стек (включая OpenAI)
-    return _dedupe_model_choices([klein, gemini, pro, gemini_preview, openai_img])
+        return _dedupe_model_choices([klein, gemini, gpt_img_15])
+    return _dedupe_model_choices([klein, gemini, gpt_img_15, pro, gemini_preview, gpt5_img])
 
 
 async def _effective_image_model_and_cost(user_id: int, requested_model: str) -> tuple[str, int]:
@@ -389,14 +411,20 @@ async def _execute_text_generation(
     override_cost: int | None = None,
 ) -> None:
     await ensure_user(user_id, username)
-    if not is_openrouter_image_configured():
-        await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
-        return
     is_admin = user_id in ADMIN_IDS
     charge = not is_admin
     if not is_admin:
         model, plan_cost = await _effective_image_model_and_cost(user_id, model)
         cost = override_cost if override_cost is not None else plan_cost
+
+    if is_polza_image_model(model):
+        if not is_polza_configured():
+            await message.answer(_POLZA_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
+            return
+    elif not is_openrouter_image_configured():
+        await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
+        return
+
     prep = await _prepare_image_charge_and_daily_slot(
         message, user_id=user_id, is_admin=is_admin, charge=charge, cost=cost, usage_kind=usage_kind
     )
@@ -405,9 +433,15 @@ async def _execute_text_generation(
         return
     wait_msg = await message.answer("Идет генерация картинки")
     try:
-        image_bytes, from_cache = await openrouter_text_to_image_bytes(
-            prompt, model=model, use_cache=use_image_cache
-        )
+        if is_polza_image_model(model):
+            image_bytes = await polza_text_to_image_bytes(
+                prompt, model=model, user_id=user_id
+            )
+            from_cache = False
+        else:
+            image_bytes, from_cache = await openrouter_text_to_image_bytes(
+                prompt, model=model, use_cache=use_image_cache
+            )
     except Exception as exc:
         if isinstance(exc, OpenRouterApiError):
             logging.warning(
@@ -416,15 +450,28 @@ async def _execute_text_generation(
                 exc.http_status,
                 exc,
             )
+            err = format_openrouter_image_user_error(exc)
+        elif isinstance(exc, PolzaApiError):
+            logging.warning(
+                "Polza.ai отказ user_id=%s http=%s: %s",
+                user_id,
+                exc.http_status,
+                exc,
+            )
+            err = format_polza_image_user_error(exc)
         else:
             logging.exception("Image text generation failed user_id=%s", user_id)
+            err = (
+                format_polza_image_user_error(exc)
+                if is_polza_image_model(model)
+                else format_openrouter_image_user_error(exc)
+            )
         if meta.daily_reserved:
             await release_daily_image_generation(user_id, usage_kind)
         if meta.credit_charged:
             await add_credits(user_id, cost)
         if meta.nonsub_quota_reserved:
             await release_nonsub_image_quota_slot(user_id)
-        err = format_openrouter_image_user_error(exc)
         await wait_msg.edit_text(err, parse_mode=HTML, disable_web_page_preview=True)
         return
     await wait_msg.delete()
