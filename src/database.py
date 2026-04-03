@@ -8,7 +8,12 @@ from datetime import datetime, timedelta, timezone
 import aiosqlite
 
 from src.config import DB_PATH, START_CREDITS
-from src.subscription_catalog import PLANS, daily_image_generation_limit
+from src.subscription_catalog import (
+    NONSUB_IMAGE_WINDOW_DAYS,
+    NONSUB_IMAGE_WINDOW_MAX,
+    PLANS,
+    daily_image_generation_limit,
+)
 
 
 @dataclass
@@ -46,6 +51,15 @@ class SupportTicketDetail:
     created_at: str
     first_admin_reply_at: str | None
     tag: str | None
+
+
+@dataclass
+class ImageChargeMeta:
+    """Следы списания при подготовке генерации картинки (для отката при ошибке)."""
+
+    credit_charged: bool = False
+    nonsub_quota_reserved: bool = False
+    daily_reserved: bool = False
 
 
 @dataclass
@@ -90,6 +104,17 @@ async def _migrate_subscription_plan(db: aiosqlite.Connection) -> None:
         cols = {row[1] for row in await cur.fetchall()}
     if "subscription_plan" not in cols:
         await db.execute("ALTER TABLE users ADD COLUMN subscription_plan TEXT")
+
+
+async def _migrate_free_image_window(db: aiosqlite.Connection) -> None:
+    async with db.execute("PRAGMA table_info(users)") as cur:
+        cols = {row[1] for row in await cur.fetchall()}
+    if "free_image_window_start" not in cols:
+        await db.execute("ALTER TABLE users ADD COLUMN free_image_window_start TEXT")
+    if "free_image_window_count" not in cols:
+        await db.execute(
+            "ALTER TABLE users ADD COLUMN free_image_window_count INTEGER NOT NULL DEFAULT 0"
+        )
 
 
 async def init_db() -> None:
@@ -226,6 +251,7 @@ async def init_db() -> None:
         await _migrate_support_tickets(db)
         await _migrate_support_ratings_feedback(db)
         await _migrate_subscription_plan(db)
+        await _migrate_free_image_window(db)
         await db.commit()
 
 
@@ -670,6 +696,16 @@ def _day_utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
+def _needs_free_image_window_reset(start_s: str | None, now: datetime) -> bool:
+    if not start_s:
+        return True
+    try:
+        t = _parse_dt_utc(start_s)
+        return now >= t + timedelta(days=NONSUB_IMAGE_WINDOW_DAYS)
+    except ValueError:
+        return True
+
+
 def daily_image_generation_limit_for_user(
     subscription_ends_at: str | None, usage_kind: str
 ) -> int:
@@ -677,6 +713,105 @@ def daily_image_generation_limit_for_user(
         subscription_is_active(subscription_ends_at),
         usage_kind,
     )
+
+
+async def try_reserve_nonsub_image_quota_slot(user_id: int) -> bool:
+    """Атомарно занять одну из квот генераций без подписки (окно NONSUB_IMAGE_WINDOW_DAYS)."""
+    now = datetime.now(timezone.utc)
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("BEGIN IMMEDIATE")
+        async with db.execute(
+            """
+            SELECT free_image_window_start, free_image_window_count
+            FROM users
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+        if not row:
+            await db.rollback()
+            return False
+        start_s, count_raw = row[0], row[1]
+        count = int(count_raw or 0)
+        start_str = str(start_s) if start_s else None
+        if _needs_free_image_window_reset(start_str, now):
+            start_iso = now.isoformat()
+            count = 0
+            await db.execute(
+                """
+                UPDATE users
+                SET free_image_window_start = ?, free_image_window_count = 0
+                WHERE user_id = ?
+                """,
+                (start_iso, user_id),
+            )
+            start_str = start_iso
+        if count >= NONSUB_IMAGE_WINDOW_MAX:
+            await db.rollback()
+            return False
+        await db.execute(
+            """
+            UPDATE users
+            SET free_image_window_count = ?, free_image_window_start = ?
+            WHERE user_id = ?
+            """,
+            (count + 1, start_str, user_id),
+        )
+        await db.commit()
+    return True
+
+
+async def release_nonsub_image_quota_slot(user_id: int) -> None:
+    """Откат квоты при неуспешной генерации (после try_reserve_nonsub_image_quota_slot)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("BEGIN IMMEDIATE")
+        async with db.execute(
+            """
+            SELECT free_image_window_count
+            FROM users
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+        if not row:
+            await db.rollback()
+            return
+        count = int(row[0] or 0)
+        if count <= 0:
+            await db.rollback()
+            return
+        new_c = count - 1
+        await db.execute(
+            "UPDATE users SET free_image_window_count = ? WHERE user_id = ?",
+            (new_c, user_id),
+        )
+        await db.commit()
+
+
+async def get_nonsub_image_quota_status(user_id: int) -> tuple[int, int] | None:
+    """Для UI без подписки: (использовано, лимит) в текущем окне; None если подписка активна."""
+    now = datetime.now(timezone.utc)
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT subscription_ends_at, free_image_window_start, free_image_window_count
+            FROM users
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return (0, NONSUB_IMAGE_WINDOW_MAX)
+    if subscription_is_active(str(row[0]) if row[0] else None):
+        return None
+    start_s, count_raw = row[1], row[2]
+    count = int(count_raw or 0)
+    if _needs_free_image_window_reset(str(start_s) if start_s else None, now):
+        return (0, NONSUB_IMAGE_WINDOW_MAX)
+    return (count, NONSUB_IMAGE_WINDOW_MAX)
 
 
 async def get_monthly_image_generation_usage(user_id: int) -> tuple[int, int]:

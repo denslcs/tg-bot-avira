@@ -1,15 +1,16 @@
 """Тарифы подписки: кредиты на баланс, цены ₽ / $ / ⭐ Telegram Stars.
 
 Подписка даёт кредиты и срок доступа; лимитов на количество генераций для
-подписчиков нет. Для пользователей без подписки действуют дневные лимиты:
-самостоятельные генерации и готовые промпты считаются отдельно.
+подписчиков нет. Без подписки: не более NONSUB_IMAGE_WINDOW_MAX генераций картинок
+за скользящие NONSUB_IMAGE_WINDOW_DAYS суток (UTC) — каждая со списанием кредитов;
+после исчерпания лимита нужна подписка или ожидание сброса окна (кредиты не помогают).
 
 Звёзды (XTR): опорная точка Nova — $2.99 → 225 ⭐ (согласовано с прежним
 соотношением ~159 ₽ → 150 ⭐, масштаб по курсу Nova). Остальные тарифы:
 round(usd / 2.99 * 225).
 
-Ориентир по кредитам (~20 за готовый промпт, ~6 за свою генерацию):
-Nova 500 ≈ 25 готовых; Supernova 1100 ≈ 55; Galaxy 2400 ≈ 120; Universe 5000 ≈ 250.
+Ориентир по кредитам (зависит от OPENROUTER_IMAGE_COST_CREDITS и модели):
+Nova 500, Supernova 1100, Galaxy 2400, Universe 5000 — на баланс при оплате подписки.
 """
 
 from __future__ import annotations
@@ -17,10 +18,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-# Без активной подписки: лимиты генераций картинок в сутки (UTC), по типам.
+# Без подписки: лимит генераций картинок за скользящее окно (UTC), со списанием кредитов.
+NONSUB_IMAGE_WINDOW_DAYS: int = 30
+NONSUB_IMAGE_WINDOW_MAX: int = 3
+
+# Для подписчиков «безлимит» в счётчике суток (внутренний резерв в БД).
+UNLIMITED_DAILY_IMAGE_GENERATIONS: int = 1_000_000_000
+
+# Устарело: дневные лимиты бесплатного тарифа заменены окном 30 дней.
 FREE_DAILY_SELF_IMAGE_GENERATIONS: int = 2
 FREE_DAILY_READY_IMAGE_GENERATIONS: int = 4
-UNLIMITED_DAILY_IMAGE_GENERATIONS: int = 1_000_000_000
 
 # Ровно 30 календарных дней с момента оплаты (или продления от текущего срока).
 SUBSCRIPTION_PERIOD_DAYS: int = 30
@@ -128,4 +135,5 @@ def free_daily_generation_limit(usage_kind: str) -> int:
 def daily_image_generation_limit(subscription_active: bool, usage_kind: str) -> int:
     if subscription_active:
         return UNLIMITED_DAILY_IMAGE_GENERATIONS
+    # Без подписки дневной лимит в БД не используется (окно 30 дней в users).
     return free_daily_generation_limit(usage_kind)

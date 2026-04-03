@@ -23,13 +23,13 @@ from src.database import (
     count_generated_images_total,
     ensure_user,
     get_credits,
-    get_daily_image_generation_usage,
+    get_nonsub_image_quota_status,
     get_referral_count,
     get_user_admin_profile,
     subscription_is_active,
     take_credits,
 )
-from src.subscription_catalog import PLANS
+from src.subscription_catalog import NONSUB_IMAGE_WINDOW_DAYS, PLANS
 from src.formatting import HTML, esc
 from src.keyboards.callback_data import (
     CB_MENU_ABOUT,
@@ -180,7 +180,6 @@ async def cmd_help(message: Message) -> None:
         "💳 <code>/pay</code> — <i>подписка и оплата</i>\n"
         "👤 <code>/profile</code> — <i>статус аккаунта и подписки</i>\n"
         "👥 <code>/ref</code> — <i>реферальная система</i>\n"
-        "💡 <code>/ideas</code> — <i>готовые идеи для фото</i>\n"
         "📋 <code>/faq</code> — <i>частые вопросы</i>\n"
         "🔄 <code>/newchat</code> или <code>/clear</code> — <i>очистить память диалога</i>\n"
         "💬 <code>/support</code> — <i>обращение в поддержку</i>\n"
@@ -200,10 +199,7 @@ async def menu_about(callback: CallbackQuery) -> None:
     await callback.message.answer(
         "<b>Что умеет бот</b>\n"
         "<blockquote>"
-        "• Сгенерировать картинку из текста.\n"
-        "• Изменить картинку по фото + тексту.\n"
-        "• Готовые промпты к фото.\n"
-        "• Разные <i>ИИ-модели</i> для генерации."
+        "• Сгенерировать картинку по тексту (OpenRouter / FLUX Klein)."
         "</blockquote>",
         reply_markup=back_to_main_menu_keyboard(),
         parse_mode=HTML,
@@ -396,10 +392,18 @@ async def send_profile_card(message: Message, user_id: int, username_raw: str | 
         sub_status = "не активна"
         sub_till = profile.subscription_ends_at or "—"
         plan_name = "—"
-    used_self, limit_self = await get_daily_image_generation_usage(user_id, "self")
-    used_ready, limit_ready = await get_daily_image_generation_usage(user_id, "ready")
     gen_total = await count_generated_images_total(user_id)
     days_in_bot = _days_in_bot(profile.created_at)
+    if active_sub:
+        img_limits_line = (
+            "<i>Картинки:</i> без дневного лимита, списание по кредитам.\n"
+        )
+    else:
+        fu, flim = await get_nonsub_image_quota_status(user_id)
+        img_limits_line = (
+            f"<i>Генераций картинок без подписки за {NONSUB_IMAGE_WINDOW_DAYS} дн. (UTC):</i> "
+            f"<b>{esc(fu)}/{esc(flim)}</b> (со списанием кредитов; дальше — только подписка или сброс окна).\n"
+        )
     await message.answer(
         "<b>👤 Профиль</b>\n"
         "<blockquote>"
@@ -411,8 +415,7 @@ async def send_profile_card(message: Message, user_id: int, username_raw: str | 
         f"<i>Активна до (UTC):</i> <b>{esc(sub_till)}</b>\n"
         f"<i>Сгенерировано изображений:</i> <b>{esc(gen_total)}</b>\n"
         f"<i>Дней в боте:</i> <b>{esc(days_in_bot)}</b>\n"
-        f"<i>Лимиты на сегодня (UTC):</i> свои <b>{esc(used_self)}/{esc(limit_self)}</b>, "
-        f"готовые <b>{esc(used_ready)}/{esc(limit_ready)}</b>."
+        f"{img_limits_line}"
         "</blockquote>",
         parse_mode=HTML,
     )

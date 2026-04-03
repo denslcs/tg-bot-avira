@@ -46,8 +46,8 @@ from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 from src.subscription_catalog import (
     BONUS_PACKS,
     BONUS_PACKS_ORDER,
-    FREE_DAILY_READY_IMAGE_GENERATIONS,
-    FREE_DAILY_SELF_IMAGE_GENERATIONS,
+    NONSUB_IMAGE_WINDOW_DAYS,
+    NONSUB_IMAGE_WINDOW_MAX,
     PLANS,
     PLANS_ORDER,
     SUBSCRIPTION_PERIOD_DAYS,
@@ -76,8 +76,8 @@ def _plans_menu_caption() -> str:
         "<b>Тарифы</b> — при оплате на баланс начисляются <b>кредиты</b> "
         f"(срок подписки <b>{esc(SUBSCRIPTION_PERIOD_DAYS)}</b> дн.). "
         "Ограничений на количество генераций по подписке нет — всё зависит от баланса кредитов.\n\n"
-        f"<blockquote><i>Без подписки (UTC сутки):</i> свои генерации — <b>{esc(FREE_DAILY_SELF_IMAGE_GENERATIONS)}</b>, "
-        f"готовые промпты — <b>{esc(FREE_DAILY_READY_IMAGE_GENERATIONS)}</b>.</blockquote>"
+        f"<blockquote><i>Без подписки:</i> не более <b>{esc(NONSUB_IMAGE_WINDOW_MAX)}</b> генераций картинок "
+        f"за <b>{esc(NONSUB_IMAGE_WINDOW_DAYS)}</b> дней (UTC), каждая за кредиты; дальше — только подписка или сброс окна.</blockquote>"
     )
 
 
@@ -162,8 +162,8 @@ def _pay_methods_text(plan_id: str) -> str:
         f"<i>Кредиты на баланс:</i> <b>+{esc(p.bonus_credits)}</b>\n"
         f"Срок: <b>{esc(SUBSCRIPTION_PERIOD_DAYS)}</b> дн.\n"
         "<blockquote><i>С подпиской</i> — ограничений на число генераций нет: списываются кредиты.</blockquote>\n"
-        f"<blockquote><i>Без подписки (UTC сутки):</i> свои генерации — <b>{esc(FREE_DAILY_SELF_IMAGE_GENERATIONS)}</b>, "
-        f"готовые промпты — <b>{esc(FREE_DAILY_READY_IMAGE_GENERATIONS)}</b>.</blockquote>\n\n"
+        f"<blockquote><i>Без подписки:</i> не более <b>{esc(NONSUB_IMAGE_WINDOW_MAX)}</b> генераций за "
+        f"<b>{esc(NONSUB_IMAGE_WINDOW_DAYS)}</b> дней (UTC), каждая за кредиты; дальше — подписка или сброс окна.</blockquote>\n\n"
         "<i>Оформляя оплату, ты соглашаешься с условиями сервиса и политикой возврата "
         "(подробности — в поддержке или на странице оплаты).</i>"
     )
