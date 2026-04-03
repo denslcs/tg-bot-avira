@@ -100,6 +100,13 @@ OPENROUTER_IMAGE_MODEL_ALT: str = os.getenv(
 OPENROUTER_IMAGE_ALT_COST_CREDITS: int = max(
     1, _parse_int(os.getenv("OPENROUTER_IMAGE_ALT_COST_CREDITS", "12"), 12)
 )
+OPENROUTER_IMAGE_GEMINI_MODEL: str = (
+    os.getenv("OPENROUTER_IMAGE_GEMINI_MODEL", "google/gemini-2.5-flash-image").strip()
+    or "google/gemini-2.5-flash-image"
+)
+OPENROUTER_IMAGE_GEMINI_COST_CREDITS: int = max(
+    1, _parse_int(os.getenv("OPENROUTER_IMAGE_GEMINI_COST_CREDITS", "8"), 8)
+)
 # Всегда не больше ~1 Мп: в API уходит 1:1 (1024×1024 по доке OpenRouter) + при необходимости image_size.
 # Пустой OPENROUTER_IMAGE_OUTPUT_SIZE — не передаём image_size (только aspect_ratio 1:1).
 OPENROUTER_IMAGE_OUTPUT_SIZE: str = os.getenv("OPENROUTER_IMAGE_OUTPUT_SIZE", "1K").strip()

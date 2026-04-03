@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-Генерация изображений по тексту через OpenRouter (FLUX). Без Gemini/Qwen и без правки по фото.
+Генерация изображений по тексту через OpenRouter (FLUX, Gemini Image и др.).
 """
 
 import logging
@@ -22,6 +22,8 @@ from src.config import (
     ADMIN_IDS,
     OPENROUTER_IMAGE_ALT_COST_CREDITS,
     OPENROUTER_IMAGE_COST_CREDITS,
+    OPENROUTER_IMAGE_GEMINI_COST_CREDITS,
+    OPENROUTER_IMAGE_GEMINI_MODEL,
     OPENROUTER_IMAGE_MODEL,
     OPENROUTER_IMAGE_MODEL_ALT,
     OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS,
@@ -108,20 +110,66 @@ class ImageGenState(StatesGroup):
     waiting_prompt = State()
 
 
-def _subscriber_image_models() -> list[tuple[str, str, int]]:
-    """Подписчики: подпись кнопки, id модели OpenRouter, стоимость."""
-    rows: list[tuple[str, str, int]] = [
-        ("⚡ FLUX Klein (быстрее)", OPENROUTER_IMAGE_MODEL, OPENROUTER_IMAGE_COST_CREDITS),
-    ]
-    alt = (OPENROUTER_IMAGE_MODEL_ALT or "").strip()
-    if alt and alt != OPENROUTER_IMAGE_MODEL:
-        rows.append(("🎨 FLUX Pro (качество)", alt, OPENROUTER_IMAGE_ALT_COST_CREDITS))
-    return rows
+def _dedupe_model_choices(items: list[tuple[str, str, int]]) -> list[tuple[str, str, int]]:
+    """Один id модели — одна кнопка (если в .env Klein и Pro совпали)."""
+    seen: set[str] = set()
+    out: list[tuple[str, str, int]] = []
+    for label, mid, cost in items:
+        key = (mid or "").strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append((label, mid, cost))
+    return out
 
 
-def _subscriber_model_pick_keyboard() -> InlineKeyboardMarkup:
+def _model_choices_for_subscription_plan(plan_id: str) -> list[tuple[str, str, int]]:
+    """
+    Подпись кнопки, id модели OpenRouter, стоимость в кредитах.
+    Nova: Gemini + Klein. SuperNova: Pro + Gemini + Klein.
+    Galaxy / Universe: те же три модели, плюс порядок как раньше у подписчиков (Klein, Pro), затем Gemini.
+    Неизвестный тариф: полная трёхмодельная панель (Klein, Pro, Gemini).
+    Без подписки панель не используется.
+    """
+    klein_id = (OPENROUTER_IMAGE_MODEL or "").strip() or "black-forest-labs/flux.2-klein-4b"
+    pro_id = (OPENROUTER_IMAGE_MODEL_ALT or "").strip() or "black-forest-labs/flux.2-pro"
+    gemini_id = (OPENROUTER_IMAGE_GEMINI_MODEL or "").strip() or "google/gemini-2.5-flash-image"
+
+    klein = ("⚡ FLUX Klein", klein_id, OPENROUTER_IMAGE_COST_CREDITS)
+    pro = ("🎨 FLUX Pro", pro_id, OPENROUTER_IMAGE_ALT_COST_CREDITS)
+    gemini = ("🌟 Gemini Flash Image", gemini_id, OPENROUTER_IMAGE_GEMINI_COST_CREDITS)
+
+    p = (plan_id or "").strip().lower()
+    if p == "nova":
+        return _dedupe_model_choices([gemini, klein])
+    if p == "supernova":
+        return _dedupe_model_choices([pro, gemini, klein])
+    if p in ("galaxy", "universe"):
+        return _dedupe_model_choices([klein, pro, gemini])
+    return _dedupe_model_choices([klein, pro, gemini])
+
+
+async def _effective_image_model_and_cost(user_id: int, requested_model: str) -> tuple[str, int]:
+    """Модель и цена согласно текущей подписке (без подписки — только Klein)."""
+    profile = await get_user_admin_profile(user_id)
+    has_sub = bool(profile and subscription_is_active(profile.subscription_ends_at))
+    if not has_sub:
+        return OPENROUTER_IMAGE_MODEL.strip(), OPENROUTER_IMAGE_COST_CREDITS
+    plan_id = (profile.subscription_plan or "").strip().lower() if profile else ""
+    choices = _model_choices_for_subscription_plan(plan_id)
+    want = (requested_model or "").strip()
+    for _lb, mid, cst in choices:
+        if mid.strip() == want:
+            return mid.strip(), cst
+    if choices:
+        mid0, cst0 = choices[0][1], choices[0][2]
+        return mid0.strip(), cst0
+    return OPENROUTER_IMAGE_MODEL.strip(), OPENROUTER_IMAGE_COST_CREDITS
+
+
+def _subscriber_model_pick_keyboard(choices: list[tuple[str, str, int]]) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
-    for i, (label, _mid, cost) in enumerate(_subscriber_image_models()):
+    for i, (label, _mid, cost) in enumerate(choices):
         rows.append(
             [
                 InlineKeyboardButton(
@@ -314,6 +362,7 @@ async def _execute_text_generation(
     cost: int,
     usage_kind: str = "self",
     use_image_cache: bool = True,
+    override_cost: int | None = None,
 ) -> None:
     await ensure_user(user_id, username)
     if not is_openrouter_image_configured():
@@ -321,6 +370,9 @@ async def _execute_text_generation(
         return
     is_admin = user_id in ADMIN_IDS
     charge = not is_admin
+    if not is_admin:
+        model, plan_cost = await _effective_image_model_and_cost(user_id, model)
+        cost = override_cost if override_cost is not None else plan_cost
     prep = await _prepare_image_charge_and_daily_slot(
         message, user_id=user_id, is_admin=is_admin, charge=charge, cost=cost, usage_kind=usage_kind
     )
@@ -387,26 +439,35 @@ async def _send_waiting_prompt_step(
 
 
 async def _show_subscriber_model_pick(
-    message: Message, state: FSMContext, user_id: int, username: str | None
+    message: Message,
+    state: FSMContext,
+    user_id: int,
+    username: str | None,
 ) -> None:
     if not is_openrouter_image_configured():
         await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
         return
     await ensure_user(user_id, username)
+    profile = await get_user_admin_profile(user_id)
+    if not profile or not subscription_is_active(profile.subscription_ends_at):
+        await _start_image_flow(message, state, user_id, username)
+        return
+    plan_id = (profile.subscription_plan or "").strip().lower()
     await state.clear()
-    models = _subscriber_image_models()
-    if len(models) < 2:
-        m = models[0]
+    choices = _model_choices_for_subscription_plan(plan_id)
+    if len(choices) < 2:
+        m = choices[0]
         await _send_waiting_prompt_step(
             message.bot, message.chat.id, state, model=m[1], cost=m[2]
         )
         return
+    await state.update_data(_model_pick_plan=(plan_id or "").strip().lower())
     await state.set_state(ImageGenState.choosing_model)
     await message.answer(
         "<b>Выбор модели ИИ</b>\n"
-        "<blockquote><i>С подпиской доступны несколько моделей. "
-        "Выбери — затем опиши картинку текстом.</i></blockquote>",
-        reply_markup=_subscriber_model_pick_keyboard(),
+        "<blockquote><i>Тариф в профиле определяет доступные модели. "
+        "Выбери вариант — затем опиши картинку текстом.</i></blockquote>",
+        reply_markup=_subscriber_model_pick_keyboard(choices),
         parse_mode=HTML,
     )
 
@@ -436,7 +497,14 @@ async def subscriber_picked_model(callback: CallbackQuery, state: FSMContext) ->
         await callback.answer("Некорректный выбор.", show_alert=True)
         return
     idx = int(raw)
-    models = _subscriber_image_models()
+    profile = await get_user_admin_profile(callback.from_user.id)
+    if not profile or not subscription_is_active(profile.subscription_ends_at):
+        await callback.answer("Подписка не активна. Доступна базовая модель.", show_alert=True)
+        await delete_nav_source_message(callback.message)
+        await _start_image_flow(callback.message, state, callback.from_user.id, callback.from_user.username)
+        return
+    plan_id = (profile.subscription_plan or "").strip().lower()
+    models = _model_choices_for_subscription_plan(plan_id)
     if idx < 0 or idx >= len(models):
         await callback.answer("Нет такой модели.", show_alert=True)
         return
@@ -450,9 +518,30 @@ async def subscriber_picked_model(callback: CallbackQuery, state: FSMContext) ->
 
 
 @router.message(ImageGenState.choosing_model)
-async def remind_pick_model_or_ignore(message: Message) -> None:
+async def remind_pick_model_or_ignore(message: Message, state: FSMContext) -> None:
     """Текст вместо кнопки на шаге выбора модели."""
-    await message.answer("Сначала выбери модель кнопками в сообщении выше 👆")
+    if not message.from_user:
+        return
+    uid = message.from_user.id
+    if uid in ADMIN_IDS:
+        await message.answer("Сначала выбери модель кнопками в сообщении выше 👆")
+        return
+    profile = await get_user_admin_profile(uid)
+    if not profile or not subscription_is_active(profile.subscription_ends_at):
+        await state.clear()
+        await message.answer(
+            "<b>Подписка не активна.</b> Доступна базовая модель и лимит как без подписки — дальше опиши картинку.",
+            parse_mode=HTML,
+        )
+        await _start_image_flow(message, state, uid, message.from_user.username)
+        return
+    plan_id = (profile.subscription_plan or "").strip().lower()
+    await state.update_data(_model_pick_plan=plan_id)
+    choices = _model_choices_for_subscription_plan(plan_id)
+    await message.answer(
+        "Сначала выбери модель кнопками в сообщении выше 👆",
+        reply_markup=_subscriber_model_pick_keyboard(choices),
+    )
 
 
 @router.callback_query(F.data == CB_IMG_CANCEL)
@@ -474,7 +563,16 @@ async def back_to_image_flow(callback: CallbackQuery, state: FSMContext) -> None
         await callback.answer("Ошибка запроса.", show_alert=True)
         return
     await callback.answer()
-    await _start_image_flow(callback.message, state, callback.from_user.id, callback.from_user.username)
+    uid = callback.from_user.id
+    if uid in ADMIN_IDS:
+        await _start_image_flow(callback.message, state, uid, callback.from_user.username)
+        return
+    await ensure_user(uid, callback.from_user.username)
+    profile = await get_user_admin_profile(uid)
+    if profile and subscription_is_active(profile.subscription_ends_at):
+        await _show_subscriber_model_pick(callback.message, state, uid, callback.from_user.username)
+    else:
+        await _start_image_flow(callback.message, state, uid, callback.from_user.username)
 
 
 async def _send_ready_ideas_screen(message: Message, state: FSMContext, user_id: int, username: str | None) -> None:
@@ -553,6 +651,7 @@ async def apply_ready_idea(callback: CallbackQuery, state: FSMContext) -> None:
         cost=OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS,
         usage_kind="self",
         use_image_cache=True,
+        override_cost=OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS,
     )
 
 
@@ -573,7 +672,10 @@ async def open_image_menu(callback: CallbackQuery, state: FSMContext) -> None:
         await _start_image_flow(callback.message, state, uid, callback.from_user.username)
     else:
         await _show_subscriber_model_pick(
-            callback.message, state, uid, callback.from_user.username
+            callback.message,
+            state,
+            uid,
+            callback.from_user.username,
         )
 
 
