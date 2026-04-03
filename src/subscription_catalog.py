@@ -87,10 +87,10 @@ PLANS: dict[str, SubscriptionPlan] = {
     ),
     "universe": SubscriptionPlan(
         id="universe",
-        title="👾 Universe",
-        price_rub=1449,
-        price_usd=17.99,
-        stars=1354,
+        title="🌍 Universe",
+        price_rub=1599,
+        price_usd=19.99,
+        stars=1504,  # round(19.99 / 2.99 * 225) — как у остальных тарифов
         bonus_credits=5000,
     ),
 }

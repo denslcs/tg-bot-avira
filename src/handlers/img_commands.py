@@ -866,12 +866,16 @@ async def create_image_from_prompt(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data.in_({CB_IMG_OK, "img:save"}))
 async def result_ok_to_main_menu(callback: CallbackQuery, state: FSMContext) -> None:
-    """Закрыть сценарий и показать главное меню (сообщение с картинкой не удаляем)."""
+    """Убрать кнопки с сообщения с картинкой, затем главное меню (фото в чате оставляем)."""
     if not callback.from_user or not callback.message:
         await callback.answer()
         return
     await state.clear()
     await callback.answer()
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        logging.debug("result_ok: edit_reply_markup failed", exc_info=True)
     await restore_main_menu_message(
         callback.message,
         callback.from_user.id,
