@@ -46,8 +46,7 @@ from src.database import (
     try_reserve_nonsub_image_quota_slot,
 )
 from src.formatting import HTML, esc
-from src.handlers.commands import restore_main_menu_message
-from src.menu_nav import replace_menu_screen
+from src.handlers.commands import delete_nav_source_message, restore_main_menu_message
 from src.keyboards.callback_data import (
     CB_APPLY_READY_PREFIX,
     CB_BACK_IMAGE_MODELS,
@@ -433,11 +432,13 @@ async def _send_waiting_prompt_step(
     await state.update_data(selected_model=model, selected_cost=cost)
     await state.set_state(ImageGenState.waiting_prompt)
     if replace_message is not None:
-        await replace_menu_screen(
-            replace_message,
-            caption=_WAITING_PROMPT_HTML,
+        chat_id = replace_message.chat.id
+        await delete_nav_source_message(replace_message)
+        await bot.send_message(
+            chat_id,
+            _WAITING_PROMPT_HTML,
             reply_markup=_waiting_prompt_keyboard(),
-            banner_path=None,
+            parse_mode=HTML,
         )
         return
     await bot.send_message(
@@ -455,11 +456,13 @@ async def _show_subscriber_model_pick(
     username: str | None,
 ) -> None:
     if not is_openrouter_image_configured():
-        await replace_menu_screen(
-            message,
-            caption=_IMAGE_GEN_MISSING_TEXT,
+        chat_id = message.chat.id
+        await delete_nav_source_message(message)
+        await message.bot.send_message(
+            chat_id,
+            _IMAGE_GEN_MISSING_TEXT,
             reply_markup=_missing_config_kb(),
-            banner_path=None,
+            parse_mode=HTML,
         )
         return
     await ensure_user(user_id, username)
@@ -483,15 +486,17 @@ async def _show_subscriber_model_pick(
         return
     await state.update_data(_model_pick_plan=(plan_id or "").strip().lower())
     await state.set_state(ImageGenState.choosing_model)
-    await replace_menu_screen(
-        message,
-        caption=(
+    chat_id = message.chat.id
+    await delete_nav_source_message(message)
+    await message.bot.send_message(
+        chat_id,
+        (
             "<b>Выбор модели ИИ</b>\n"
             "<blockquote><i>Тариф в профиле определяет доступные модели. "
             "Выбери вариант — затем опиши картинку текстом.</i></blockquote>"
         ),
         reply_markup=_subscriber_model_pick_keyboard(choices),
-        banner_path=None,
+        parse_mode=HTML,
     )
 
 
@@ -505,11 +510,13 @@ async def _start_image_flow(
 ) -> None:
     if not is_openrouter_image_configured():
         if replace_menu:
-            await replace_menu_screen(
-                message,
-                caption=_IMAGE_GEN_MISSING_TEXT,
+            chat_id = message.chat.id
+            await delete_nav_source_message(message)
+            await message.bot.send_message(
+                chat_id,
+                _IMAGE_GEN_MISSING_TEXT,
                 reply_markup=_missing_config_kb(),
-                banner_path=None,
+                parse_mode=HTML,
             )
         else:
             await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
@@ -631,11 +638,13 @@ async def _send_ready_ideas_screen(
     await state.clear()
     if not is_openrouter_image_configured():
         if edit:
-            await replace_menu_screen(
-                message,
-                caption=_IMAGE_GEN_MISSING_TEXT,
+            chat_id = message.chat.id
+            await delete_nav_source_message(message)
+            await message.bot.send_message(
+                chat_id,
+                _IMAGE_GEN_MISSING_TEXT,
                 reply_markup=_missing_config_kb(),
-                banner_path=None,
+                parse_mode=HTML,
             )
         else:
             await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
@@ -653,7 +662,9 @@ async def _send_ready_ideas_screen(
     cap = f"<b>💡 Готовые идеи</b>\n{sub}"
     kb = ready_ideas_keyboard()
     if edit:
-        await replace_menu_screen(message, caption=cap, reply_markup=kb, banner_path=None)
+        chat_id = message.chat.id
+        await delete_nav_source_message(message)
+        await message.bot.send_message(chat_id, cap, reply_markup=kb, parse_mode=HTML)
     else:
         await message.answer(cap, reply_markup=kb, parse_mode=HTML)
 

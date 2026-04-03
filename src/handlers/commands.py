@@ -11,7 +11,6 @@ from pathlib import Path
 from aiogram import Bot, F, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from src.config import ADMIN_IDS, PROJECT_ROOT, SUPPORT_BOT_USERNAME
@@ -42,7 +41,6 @@ from src.keyboards.callback_data import (
 )
 from src.keyboards.main_menu import back_to_main_menu_keyboard, start_menu_keyboard
 from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
-from src.menu_nav import edit_menu_plain_text, replace_menu_screen
 
 router = Router(name="commands")
 
@@ -120,38 +118,10 @@ async def send_main_menu_screen(
 
 
 async def restore_main_menu_message(message: Message, user_id: int, username: str | None) -> None:
-    """Вернуть главный экран на месте текущего сообщения меню (редактирование, не новый пост)."""
-    await ensure_user(user_id, username)
-    balance = await get_credits(user_id)
-    text = _main_screen_text(balance, "")
-    kb = start_menu_keyboard()
-    banner = _start_banner_path()
-    try:
-        if message.photo:
-            if banner:
-                await replace_menu_screen(message, caption=text, reply_markup=kb, banner_path=banner)
-            else:
-                await message.edit_caption(caption=text, reply_markup=kb, parse_mode=HTML)
-            return
-        if message.text is not None:
-            if banner:
-                chat_id = message.chat.id
-                await delete_nav_source_message(message)
-                await message.bot.send_photo(
-                    chat_id,
-                    photo=FSInputFile(banner),
-                    caption=text,
-                    reply_markup=kb,
-                    parse_mode=HTML,
-                )
-            else:
-                await edit_menu_plain_text(message, text=text, reply_markup=kb)
-            return
-        await message.edit_caption(caption=text, reply_markup=kb, parse_mode=HTML)
-    except TelegramBadRequest as e:
-        if "message is not modified" in (e.message or "").lower():
-            return
-        raise
+    """Удалить текущее сообщение меню и отправить главный экран заново."""
+    chat_id = message.chat.id
+    await delete_nav_source_message(message)
+    await send_main_menu_screen(message.bot, chat_id, user_id, username)
 
 
 def _parse_ref_start_arg(args: str | None) -> int | None:
@@ -255,6 +225,7 @@ async def menu_about(callback: CallbackQuery) -> None:
     if not callback.message:
         await callback.answer("Сообщение недоступно.", show_alert=True)
         return
+    chat_id = callback.message.chat.id
     await callback.answer()
     text = (
         "<b>Что умеет бот</b>\n"
@@ -263,11 +234,12 @@ async def menu_about(callback: CallbackQuery) -> None:
         "• Готовые идеи — пресеты промптов (если добавлены)."
         "</blockquote>"
     )
-    await replace_menu_screen(
-        callback.message,
-        caption=text,
+    await delete_nav_source_message(callback.message)
+    await callback.bot.send_message(
+        chat_id,
+        text,
         reply_markup=back_to_main_menu_keyboard(),
-        banner_path=None,
+        parse_mode=HTML,
     )
 
 
@@ -276,16 +248,18 @@ async def menu_support(callback: CallbackQuery) -> None:
     if not callback.message:
         await callback.answer("Сообщение недоступно.", show_alert=True)
         return
+    chat_id = callback.message.chat.id
     await callback.answer()
     if not SUPPORT_BOT_USERNAME:
-        await replace_menu_screen(
-            callback.message,
-            caption=(
+        await delete_nav_source_message(callback.message)
+        await callback.bot.send_message(
+            chat_id,
+            (
                 "<blockquote><i>Поддержка пока не настроена</i> "
                 "(пустой <code>SUPPORT_BOT_USERNAME</code>).</blockquote>"
             ),
             reply_markup=back_to_main_menu_keyboard(),
-            banner_path=None,
+            parse_mode=HTML,
         )
         return
     support_url = f"https://t.me/{SUPPORT_BOT_USERNAME}?start=from_avira"
@@ -295,11 +269,12 @@ async def menu_support(callback: CallbackQuery) -> None:
             _BACK_TO_MENU_ROW,
         ]
     )
-    await replace_menu_screen(
-        callback.message,
-        caption="<b>Поддержка</b>\n<i>Нажми кнопку ниже,</i> чтобы открыть чат.",
+    await delete_nav_source_message(callback.message)
+    await callback.bot.send_message(
+        chat_id,
+        "<b>Поддержка</b>\n<i>Нажми кнопку ниже,</i> чтобы открыть чат.",
         reply_markup=keyboard,
-        banner_path=None,
+        parse_mode=HTML,
     )
 
 
@@ -367,11 +342,14 @@ async def deliver_referral_screen(bot: Bot, user_id: int, username: str | None, 
     text, kb = await _build_referral_message(user_id, username, me.username)
     try:
         if reply_via:
-            await replace_menu_screen(
-                reply_via,
-                caption=text,
+            chat_id = reply_via.chat.id
+            await delete_nav_source_message(reply_via)
+            await bot.send_message(
+                chat_id,
+                text=text,
                 reply_markup=kb,
-                banner_path=None,
+                parse_mode=HTML,
+                disable_web_page_preview=True,
             )
         else:
             await bot.send_message(
@@ -504,13 +482,17 @@ async def send_profile_card(
         text = "<blockquote><b>Режим админа</b> — безлимит по кредитам.</blockquote>"
         kb = back_to_main_menu_keyboard()
         if edit_existing:
-            await replace_menu_screen(message, caption=text, reply_markup=kb, banner_path=None)
+            chat_id = message.chat.id
+            await delete_nav_source_message(message)
+            await message.bot.send_message(chat_id, text, reply_markup=kb, parse_mode=HTML)
         else:
             await message.answer(text, reply_markup=kb, parse_mode=HTML)
         return
     text, kb = await _profile_card_html(user_id, username_raw)
     if edit_existing:
-        await replace_menu_screen(message, caption=text, reply_markup=kb, banner_path=None)
+        chat_id = message.chat.id
+        await delete_nav_source_message(message)
+        await message.bot.send_message(chat_id, text, reply_markup=kb, parse_mode=HTML)
     else:
         await message.answer(text, reply_markup=kb, parse_mode=HTML)
 

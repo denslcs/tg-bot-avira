@@ -30,7 +30,7 @@ from src.database import (
     try_claim_star_payment,
 )
 from src.formatting import HTML, esc, format_subscription_ends_at
-from src.menu_nav import replace_menu_screen
+from src.handlers.commands import delete_nav_source_message
 from src.keyboards.callback_data import (
     CB_MENU_BACK_START,
     CB_MENU_PAY,
@@ -248,31 +248,32 @@ def _bonus_packs_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-async def send_subscription_menu(message: Message, *, edit: bool = False) -> None:
-    """Тарифы и оплата — то же, что кнопка «Оплатить» в /start."""
-    if not message.from_user:
-        return
-    await ensure_user(message.from_user.id, message.from_user.username)
+async def _send_plans_menu_to_chat(bot, chat_id: int) -> None:
     caption = _plans_menu_caption()
     kb = _plans_keyboard()
     pricing_img = _subscriptions_pricing_image_path()
-    if edit:
-        await replace_menu_screen(
-            message,
-            caption=caption,
-            reply_markup=kb,
-            banner_path=pricing_img if pricing_img and pricing_img.is_file() else None,
-        )
-        return
-    if pricing_img:
-        await message.answer_photo(
-            FSInputFile(pricing_img),
+    if pricing_img and pricing_img.is_file():
+        await bot.send_photo(
+            chat_id,
+            photo=FSInputFile(pricing_img),
             caption=caption,
             reply_markup=kb,
             parse_mode=HTML,
         )
     else:
-        await message.answer(caption, reply_markup=kb, parse_mode=HTML)
+        await bot.send_message(chat_id, caption, reply_markup=kb, parse_mode=HTML)
+
+
+async def send_subscription_menu(message: Message, *, replace_previous: bool = False) -> None:
+    """Тарифы и оплата — то же, что кнопка «Оплатить» в /start."""
+    if not message.from_user:
+        return
+    await ensure_user(message.from_user.id, message.from_user.username)
+    chat_id = message.chat.id
+    bot = message.bot
+    if replace_previous:
+        await delete_nav_source_message(message)
+    await _send_plans_menu_to_chat(bot, chat_id)
 
 
 @router.callback_query(F.data == CB_MENU_PAY)
@@ -281,7 +282,7 @@ async def menu_pay(callback: CallbackQuery) -> None:
         await callback.answer()
         return
     await callback.answer()
-    await send_subscription_menu(callback.message, edit=True)
+    await send_subscription_menu(callback.message, replace_previous=True)
 
 
 @router.message(Command("pay"))
@@ -294,16 +295,10 @@ async def pay_back_plans(callback: CallbackQuery) -> None:
     if callback.message is None:
         await callback.answer()
         return
-    caption = _plans_menu_caption()
-    kb = _plans_keyboard()
-    pricing_img = _subscriptions_pricing_image_path()
-    await replace_menu_screen(
-        callback.message,
-        caption=caption,
-        reply_markup=kb,
-        banner_path=pricing_img if pricing_img and pricing_img.is_file() else None,
-    )
+    chat_id = callback.message.chat.id
     await callback.answer()
+    await delete_nav_source_message(callback.message)
+    await _send_plans_menu_to_chat(callback.bot, chat_id)
 
 
 @router.callback_query(F.data.startswith(CB_PAY_PLAN_PREFIX))
@@ -319,13 +314,15 @@ async def pay_pick_plan(callback: CallbackQuery) -> None:
     if not allowed:
         await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
         return
-    await replace_menu_screen(
-        callback.message,
-        caption=_pay_methods_text(plan_id),
-        reply_markup=_methods_keyboard(plan_id, is_pack=False, back_callback_data=CB_PAY_MENU),
-        banner_path=None,
-    )
+    chat_id = callback.message.chat.id
     await callback.answer()
+    await delete_nav_source_message(callback.message)
+    await callback.bot.send_message(
+        chat_id,
+        _pay_methods_text(plan_id),
+        reply_markup=_methods_keyboard(plan_id, is_pack=False, back_callback_data=CB_PAY_MENU),
+        parse_mode=HTML,
+    )
 
 
 @router.callback_query(F.data == CB_PAY_BONUS_MENU)
@@ -333,13 +330,15 @@ async def pay_bonus_menu(callback: CallbackQuery) -> None:
     if callback.message is None:
         await callback.answer()
         return
-    await replace_menu_screen(
-        callback.message,
-        caption=_bonus_packs_caption(),
-        reply_markup=_bonus_packs_keyboard(),
-        banner_path=None,
-    )
+    chat_id = callback.message.chat.id
     await callback.answer()
+    await delete_nav_source_message(callback.message)
+    await callback.bot.send_message(
+        chat_id,
+        _bonus_packs_caption(),
+        reply_markup=_bonus_packs_keyboard(),
+        parse_mode=HTML,
+    )
 
 
 @router.callback_query(F.data.startswith(CB_PAY_PACK_PREFIX))
@@ -351,13 +350,15 @@ async def pay_pick_pack(callback: CallbackQuery) -> None:
     if pack_id not in BONUS_PACKS:
         await callback.answer("Неизвестный пакет", show_alert=True)
         return
-    await replace_menu_screen(
-        callback.message,
-        caption=_pack_methods_text(pack_id),
-        reply_markup=_methods_keyboard(pack_id, is_pack=True, back_callback_data=CB_PAY_BONUS_MENU),
-        banner_path=None,
-    )
+    chat_id = callback.message.chat.id
     await callback.answer()
+    await delete_nav_source_message(callback.message)
+    await callback.bot.send_message(
+        chat_id,
+        _pack_methods_text(pack_id),
+        reply_markup=_methods_keyboard(pack_id, is_pack=True, back_callback_data=CB_PAY_BONUS_MENU),
+        parse_mode=HTML,
+    )
 
 
 def _pay_item_info(item_id: str) -> tuple[str, int]:
@@ -385,14 +386,16 @@ async def _external_pay_hint(callback: CallbackQuery, item_id: str, label: str, 
             ]
         )
         if callback.message:
-            await replace_menu_screen(
-                callback.message,
-                caption=(
+            chat_id = callback.message.chat.id
+            await delete_nav_source_message(callback.message)
+            await callback.bot.send_message(
+                chat_id,
+                (
                     "<blockquote><i>Открой страницу оплаты.</i> Если на кассе есть выбор тарифа — "
                     f"укажи: <b>{esc(title)}</b>.</blockquote>"
                 ),
                 reply_markup=keyboard,
-                banner_path=None,
+                parse_mode=HTML,
             )
         await callback.answer()
         return
@@ -402,17 +405,19 @@ async def _external_pay_hint(callback: CallbackQuery, item_id: str, label: str, 
         else f"Напиши в поддержку (бот в настройках проекта) с текстом «{title}» ({price_rub} ₽)."
     )
     if callback.message:
+        chat_id = callback.message.chat.id
         kb = InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_PAY_MENU)]]
         )
-        await replace_menu_screen(
-            callback.message,
-            caption=(
+        await delete_nav_source_message(callback.message)
+        await callback.bot.send_message(
+            chat_id,
+            (
                 f"<b>Оплата «{esc(label)}»</b> пока подключается.\n"
                 f"<blockquote>{esc(support_line)} Мы выставим счёт или дадим ссылку.</blockquote>"
             ),
             reply_markup=kb,
-            banner_path=None,
+            parse_mode=HTML,
         )
     await callback.answer()
 
