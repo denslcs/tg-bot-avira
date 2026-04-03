@@ -18,7 +18,6 @@ from src.database import (
     ensure_user,
     get_credits,
     get_daily_user_messages,
-    get_last_dialog_messages,
     get_open_ticket_by_id,
     get_open_ticket_by_thread,
     get_user_admin_profile,
@@ -26,6 +25,7 @@ from src.database import (
     spend_one_credit,
     subscription_is_active,
 )
+from src.keyboards.main_menu import start_menu_keyboard
 from src.private_rate_limit import check_private_message_rate
 from src.support_state import (
     append_support_draft,
@@ -189,12 +189,9 @@ async def any_message(message: Message, state: FSMContext) -> None:
 
     try:
         await add_dialog_message(user_id, "user", text)
-        history = await get_last_dialog_messages(user_id, limit=10)
-
         reply_text = (
-            f"Avira получила: {text}\n\n"
-            f"В памяти сейчас: {len(history)} сообщений (максимум 10).\n"
-            "Полноценный текстовый чат с ИИ подключим отдельно; пока основной режим — картинки через меню /start."
+            "Привет! Я Avira ✨\n\n"
+            "Выбери, что хочешь: картинки, оплата, профиль и остальное — в меню ниже или команда /start."
         )
         await add_dialog_message(user_id, "assistant", reply_text)
     except Exception:
@@ -205,13 +202,17 @@ async def any_message(message: Message, state: FSMContext) -> None:
     if not is_admin and not sub_free and FREE_DAILY_MESSAGE_LIMIT > 0:
         await increment_daily_user_messages(user_id)
 
+    kb = start_menu_keyboard()
     if is_admin:
-        await message.answer(f"{reply_text}\n\nРежим админа: безлимит кредитов.")
+        await message.answer(
+            f"{reply_text}\n\nРежим админа: безлимит кредитов.",
+            reply_markup=kb,
+        )
         return
 
     sub_note = ""
     if profile_for_balance and subscription_is_active(profile_for_balance.subscription_ends_at):
         sub_note = "\n(Запрос не списал кредит: активна подписка.)"
     balance = await get_credits(user_id)
-    await message.answer(f"{reply_text}\n\nОсталось кредитов: {balance}{sub_note}")
+    await message.answer(f"{reply_text}\n\nОсталось кредитов: {balance}{sub_note}", reply_markup=kb)
 
