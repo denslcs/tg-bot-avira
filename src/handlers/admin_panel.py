@@ -1,10 +1,11 @@
+import logging
+
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from src.config import ADMIN_IDS
 from src.database import (
-    add_credits,
     extend_subscription,
     clear_dialog_messages,
     count_dialog_messages,
@@ -21,6 +22,7 @@ from src.database import (
     subscription_is_active,
     sum_users_credits,
 )
+from src.formatting import HTML, esc, format_subscription_ends_at
 from src.keyboards.styles import BTN_PRIMARY
 from src.subscription_catalog import PLANS, PLANS_ORDER
 
@@ -67,10 +69,11 @@ async def cmd_admin_panel(message: Message) -> None:
         "• /user ID — профиль пользователя\n"
         "• /addcredits ID сумма — начислить кредиты\n"
         "• /takecredits ID сумма — списать кредиты\n"
-        f"• /setsub ID дни [{_plans_hint()}] — продлить; бонус кредитов по тарифу (из команды или БД)\n"
+        f"• /setsub ID дни [{_plans_hint()}] — продлить подписку; бонусы по тарифу <b>не</b> начисляются (только при оплате)\n"
         "• /wipechat ID — очистить историю диалога у пользователя\n"
         "• /stats — сводка по пользователям, подпискам и кредитам",
         reply_markup=_main_kb(),
+        parse_mode=HTML,
     )
 
 
@@ -85,8 +88,8 @@ async def adm_help(callback: CallbackQuery) -> None:
         "/user 123 — кредиты, подписка, тикет, сообщения в диалоге\n"
         "/addcredits 123 50\n"
         "/takecredits 123 20\n"
-        "/setsub 123 30 — +30 дней; бонус кредитов по тарифу из БД (если тариф уже задан)\n"
-        f"/setsub 123 30 {_plans_hint().split('|')[0]} — +30 дней, запись тарифа и бонус как при оплате\n"
+        "/setsub 123 30 — +30 дней (тариф в БД не трогаем); бонусы не начисляются\n"
+        f"/setsub 123 30 {_plans_hint().split('|')[0]} — +30 дней и запись тарифа; бонусы не начисляются\n"
         "/wipechat 123 — очистить dialog_messages\n"
         "/faq — шаблоны ответов для пользователей\n"
         "/chatid — id чата (в группе)"
@@ -240,31 +243,45 @@ async def cmd_setsub(message: Message) -> None:
     uid = int(raw[1])
     days = int(raw[2])
     await ensure_user(uid, None)
-    profile_before = await get_user_admin_profile(uid)
-    effective_plan: str | None = plan
-    if effective_plan is None and profile_before and profile_before.subscription_plan in PLANS:
-        effective_plan = profile_before.subscription_plan
     new_end = await extend_subscription(uid, days, plan)
     if not new_end:
         await message.answer("Не удалось продлить подписку (проверь ID и тариф).")
         return
-    bonus_note = ""
-    plan_note = ""
+    profile_after = await get_user_admin_profile(uid)
+    end_h = format_subscription_ends_at(new_end)
+    stored = (profile_after.subscription_plan or "").strip().lower() if profile_after else ""
+    plan_lines: list[str] = []
     if plan:
-        plan_note = f"\nТариф записан: {plan} ({PLANS[plan].title})"
-    elif effective_plan:
-        plan_note = f"\nТариф в БД: {effective_plan} ({PLANS[effective_plan].title}) — бонус как при тарифе."
-    if effective_plan and effective_plan in PLANS:
-        bonus = int(PLANS[effective_plan].bonus_credits)
-        credited = await add_credits(uid, bonus)
-        if credited:
-            bonus_note = f"\nНачислено бонусом (как у тарифа): +{bonus} кредитов."
-        else:
-            bonus_note = f"\nНе удалось автоматически начислить бонус +{bonus} кредитов."
+        plan_lines.append(f"Тариф записан: {PLANS[plan].title} (<code>{esc(plan)}</code>)")
+    elif stored and stored in PLANS:
+        plan_lines.append(
+            f"Тариф в профиле без изменений: {PLANS[stored].title} (<code>{esc(stored)}</code>)"
+        )
+    plan_block = ("\n" + "\n".join(plan_lines)) if plan_lines else ""
     await message.answer(
-        f"Подписка для {uid} продлена на {days} д.\n"
-        f"Новая дата окончания (UTC): {new_end}{plan_note}{bonus_note}"
+        f"Подписка пользователя <code>{uid}</code> продлена на <b>{days}</b> д.\n"
+        f"Окончание: <b>{esc(end_h)}</b>{plan_block}\n\n"
+        "<blockquote><i>Бонусные кредиты по тарифу при /setsub не начисляются (только при оплате).</i></blockquote>",
+        parse_mode=HTML,
     )
+    try:
+        if stored and stored in PLANS:
+            title_line = f"Подписка: <b>{esc(PLANS[stored].title)}</b>\n"
+        elif plan and plan in PLANS:
+            title_line = f"Подписка: <b>{esc(PLANS[plan].title)}</b>\n"
+        else:
+            title_line = "Подписка активирована.\n"
+        await message.bot.send_message(
+            uid,
+            "<b>Вам выдана подписка администратором</b>\n\n"
+            f"{title_line}"
+            f"Добавлено дней: <b>{esc(days)}</b>\n"
+            f"Действует до: <b>{esc(end_h)}</b>\n\n"
+            "<i>Бонусные кредиты по тарифу при выдаче админом не начисляются (они есть только при покупке).</i>",
+            parse_mode=HTML,
+        )
+    except Exception:
+        logging.warning("setsub: не удалось уведомить пользователя uid=%s", uid, exc_info=True)
 
 
 @router.message(Command("wipechat"))

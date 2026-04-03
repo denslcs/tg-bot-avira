@@ -5,6 +5,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from src.config import OPENROUTER_IMAGE_COST_CREDITS, OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS
 from src.formatting import HTML, esc
 from src.keyboards.callback_data import CB_MENU_BACK_START
+from src.menu_nav import replace_menu_screen
 from src.keyboards.styles import BTN_PRIMARY
 
 router = Router(name="faq")
@@ -90,7 +91,15 @@ async def faq_callback(callback: CallbackQuery) -> None:
     text = f"<b>{esc(title)}</b>\n\n<blockquote>{esc(body)}</blockquote>"
     if callback.message:
         try:
-            await callback.message.edit_text(text, reply_markup=_faq_keyboard(), parse_mode=HTML)
+            if callback.message.photo:
+                await replace_menu_screen(
+                    callback.message,
+                    caption=text,
+                    reply_markup=_faq_keyboard(),
+                    banner_path=None,
+                )
+            else:
+                await callback.message.edit_text(text, reply_markup=_faq_keyboard(), parse_mode=HTML)
         except Exception:
             await callback.message.answer(text, reply_markup=_faq_keyboard(), parse_mode=HTML)
     await callback.answer()

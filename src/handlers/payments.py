@@ -29,7 +29,8 @@ from src.database import (
     subscription_is_active,
     try_claim_star_payment,
 )
-from src.formatting import HTML, esc
+from src.formatting import HTML, esc, format_subscription_ends_at
+from src.menu_nav import replace_menu_screen
 from src.keyboards.callback_data import (
     CB_MENU_BACK_START,
     CB_MENU_PAY,
@@ -247,7 +248,7 @@ def _bonus_packs_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-async def send_subscription_menu(message: Message) -> None:
+async def send_subscription_menu(message: Message, *, edit: bool = False) -> None:
     """Тарифы и оплата — то же, что кнопка «Оплатить» в /start."""
     if not message.from_user:
         return
@@ -255,6 +256,14 @@ async def send_subscription_menu(message: Message) -> None:
     caption = _plans_menu_caption()
     kb = _plans_keyboard()
     pricing_img = _subscriptions_pricing_image_path()
+    if edit:
+        await replace_menu_screen(
+            message,
+            caption=caption,
+            reply_markup=kb,
+            banner_path=pricing_img if pricing_img and pricing_img.is_file() else None,
+        )
+        return
     if pricing_img:
         await message.answer_photo(
             FSInputFile(pricing_img),
@@ -272,7 +281,7 @@ async def menu_pay(callback: CallbackQuery) -> None:
         await callback.answer()
         return
     await callback.answer()
-    await send_subscription_menu(callback.message)
+    await send_subscription_menu(callback.message, edit=True)
 
 
 @router.message(Command("pay"))
@@ -288,19 +297,12 @@ async def pay_back_plans(callback: CallbackQuery) -> None:
     caption = _plans_menu_caption()
     kb = _plans_keyboard()
     pricing_img = _subscriptions_pricing_image_path()
-    if pricing_img:
-        await callback.message.answer_photo(
-            FSInputFile(pricing_img),
-            caption=caption,
-            reply_markup=kb,
-            parse_mode=HTML,
-        )
-    else:
-        await callback.message.answer(
-            "<blockquote><i>Выбери тариф ниже.</i></blockquote>",
-            reply_markup=kb,
-            parse_mode=HTML,
-        )
+    await replace_menu_screen(
+        callback.message,
+        caption=caption,
+        reply_markup=kb,
+        banner_path=pricing_img if pricing_img and pricing_img.is_file() else None,
+    )
     await callback.answer()
 
 
@@ -317,10 +319,11 @@ async def pay_pick_plan(callback: CallbackQuery) -> None:
     if not allowed:
         await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
         return
-    await callback.message.answer(
-        _pay_methods_text(plan_id),
+    await replace_menu_screen(
+        callback.message,
+        caption=_pay_methods_text(plan_id),
         reply_markup=_methods_keyboard(plan_id, is_pack=False, back_callback_data=CB_PAY_MENU),
-        parse_mode=HTML,
+        banner_path=None,
     )
     await callback.answer()
 
@@ -330,10 +333,11 @@ async def pay_bonus_menu(callback: CallbackQuery) -> None:
     if callback.message is None:
         await callback.answer()
         return
-    await callback.message.answer(
-        _bonus_packs_caption(),
+    await replace_menu_screen(
+        callback.message,
+        caption=_bonus_packs_caption(),
         reply_markup=_bonus_packs_keyboard(),
-        parse_mode=HTML,
+        banner_path=None,
     )
     await callback.answer()
 
@@ -347,10 +351,11 @@ async def pay_pick_pack(callback: CallbackQuery) -> None:
     if pack_id not in BONUS_PACKS:
         await callback.answer("Неизвестный пакет", show_alert=True)
         return
-    await callback.message.answer(
-        _pack_methods_text(pack_id),
+    await replace_menu_screen(
+        callback.message,
+        caption=_pack_methods_text(pack_id),
         reply_markup=_methods_keyboard(pack_id, is_pack=True, back_callback_data=CB_PAY_BONUS_MENU),
-        parse_mode=HTML,
+        banner_path=None,
     )
     await callback.answer()
 
@@ -380,11 +385,14 @@ async def _external_pay_hint(callback: CallbackQuery, item_id: str, label: str, 
             ]
         )
         if callback.message:
-            await callback.message.answer(
-                "<blockquote><i>Открой страницу оплаты.</i> Если на кассе есть выбор тарифа — "
-                f"укажи: <b>{esc(title)}</b>.</blockquote>",
+            await replace_menu_screen(
+                callback.message,
+                caption=(
+                    "<blockquote><i>Открой страницу оплаты.</i> Если на кассе есть выбор тарифа — "
+                    f"укажи: <b>{esc(title)}</b>.</blockquote>"
+                ),
                 reply_markup=keyboard,
-                parse_mode=HTML,
+                banner_path=None,
             )
         await callback.answer()
         return
@@ -397,11 +405,14 @@ async def _external_pay_hint(callback: CallbackQuery, item_id: str, label: str, 
         kb = InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_PAY_MENU)]]
         )
-        await callback.message.answer(
-            f"<b>Оплата «{esc(label)}»</b> пока подключается.\n"
-            f"<blockquote>{esc(support_line)} Мы выставим счёт или дадим ссылку.</blockquote>",
+        await replace_menu_screen(
+            callback.message,
+            caption=(
+                f"<b>Оплата «{esc(label)}»</b> пока подключается.\n"
+                f"<blockquote>{esc(support_line)} Мы выставим счёт или дадим ссылку.</blockquote>"
+            ),
             reply_markup=kb,
-            parse_mode=HTML,
+            banner_path=None,
         )
     await callback.answer()
 
@@ -570,20 +581,23 @@ async def successful_payment(message: Message) -> None:
             )
             return
         credited = await add_credits(message.from_user.id, p.bonus_credits)
-        bonus_line = (
-            f"Начислено кредитов: +{p.bonus_credits}."
-            if credited
-            else (
-                f"Подписка записана, но бонус +{p.bonus_credits} кредитов не удалось начислить автоматически — "
-                "напиши в поддержку, начислим вручную."
+        end_h = format_subscription_ends_at(new_end)
+        q_lines = [
+            f"<i>Срок:</i> <b>{esc(SUBSCRIPTION_PERIOD_DAYS)}</b> дн.; действует до <b>{esc(end_h)}</b>",
+        ]
+        if credited:
+            q_lines.append(
+                f"<i>Бонус по тарифу на баланс:</i> <b>+{esc(p.bonus_credits)}</b> кредитов"
             )
-        )
-        bonus_html = esc(bonus_line)
+        else:
+            q_lines.append(
+                f"<i>Бонус +{esc(p.bonus_credits)} не начислен — напиши в поддержку.</i>"
+            )
+        quote_inner = "\n".join(q_lines)
         await message.answer(
-            "<b>Оплата прошла ✅</b>\n"
-            f"Тариф: <b>{esc(p.title)}</b> — начислены кредиты.\n"
-            f"<blockquote><i>Подписка:</i> +{esc(SUBSCRIPTION_PERIOD_DAYS)} дн., активна до (UTC): <b>{esc(new_end)}</b>\n"
-            f"{bonus_html}</blockquote>\n\n"
+            "<b>Спасибо за покупку!</b>\n"
+            f"Вы приобрели подписку <b>{esc(p.title)}</b>.\n\n"
+            f"<blockquote>{quote_inner}</blockquote>\n\n"
             "<i>Можно снова открыть «Создать картинку» в</i> <code>/start</code>.",
             parse_mode=HTML,
         )

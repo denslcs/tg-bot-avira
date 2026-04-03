@@ -46,7 +46,8 @@ from src.database import (
     try_reserve_nonsub_image_quota_slot,
 )
 from src.formatting import HTML, esc
-from src.handlers.commands import delete_nav_source_message, send_main_menu_screen
+from src.handlers.commands import restore_main_menu_message
+from src.menu_nav import replace_menu_screen
 from src.keyboards.callback_data import (
     CB_APPLY_READY_PREFIX,
     CB_BACK_IMAGE_MODELS,
@@ -427,9 +428,18 @@ async def _send_waiting_prompt_step(
     *,
     model: str,
     cost: int,
+    replace_message: Message | None = None,
 ) -> None:
     await state.update_data(selected_model=model, selected_cost=cost)
     await state.set_state(ImageGenState.waiting_prompt)
+    if replace_message is not None:
+        await replace_menu_screen(
+            replace_message,
+            caption=_WAITING_PROMPT_HTML,
+            reply_markup=_waiting_prompt_keyboard(),
+            banner_path=None,
+        )
+        return
     await bot.send_message(
         chat_id,
         _WAITING_PROMPT_HTML,
@@ -445,12 +455,17 @@ async def _show_subscriber_model_pick(
     username: str | None,
 ) -> None:
     if not is_openrouter_image_configured():
-        await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
+        await replace_menu_screen(
+            message,
+            caption=_IMAGE_GEN_MISSING_TEXT,
+            reply_markup=_missing_config_kb(),
+            banner_path=None,
+        )
         return
     await ensure_user(user_id, username)
     profile = await get_user_admin_profile(user_id)
     if not profile or not subscription_is_active(profile.subscription_ends_at):
-        await _start_image_flow(message, state, user_id, username)
+        await _start_image_flow(message, state, user_id, username, replace_menu=True)
         return
     plan_id = (profile.subscription_plan or "").strip().lower()
     await state.clear()
@@ -458,23 +473,46 @@ async def _show_subscriber_model_pick(
     if len(choices) < 2:
         m = choices[0]
         await _send_waiting_prompt_step(
-            message.bot, message.chat.id, state, model=m[1], cost=m[2]
+            message.bot,
+            message.chat.id,
+            state,
+            model=m[1],
+            cost=m[2],
+            replace_message=message,
         )
         return
     await state.update_data(_model_pick_plan=(plan_id or "").strip().lower())
     await state.set_state(ImageGenState.choosing_model)
-    await message.answer(
-        "<b>Выбор модели ИИ</b>\n"
-        "<blockquote><i>Тариф в профиле определяет доступные модели. "
-        "Выбери вариант — затем опиши картинку текстом.</i></blockquote>",
+    await replace_menu_screen(
+        message,
+        caption=(
+            "<b>Выбор модели ИИ</b>\n"
+            "<blockquote><i>Тариф в профиле определяет доступные модели. "
+            "Выбери вариант — затем опиши картинку текстом.</i></blockquote>"
+        ),
         reply_markup=_subscriber_model_pick_keyboard(choices),
-        parse_mode=HTML,
+        banner_path=None,
     )
 
 
-async def _start_image_flow(message: Message, state: FSMContext, user_id: int, username: str | None) -> None:
+async def _start_image_flow(
+    message: Message,
+    state: FSMContext,
+    user_id: int,
+    username: str | None,
+    *,
+    replace_menu: bool = False,
+) -> None:
     if not is_openrouter_image_configured():
-        await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
+        if replace_menu:
+            await replace_menu_screen(
+                message,
+                caption=_IMAGE_GEN_MISSING_TEXT,
+                reply_markup=_missing_config_kb(),
+                banner_path=None,
+            )
+        else:
+            await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
         return
     await ensure_user(user_id, username)
     await state.clear()
@@ -484,6 +522,7 @@ async def _start_image_flow(message: Message, state: FSMContext, user_id: int, u
         state,
         model=OPENROUTER_IMAGE_MODEL,
         cost=OPENROUTER_IMAGE_COST_CREDITS,
+        replace_message=message if replace_menu else None,
     )
 
 
@@ -500,8 +539,13 @@ async def subscriber_picked_model(callback: CallbackQuery, state: FSMContext) ->
     profile = await get_user_admin_profile(callback.from_user.id)
     if not profile or not subscription_is_active(profile.subscription_ends_at):
         await callback.answer("Подписка не активна. Доступна базовая модель.", show_alert=True)
-        await delete_nav_source_message(callback.message)
-        await _start_image_flow(callback.message, state, callback.from_user.id, callback.from_user.username)
+        await _start_image_flow(
+            callback.message,
+            state,
+            callback.from_user.id,
+            callback.from_user.username,
+            replace_menu=True,
+        )
         return
     plan_id = (profile.subscription_plan or "").strip().lower()
     models = _model_choices_for_subscription_plan(plan_id)
@@ -509,11 +553,14 @@ async def subscriber_picked_model(callback: CallbackQuery, state: FSMContext) ->
         await callback.answer("Нет такой модели.", show_alert=True)
         return
     _label, model_id, cost = models[idx]
-    chat_id = callback.message.chat.id
     await callback.answer()
-    await delete_nav_source_message(callback.message)
     await _send_waiting_prompt_step(
-        callback.bot, chat_id, state, model=model_id, cost=cost
+        callback.bot,
+        callback.message.chat.id,
+        state,
+        model=model_id,
+        cost=cost,
+        replace_message=callback.message,
     )
 
 
@@ -551,10 +598,8 @@ async def cancel_image_flow(callback: CallbackQuery, state: FSMContext) -> None:
         return
     await state.clear()
     user_id = callback.from_user.id
-    chat_id = callback.message.chat.id
     await callback.answer()
-    await delete_nav_source_message(callback.message)
-    await send_main_menu_screen(callback.bot, chat_id, user_id, callback.from_user.username)
+    await restore_main_menu_message(callback.message, user_id, callback.from_user.username)
 
 
 @router.callback_query(F.data == CB_BACK_IMAGE_MODELS)
@@ -565,20 +610,35 @@ async def back_to_image_flow(callback: CallbackQuery, state: FSMContext) -> None
     await callback.answer()
     uid = callback.from_user.id
     if uid in ADMIN_IDS:
-        await _start_image_flow(callback.message, state, uid, callback.from_user.username)
+        await _start_image_flow(callback.message, state, uid, callback.from_user.username, replace_menu=True)
         return
     await ensure_user(uid, callback.from_user.username)
     profile = await get_user_admin_profile(uid)
     if profile and subscription_is_active(profile.subscription_ends_at):
         await _show_subscriber_model_pick(callback.message, state, uid, callback.from_user.username)
     else:
-        await _start_image_flow(callback.message, state, uid, callback.from_user.username)
+        await _start_image_flow(callback.message, state, uid, callback.from_user.username, replace_menu=True)
 
 
-async def _send_ready_ideas_screen(message: Message, state: FSMContext, user_id: int, username: str | None) -> None:
+async def _send_ready_ideas_screen(
+    message: Message,
+    state: FSMContext,
+    user_id: int,
+    username: str | None,
+    *,
+    edit: bool = False,
+) -> None:
     await state.clear()
     if not is_openrouter_image_configured():
-        await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
+        if edit:
+            await replace_menu_screen(
+                message,
+                caption=_IMAGE_GEN_MISSING_TEXT,
+                reply_markup=_missing_config_kb(),
+                banner_path=None,
+            )
+        else:
+            await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
         return
     await ensure_user(user_id, username)
     if READY_IDEAS:
@@ -590,11 +650,12 @@ async def _send_ready_ideas_screen(message: Message, state: FSMContext, user_id:
             "<blockquote><i>Пока нет заготовок — список добавит администратор. "
             "Можно описать картинку вручную: «Создать картинку».</i></blockquote>"
         )
-    await message.answer(
-        f"<b>💡 Готовые идеи</b>\n{sub}",
-        reply_markup=ready_ideas_keyboard(),
-        parse_mode=HTML,
-    )
+    cap = f"<b>💡 Готовые идеи</b>\n{sub}"
+    kb = ready_ideas_keyboard()
+    if edit:
+        await replace_menu_screen(message, caption=cap, reply_markup=kb, banner_path=None)
+    else:
+        await message.answer(cap, reply_markup=kb, parse_mode=HTML)
 
 
 @router.callback_query(F.data == CB_READY_IDEAS)
@@ -604,7 +665,11 @@ async def open_ready_ideas(callback: CallbackQuery, state: FSMContext) -> None:
         return
     await callback.answer()
     await _send_ready_ideas_screen(
-        callback.message, state, callback.from_user.id, callback.from_user.username
+        callback.message,
+        state,
+        callback.from_user.id,
+        callback.from_user.username,
+        edit=True,
     )
 
 
@@ -663,13 +728,13 @@ async def open_image_menu(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
     uid = callback.from_user.id
     if uid in ADMIN_IDS:
-        await _start_image_flow(callback.message, state, uid, callback.from_user.username)
+        await _start_image_flow(callback.message, state, uid, callback.from_user.username, replace_menu=True)
         return
     await ensure_user(uid, callback.from_user.username)
     profile = await get_user_admin_profile(uid)
     has_sub = bool(profile and subscription_is_active(profile.subscription_ends_at))
     if not has_sub:
-        await _start_image_flow(callback.message, state, uid, callback.from_user.username)
+        await _start_image_flow(callback.message, state, uid, callback.from_user.username, replace_menu=True)
     else:
         await _show_subscriber_model_pick(
             callback.message,

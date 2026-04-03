@@ -11,6 +11,7 @@ from pathlib import Path
 from aiogram import Bot, F, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from src.config import ADMIN_IDS, PROJECT_ROOT, SUPPORT_BOT_USERNAME
@@ -30,7 +31,7 @@ from src.database import (
     take_credits,
 )
 from src.subscription_catalog import NONSUB_IMAGE_WINDOW_DAYS, PLANS
-from src.formatting import HTML, esc
+from src.formatting import HTML, esc, format_subscription_ends_at
 from src.keyboards.callback_data import (
     CB_MENU_ABOUT,
     CB_MENU_BACK_START,
@@ -41,6 +42,7 @@ from src.keyboards.callback_data import (
 )
 from src.keyboards.main_menu import back_to_main_menu_keyboard, start_menu_keyboard
 from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
+from src.menu_nav import edit_menu_plain_text, replace_menu_screen
 
 router = Router(name="commands")
 
@@ -117,6 +119,41 @@ async def send_main_menu_screen(
         await bot.send_message(chat_id, text, reply_markup=kb, parse_mode=HTML)
 
 
+async def restore_main_menu_message(message: Message, user_id: int, username: str | None) -> None:
+    """Вернуть главный экран на месте текущего сообщения меню (редактирование, не новый пост)."""
+    await ensure_user(user_id, username)
+    balance = await get_credits(user_id)
+    text = _main_screen_text(balance, "")
+    kb = start_menu_keyboard()
+    banner = _start_banner_path()
+    try:
+        if message.photo:
+            if banner:
+                await replace_menu_screen(message, caption=text, reply_markup=kb, banner_path=banner)
+            else:
+                await message.edit_caption(caption=text, reply_markup=kb, parse_mode=HTML)
+            return
+        if message.text is not None:
+            if banner:
+                chat_id = message.chat.id
+                await delete_nav_source_message(message)
+                await message.bot.send_photo(
+                    chat_id,
+                    photo=FSInputFile(banner),
+                    caption=text,
+                    reply_markup=kb,
+                    parse_mode=HTML,
+                )
+            else:
+                await edit_menu_plain_text(message, text=text, reply_markup=kb)
+            return
+        await message.edit_caption(caption=text, reply_markup=kb, parse_mode=HTML)
+    except TelegramBadRequest as e:
+        if "message is not modified" in (e.message or "").lower():
+            return
+        raise
+
+
 def _parse_ref_start_arg(args: str | None) -> int | None:
     """Аргумент команды /start (диплинк t.me/bot?start=ref_<id>)."""
     if not args:
@@ -188,10 +225,8 @@ async def menu_back_start(callback: CallbackQuery, state: FSMContext) -> None:
         return
     await state.clear()
     user_id = callback.from_user.id
-    chat_id = callback.message.chat.id
     await callback.answer()
-    await delete_nav_source_message(callback.message)
-    await send_main_menu_screen(callback.bot, chat_id, user_id, callback.from_user.username)
+    await restore_main_menu_message(callback.message, user_id, callback.from_user.username)
 
 
 @router.message(Command("help"))
@@ -221,14 +256,18 @@ async def menu_about(callback: CallbackQuery) -> None:
         await callback.answer("Сообщение недоступно.", show_alert=True)
         return
     await callback.answer()
-    await callback.message.answer(
+    text = (
         "<b>Что умеет бот</b>\n"
         "<blockquote>"
         "• Сгенерировать картинку по тексту.\n"
         "• Готовые идеи — пресеты промптов (если добавлены)."
-        "</blockquote>",
+        "</blockquote>"
+    )
+    await replace_menu_screen(
+        callback.message,
+        caption=text,
         reply_markup=back_to_main_menu_keyboard(),
-        parse_mode=HTML,
+        banner_path=None,
     )
 
 
@@ -239,11 +278,14 @@ async def menu_support(callback: CallbackQuery) -> None:
         return
     await callback.answer()
     if not SUPPORT_BOT_USERNAME:
-        await callback.message.answer(
-            "<blockquote><i>Поддержка пока не настроена</i> "
-            "(пустой <code>SUPPORT_BOT_USERNAME</code>).</blockquote>",
+        await replace_menu_screen(
+            callback.message,
+            caption=(
+                "<blockquote><i>Поддержка пока не настроена</i> "
+                "(пустой <code>SUPPORT_BOT_USERNAME</code>).</blockquote>"
+            ),
             reply_markup=back_to_main_menu_keyboard(),
-            parse_mode=HTML,
+            banner_path=None,
         )
         return
     support_url = f"https://t.me/{SUPPORT_BOT_USERNAME}?start=from_avira"
@@ -253,10 +295,11 @@ async def menu_support(callback: CallbackQuery) -> None:
             _BACK_TO_MENU_ROW,
         ]
     )
-    await callback.message.answer(
-        "<b>Поддержка</b>\n<i>Нажми кнопку ниже,</i> чтобы открыть чат.",
+    await replace_menu_screen(
+        callback.message,
+        caption="<b>Поддержка</b>\n<i>Нажми кнопку ниже,</i> чтобы открыть чат.",
         reply_markup=keyboard,
-        parse_mode=HTML,
+        banner_path=None,
     )
 
 
@@ -324,11 +367,11 @@ async def deliver_referral_screen(bot: Bot, user_id: int, username: str | None, 
     text, kb = await _build_referral_message(user_id, username, me.username)
     try:
         if reply_via:
-            await reply_via.answer(
-                text,
+            await replace_menu_screen(
+                reply_via,
+                caption=text,
                 reply_markup=kb,
-                parse_mode=HTML,
-                disable_web_page_preview=True,
+                banner_path=None,
             )
         else:
             await bot.send_message(
@@ -385,32 +428,29 @@ async def menu_profile(callback: CallbackQuery) -> None:
         await callback.answer()
         return
     await callback.answer()
-    await send_profile_card(callback.message, callback.from_user.id, callback.from_user.username)
+    await send_profile_card(
+        callback.message,
+        callback.from_user.id,
+        callback.from_user.username,
+        edit_existing=True,
+    )
 
 
-async def send_profile_card(message: Message, user_id: int, username_raw: str | None) -> None:
+async def _profile_card_html(user_id: int, username_raw: str | None) -> tuple[str, InlineKeyboardMarkup]:
+    """Текст профиля и клавиатура «Назад» (не вызывать для админов — у них отдельный экран)."""
     await ensure_user(user_id, username_raw)
-    balance = await get_credits(user_id)
-    if user_id in ADMIN_IDS:
-        await message.answer(
-            "<blockquote><b>Режим админа</b> — безлимит по кредитам.</blockquote>",
-            reply_markup=back_to_main_menu_keyboard(),
-            parse_mode=HTML,
-        )
-        return
     profile = await get_user_admin_profile(user_id)
     if not profile:
-        await message.answer(
-            "<blockquote><i>Профиль пока не найден. Нажми</i> <code>/start</code> <i>и попробуй снова.</i></blockquote>",
-            reply_markup=back_to_main_menu_keyboard(),
-            parse_mode=HTML,
+        missing = (
+            "<blockquote><i>Профиль пока не найден. Нажми</i> <code>/start</code> <i>и попробуй снова.</i></blockquote>"
         )
-        return
+        return missing, back_to_main_menu_keyboard()
+    balance = await get_credits(user_id)
     username = f"@{profile.username}" if profile.username else "—"
     active_sub = subscription_is_active(profile.subscription_ends_at)
     if active_sub:
         sub_status = "активна"
-        sub_till = profile.subscription_ends_at or "—"
+        sub_till = format_subscription_ends_at(profile.subscription_ends_at)
         plan_name = (
             PLANS[profile.subscription_plan].title
             if profile.subscription_plan and profile.subscription_plan in PLANS
@@ -418,7 +458,11 @@ async def send_profile_card(message: Message, user_id: int, username_raw: str | 
         )
     else:
         sub_status = "не активна"
-        sub_till = profile.subscription_ends_at or "—"
+        sub_till = (
+            format_subscription_ends_at(profile.subscription_ends_at)
+            if profile.subscription_ends_at
+            else "—"
+        )
         plan_name = "—"
     gen_total = await count_generated_images_total(user_id)
     days_in_bot = _days_in_bot(profile.created_at)
@@ -432,7 +476,7 @@ async def send_profile_card(message: Message, user_id: int, username_raw: str | 
             f"<i>Генераций картинок без подписки за {NONSUB_IMAGE_WINDOW_DAYS} дн. (UTC):</i> "
             f"<b>{esc(fu)}/{esc(flim)}</b> (со списанием кредитов; дальше — только подписка или сброс окна).\n"
         )
-    await message.answer(
+    body = (
         "<b>👤 Профиль</b>\n"
         "<blockquote>"
         f"<i>Ник:</i> <b>{esc(username)}</b>\n"
@@ -440,14 +484,35 @@ async def send_profile_card(message: Message, user_id: int, username_raw: str | 
         f"<i>💰 Кредиты:</i> <b>{esc(balance)}</b>\n"
         f"<i>Подписка:</i> <b>{esc(sub_status)}</b>\n"
         f"<i>Тариф:</i> <b>{esc(plan_name)}</b>\n"
-        f"<i>Активна до (UTC):</i> <b>{esc(sub_till)}</b>\n"
+        f"<i>Окончание:</i> <b>{esc(sub_till)}</b>\n"
         f"<i>Сгенерировано изображений:</i> <b>{esc(gen_total)}</b>\n"
         f"<i>Дней в боте:</i> <b>{esc(days_in_bot)}</b>\n"
         f"{img_limits_line}"
-        "</blockquote>",
-        reply_markup=back_to_main_menu_keyboard(),
-        parse_mode=HTML,
+        "</blockquote>"
     )
+    return body, back_to_main_menu_keyboard()
+
+
+async def send_profile_card(
+    message: Message,
+    user_id: int,
+    username_raw: str | None,
+    *,
+    edit_existing: bool = False,
+) -> None:
+    if user_id in ADMIN_IDS:
+        text = "<blockquote><b>Режим админа</b> — безлимит по кредитам.</blockquote>"
+        kb = back_to_main_menu_keyboard()
+        if edit_existing:
+            await replace_menu_screen(message, caption=text, reply_markup=kb, banner_path=None)
+        else:
+            await message.answer(text, reply_markup=kb, parse_mode=HTML)
+        return
+    text, kb = await _profile_card_html(user_id, username_raw)
+    if edit_existing:
+        await replace_menu_screen(message, caption=text, reply_markup=kb, banner_path=None)
+    else:
+        await message.answer(text, reply_markup=kb, parse_mode=HTML)
 
 
 @router.message(Command("newchat"))
