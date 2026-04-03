@@ -20,8 +20,10 @@ from aiogram.types import (
 
 from src.config import (
     ADMIN_IDS,
+    OPENROUTER_IMAGE_ALT_COST_CREDITS,
     OPENROUTER_IMAGE_COST_CREDITS,
     OPENROUTER_IMAGE_MODEL,
+    OPENROUTER_IMAGE_MODEL_ALT,
     OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS,
 )
 from src.database import (
@@ -48,6 +50,7 @@ from src.keyboards.callback_data import (
     CB_BACK_IMAGE_MODELS,
     CB_CREATE_IMAGE,
     CB_IMG_CANCEL,
+    CB_IMG_MODEL_SEL_PREFIX,
     CB_MENU_BACK_START,
     CB_READY_IDEAS,
     CB_REGEN,
@@ -69,6 +72,11 @@ READY_IDEAS: list[tuple[str, str]] = []
 
 # Подпись для внутреннего контекста «Ещё раз» (пользователю не показываем).
 _IMAGE_CONTEXT_LABEL = "text2img"
+
+_WAITING_PROMPT_HTML = (
+    "<b>🎨 Картинка по описанию</b>\n"
+    "<blockquote><i>Напиши одним сообщением, что должно быть на картинке.</i></blockquote>"
+)
 
 _IMAGE_GEN_MISSING_TEXT = (
     "<b>Генерация картинок выключена.</b>\n\n"
@@ -96,7 +104,37 @@ def _missing_config_kb() -> InlineKeyboardMarkup:
 
 
 class ImageGenState(StatesGroup):
+    choosing_model = State()
     waiting_prompt = State()
+
+
+def _subscriber_image_models() -> list[tuple[str, str, int]]:
+    """Подписчики: подпись кнопки, id модели OpenRouter, стоимость."""
+    rows: list[tuple[str, str, int]] = [
+        ("⚡ Базовая модель", OPENROUTER_IMAGE_MODEL, OPENROUTER_IMAGE_COST_CREDITS),
+    ]
+    alt = (OPENROUTER_IMAGE_MODEL_ALT or "").strip()
+    if alt and alt != OPENROUTER_IMAGE_MODEL:
+        rows.append(("🎨 Расширенная модель", alt, OPENROUTER_IMAGE_ALT_COST_CREDITS))
+    return rows
+
+
+def _subscriber_model_pick_keyboard() -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for i, (label, _mid, cost) in enumerate(_subscriber_image_models()):
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"{label} · {cost} кр.",
+                    callback_data=f"{CB_IMG_MODEL_SEL_PREFIX}{i}",
+                    style=BTN_PRIMARY,
+                )
+            ]
+        )
+    rows.append(
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 async def _prepare_image_charge_and_daily_slot(
@@ -330,23 +368,91 @@ async def _execute_text_generation(
     )
 
 
+async def _send_waiting_prompt_step(
+    bot,
+    chat_id: int,
+    state: FSMContext,
+    *,
+    model: str,
+    cost: int,
+) -> None:
+    await state.update_data(selected_model=model, selected_cost=cost)
+    await state.set_state(ImageGenState.waiting_prompt)
+    await bot.send_message(
+        chat_id,
+        _WAITING_PROMPT_HTML,
+        reply_markup=_waiting_prompt_keyboard(),
+        parse_mode=HTML,
+    )
+
+
+async def _show_subscriber_model_pick(
+    message: Message, state: FSMContext, user_id: int, username: str | None
+) -> None:
+    if not is_openrouter_image_configured():
+        await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
+        return
+    await ensure_user(user_id, username)
+    await state.clear()
+    models = _subscriber_image_models()
+    if len(models) < 2:
+        m = models[0]
+        await _send_waiting_prompt_step(
+            message.bot, message.chat.id, state, model=m[1], cost=m[2]
+        )
+        return
+    await state.set_state(ImageGenState.choosing_model)
+    await message.answer(
+        "<b>Выбор модели ИИ</b>\n"
+        "<blockquote><i>С подпиской доступны несколько моделей. "
+        "Выбери — затем опиши картинку текстом.</i></blockquote>",
+        reply_markup=_subscriber_model_pick_keyboard(),
+        parse_mode=HTML,
+    )
+
+
 async def _start_image_flow(message: Message, state: FSMContext, user_id: int, username: str | None) -> None:
     if not is_openrouter_image_configured():
         await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
         return
     await ensure_user(user_id, username)
     await state.clear()
-    await state.update_data(
-        selected_model=OPENROUTER_IMAGE_MODEL,
-        selected_cost=OPENROUTER_IMAGE_COST_CREDITS,
+    await _send_waiting_prompt_step(
+        message.bot,
+        message.chat.id,
+        state,
+        model=OPENROUTER_IMAGE_MODEL,
+        cost=OPENROUTER_IMAGE_COST_CREDITS,
     )
-    await state.set_state(ImageGenState.waiting_prompt)
-    await message.answer(
-        "<b>🎨 Картинка по описанию</b>\n"
-        "<blockquote><i>Напиши одним сообщением, что должно быть на картинке.</i></blockquote>",
-        reply_markup=_waiting_prompt_keyboard(),
-        parse_mode=HTML,
+
+
+@router.callback_query(F.data.startswith(CB_IMG_MODEL_SEL_PREFIX))
+async def subscriber_picked_model(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.from_user is None or callback.message is None or not callback.data:
+        await callback.answer("Ошибка запроса.", show_alert=True)
+        return
+    raw = callback.data[len(CB_IMG_MODEL_SEL_PREFIX) :]
+    if not raw.isdigit():
+        await callback.answer("Некорректный выбор.", show_alert=True)
+        return
+    idx = int(raw)
+    models = _subscriber_image_models()
+    if idx < 0 or idx >= len(models):
+        await callback.answer("Нет такой модели.", show_alert=True)
+        return
+    _label, model_id, cost = models[idx]
+    chat_id = callback.message.chat.id
+    await callback.answer()
+    await delete_nav_source_message(callback.message)
+    await _send_waiting_prompt_step(
+        callback.bot, chat_id, state, model=model_id, cost=cost
     )
+
+
+@router.message(ImageGenState.choosing_model)
+async def remind_pick_model_or_ignore(message: Message) -> None:
+    """Текст вместо кнопки на шаге выбора модели."""
+    await message.answer("Сначала выбери модель кнопками в сообщении выше 👆")
 
 
 @router.callback_query(F.data == CB_IMG_CANCEL)
@@ -456,7 +562,19 @@ async def open_image_menu(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer("Ошибка запроса.", show_alert=True)
         return
     await callback.answer()
-    await _start_image_flow(callback.message, state, callback.from_user.id, callback.from_user.username)
+    uid = callback.from_user.id
+    if uid in ADMIN_IDS:
+        await _start_image_flow(callback.message, state, uid, callback.from_user.username)
+        return
+    await ensure_user(uid, callback.from_user.username)
+    profile = await get_user_admin_profile(uid)
+    has_sub = bool(profile and subscription_is_active(profile.subscription_ends_at))
+    if not has_sub:
+        await _start_image_flow(callback.message, state, uid, callback.from_user.username)
+    else:
+        await _show_subscriber_model_pick(
+            callback.message, state, uid, callback.from_user.username
+        )
 
 
 @router.message(ImageGenState.waiting_prompt, ~F.text)

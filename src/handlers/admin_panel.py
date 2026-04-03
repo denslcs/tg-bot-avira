@@ -67,7 +67,7 @@ async def cmd_admin_panel(message: Message) -> None:
         "• /user ID — профиль пользователя\n"
         "• /addcredits ID сумма — начислить кредиты\n"
         "• /takecredits ID сумма — списать кредиты\n"
-        f"• /setsub ID дни [{_plans_hint()}] — продлить подписку и назначить тариф\n"
+        f"• /setsub ID дни [{_plans_hint()}] — продлить; бонус кредитов по тарифу (из команды или БД)\n"
         "• /wipechat ID — очистить историю диалога у пользователя\n"
         "• /stats — сводка по пользователям, подпискам и кредитам",
         reply_markup=_main_kb(),
@@ -85,8 +85,8 @@ async def adm_help(callback: CallbackQuery) -> None:
         "/user 123 — кредиты, подписка, тикет, сообщения в диалоге\n"
         "/addcredits 123 50\n"
         "/takecredits 123 20\n"
-        "/setsub 123 30 — +30 дней (тариф в БД не меняется)\n"
-        f"/setsub 123 30 {_plans_hint().split('|')[0]} — +30 дней и назначение тарифа\n"
+        "/setsub 123 30 — +30 дней; бонус кредитов по тарифу из БД (если тариф уже задан)\n"
+        f"/setsub 123 30 {_plans_hint().split('|')[0]} — +30 дней, запись тарифа и бонус как при оплате\n"
         "/wipechat 123 — очистить dialog_messages\n"
         "/faq — шаблоны ответов для пользователей\n"
         "/chatid — id чата (в группе)"
@@ -240,6 +240,10 @@ async def cmd_setsub(message: Message) -> None:
     uid = int(raw[1])
     days = int(raw[2])
     await ensure_user(uid, None)
+    profile_before = await get_user_admin_profile(uid)
+    effective_plan: str | None = plan
+    if effective_plan is None and profile_before and profile_before.subscription_plan in PLANS:
+        effective_plan = profile_before.subscription_plan
     new_end = await extend_subscription(uid, days, plan)
     if not new_end:
         await message.answer("Не удалось продлить подписку (проверь ID и тариф).")
@@ -248,10 +252,13 @@ async def cmd_setsub(message: Message) -> None:
     plan_note = ""
     if plan:
         plan_note = f"\nТариф записан: {plan} ({PLANS[plan].title})"
-        bonus = int(PLANS[plan].bonus_credits)
+    elif effective_plan:
+        plan_note = f"\nТариф в БД: {effective_plan} ({PLANS[effective_plan].title}) — бонус как при тарифе."
+    if effective_plan and effective_plan in PLANS:
+        bonus = int(PLANS[effective_plan].bonus_credits)
         credited = await add_credits(uid, bonus)
         if credited:
-            bonus_note = f"\nНачислено бонусом: +{bonus} кредитов."
+            bonus_note = f"\nНачислено бонусом (как у тарифа): +{bonus} кредитов."
         else:
             bonus_note = f"\nНе удалось автоматически начислить бонус +{bonus} кредитов."
     await message.answer(

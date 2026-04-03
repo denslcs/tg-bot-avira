@@ -92,6 +92,11 @@ OPENROUTER_IMAGE_COST_CREDITS: int = max(1, _parse_int(os.getenv("OPENROUTER_IMA
 OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS: int = max(
     1, _parse_int(os.getenv("OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS", "20"), 20)
 )
+# Вторая модель для подписчиков (панель выбора). Пусто — только базовая модель, без панели.
+OPENROUTER_IMAGE_MODEL_ALT: str = os.getenv("OPENROUTER_IMAGE_MODEL_ALT", "black-forest-labs/flux-1.1-pro").strip()
+OPENROUTER_IMAGE_ALT_COST_CREDITS: int = max(
+    1, _parse_int(os.getenv("OPENROUTER_IMAGE_ALT_COST_CREDITS", "10"), 10)
+)
 # Соотношение сторон для OpenRouter image_config: "1:1" → 1024×1024 (документация OpenRouter). Пусто — не передавать.
 OPENROUTER_IMAGE_ASPECT_RATIO: str = os.getenv("OPENROUTER_IMAGE_ASPECT_RATIO", "1:1").strip()
 # Кэш сгенерированных картинок на диске (ключ: модель + нормализованный промпт). 0 = выкл.
