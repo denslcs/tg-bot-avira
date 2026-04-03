@@ -42,6 +42,7 @@ from src.database import (
     try_reserve_nonsub_image_quota_slot,
 )
 from src.formatting import HTML, esc
+from src.handlers.commands import delete_nav_source_message, send_main_menu_screen
 from src.keyboards.callback_data import (
     CB_APPLY_READY_PREFIX,
     CB_BACK_IMAGE_MODELS,
@@ -51,7 +52,6 @@ from src.keyboards.callback_data import (
     CB_READY_IDEAS,
     CB_REGEN,
 )
-from src.keyboards.main_menu import start_menu_keyboard
 from src.keyboards.styles import BTN_DANGER, BTN_PRIMARY, BTN_SUCCESS
 from src.openrouter_image import (
     OpenRouterApiError,
@@ -355,12 +355,11 @@ async def cancel_image_flow(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer()
         return
     await state.clear()
+    user_id = callback.from_user.id
+    chat_id = callback.message.chat.id
     await callback.answer()
-    await callback.message.answer(
-        "<blockquote><i>Ок, отменили генерацию. Выбери действие в меню ниже.</i></blockquote>",
-        reply_markup=start_menu_keyboard(),
-        parse_mode=HTML,
-    )
+    await delete_nav_source_message(callback.message)
+    await send_main_menu_screen(callback.bot, chat_id, user_id, callback.from_user.username)
 
 
 @router.callback_query(F.data == CB_BACK_IMAGE_MODELS)

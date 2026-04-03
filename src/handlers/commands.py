@@ -83,6 +83,40 @@ def _start_banner_path() -> Path | None:
     return p if p.is_file() else None
 
 
+async def delete_nav_source_message(message: Message | None) -> None:
+    """Удалить сообщение с кнопкой навигации, если API позволяет (чтобы не копить чат)."""
+    if message is None:
+        return
+    try:
+        await message.delete()
+    except Exception:
+        logging.debug("delete_nav_source_message: не удалось удалить сообщение", exc_info=True)
+
+
+async def send_main_menu_screen(
+    bot: Bot,
+    chat_id: int,
+    user_id: int,
+    username: str | None,
+) -> None:
+    """Главный экран как после /start: баланс в тексте, меню, при наличии — фото-баннер."""
+    await ensure_user(user_id, username)
+    balance = await get_credits(user_id)
+    text = _main_screen_text(balance, "")
+    kb = start_menu_keyboard()
+    banner = _start_banner_path()
+    if banner:
+        await bot.send_photo(
+            chat_id,
+            photo=FSInputFile(banner),
+            caption=text,
+            reply_markup=kb,
+            parse_mode=HTML,
+        )
+    else:
+        await bot.send_message(chat_id, text, reply_markup=kb, parse_mode=HTML)
+
+
 def _parse_ref_start_arg(args: str | None) -> int | None:
     """Аргумент команды /start (диплинк t.me/bot?start=ref_<id>)."""
     if not args:
@@ -154,21 +188,10 @@ async def menu_back_start(callback: CallbackQuery, state: FSMContext) -> None:
         return
     await state.clear()
     user_id = callback.from_user.id
-    await ensure_user(user_id, callback.from_user.username)
-    balance = await get_credits(user_id)
+    chat_id = callback.message.chat.id
     await callback.answer()
-    text = _main_screen_text(balance, "")
-    kb = start_menu_keyboard()
-    banner = _start_banner_path()
-    if banner:
-        await callback.message.answer_photo(
-            FSInputFile(banner),
-            caption=text,
-            reply_markup=kb,
-            parse_mode=HTML,
-        )
-    else:
-        await callback.message.answer(text, reply_markup=kb, parse_mode=HTML)
+    await delete_nav_source_message(callback.message)
+    await send_main_menu_screen(callback.bot, chat_id, user_id, callback.from_user.username)
 
 
 @router.message(Command("help"))
