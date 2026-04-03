@@ -107,6 +107,22 @@ OPENROUTER_IMAGE_GEMINI_MODEL: str = (
 OPENROUTER_IMAGE_GEMINI_COST_CREDITS: int = max(
     1, _parse_int(os.getenv("OPENROUTER_IMAGE_GEMINI_COST_CREDITS", "8"), 8)
 )
+# «Nano Banana 2» в панели Galaxy / Universe (см. _model_choices_for_subscription_plan).
+OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL: str = (
+    os.getenv("OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL", "google/gemini-3.1-flash-image-preview").strip()
+    or "google/gemini-3.1-flash-image-preview"
+)
+OPENROUTER_IMAGE_GEMINI_PREVIEW_COST_CREDITS: int = max(
+    1, _parse_int(os.getenv("OPENROUTER_IMAGE_GEMINI_PREVIEW_COST_CREDITS", "8"), 8)
+)
+# Пятый слот только Universe.
+OPENROUTER_IMAGE_OPENAI_MODEL: str = (
+    os.getenv("OPENROUTER_IMAGE_OPENAI_MODEL", "openai/gpt-5-image-mini").strip()
+    or "openai/gpt-5-image-mini"
+)
+OPENROUTER_IMAGE_OPENAI_COST_CREDITS: int = max(
+    1, _parse_int(os.getenv("OPENROUTER_IMAGE_OPENAI_COST_CREDITS", "18"), 18)
+)
 # В API уходит aspect_ratio 1:1 (~1024×1024, ~1 Мп по доке OpenRouter).
 # Значение вроде «1K» у FLUX на OpenRouter может давать больше мегапикселей и цену ~2.5× к тарифу «$ за Мп».
 # Пустой OPENROUTER_IMAGE_OUTPUT_SIZE — не передаём image_size (только 1:1), ближе к одному мегапикселю в биллинге.

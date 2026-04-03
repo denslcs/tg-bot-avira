@@ -89,6 +89,8 @@ def _is_generated_image_result_message(message: Message) -> bool:
     if not message.photo:
         return False
     cap = message.caption or ""
+    if "Картинка сохранена" in cap:
+        return True
     if "Готово" in cap and "✅" in cap:
         return True
     kb = message.reply_markup

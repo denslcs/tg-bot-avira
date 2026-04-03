@@ -9,8 +9,9 @@
 соотношением ~159 ₽ → 150 ⭐, масштаб по курсу Nova). Остальные тарифы:
 round(usd / 2.99 * 225).
 
-Ориентир по кредитам (зависит от OPENROUTER_IMAGE_COST_CREDITS и модели):
+Ориентир по кредитам (зависит от OPENROUTER_*_COST_CREDITS и модели в панели):
 Nova 500, Supernova 1100, Galaxy 2400, Universe 5000 — на баланс при оплате подписки.
+Матрица моделей по тарифам: см. _model_choices_for_subscription_plan в img_commands.
 """
 
 from __future__ import annotations

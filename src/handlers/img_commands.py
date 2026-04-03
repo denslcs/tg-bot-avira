@@ -24,8 +24,12 @@ from src.config import (
     OPENROUTER_IMAGE_COST_CREDITS,
     OPENROUTER_IMAGE_GEMINI_COST_CREDITS,
     OPENROUTER_IMAGE_GEMINI_MODEL,
+    OPENROUTER_IMAGE_GEMINI_PREVIEW_COST_CREDITS,
+    OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL,
     OPENROUTER_IMAGE_MODEL,
     OPENROUTER_IMAGE_MODEL_ALT,
+    OPENROUTER_IMAGE_OPENAI_COST_CREDITS,
+    OPENROUTER_IMAGE_OPENAI_MODEL,
     OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS,
 )
 from src.database import (
@@ -53,6 +57,7 @@ from src.keyboards.callback_data import (
     CB_CREATE_IMAGE,
     CB_IMG_CANCEL,
     CB_IMG_MODEL_SEL_PREFIX,
+    CB_IMG_SAVE,
     CB_MENU_BACK_START,
     CB_READY_IDEAS,
     CB_REGEN,
@@ -126,27 +131,38 @@ def _dedupe_model_choices(items: list[tuple[str, str, int]]) -> list[tuple[str, 
 def _model_choices_for_subscription_plan(plan_id: str) -> list[tuple[str, str, int]]:
     """
     Подпись кнопки, id модели OpenRouter, стоимость в кредитах.
-    Nova: Gemini + Klein. SuperNova: Pro + Gemini + Klein.
-    Galaxy / Universe: те же три модели, плюс порядок как раньше у подписчиков (Klein, Pro), затем Gemini.
-    Неизвестный тариф: полная трёхмодельная панель (Klein, Pro, Gemini).
+    Nova: только Klein 4B.
+    SuperNova: Klein 4B + Nano Banana (Gemini Flash) + FLUX Pro.
+    Galaxy: + Nano Banana 2 (Gemini 3.1 preview).
+    Universe: + OpenAI GPT-5 Image Mini.
+    Неизвестный plan_id: полный набор как Universe (миграции/опечатки — не режем OpenAI).
     Без подписки панель не используется.
     """
     klein_id = (OPENROUTER_IMAGE_MODEL or "").strip() or "black-forest-labs/flux.2-klein-4b"
     pro_id = (OPENROUTER_IMAGE_MODEL_ALT or "").strip() or "black-forest-labs/flux.2-pro"
     gemini_id = (OPENROUTER_IMAGE_GEMINI_MODEL or "").strip() or "google/gemini-2.5-flash-image"
+    preview_id = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or "google/gemini-3.1-flash-image-preview"
+    openai_id = (OPENROUTER_IMAGE_OPENAI_MODEL or "").strip() or "openai/gpt-5-image-mini"
 
-    klein = ("⚡ FLUX Klein", klein_id, OPENROUTER_IMAGE_COST_CREDITS)
+    klein = ("⚡ FLUX Klein 4B", klein_id, OPENROUTER_IMAGE_COST_CREDITS)
     pro = ("🎨 FLUX Pro", pro_id, OPENROUTER_IMAGE_ALT_COST_CREDITS)
-    gemini = ("🌟 Gemini Flash Image", gemini_id, OPENROUTER_IMAGE_GEMINI_COST_CREDITS)
+    gemini = ("🍌 Nano Banana", gemini_id, OPENROUTER_IMAGE_GEMINI_COST_CREDITS)
+    gemini_preview = (
+        "🍌 Nano Banana 2",
+        preview_id,
+        OPENROUTER_IMAGE_GEMINI_PREVIEW_COST_CREDITS,
+    )
+    openai_img = ("🖼 OpenAI GPT-5 Image Mini", openai_id, OPENROUTER_IMAGE_OPENAI_COST_CREDITS)
 
     p = (plan_id or "").strip().lower()
     if p == "nova":
-        return _dedupe_model_choices([gemini, klein])
+        return _dedupe_model_choices([klein])
     if p == "supernova":
-        return _dedupe_model_choices([pro, gemini, klein])
-    if p in ("galaxy", "universe"):
-        return _dedupe_model_choices([klein, pro, gemini])
-    return _dedupe_model_choices([klein, pro, gemini])
+        return _dedupe_model_choices([klein, gemini, pro])
+    if p == "galaxy":
+        return _dedupe_model_choices([klein, gemini, pro, gemini_preview])
+    # universe и неизвестный plan_id — один полный стек (включая OpenAI)
+    return _dedupe_model_choices([klein, gemini, pro, gemini_preview, openai_img])
 
 
 async def _effective_image_model_and_cost(user_id: int, requested_model: str) -> tuple[str, int]:
@@ -277,7 +293,16 @@ def ready_ideas_keyboard() -> InlineKeyboardMarkup:
 def _regen_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🔄 Ещё раз", callback_data=CB_REGEN, style=BTN_SUCCESS)],
+            [
+                InlineKeyboardButton(
+                    text="💾 Сохранить", callback_data=CB_IMG_SAVE, style=BTN_SUCCESS
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🔄 Ещё раз", callback_data=CB_REGEN, style=BTN_PRIMARY
+                ),
+            ],
             _BACK_MAIN,
         ],
     )
@@ -791,6 +816,31 @@ async def create_image_from_prompt(message: Message, state: FSMContext) -> None:
         cost=cost,
         usage_kind="self",
     )
+
+
+@router.callback_query(F.data == CB_IMG_SAVE)
+async def save_generated_image(callback: CallbackQuery, _state: FSMContext) -> None:
+    """Убрать клавиатуру, дописать в подпись; сообщение помечается как защищённое от автоудаления."""
+    if not callback.from_user or not callback.message:
+        await callback.answer()
+        return
+    msg = callback.message
+    if not msg.photo:
+        await callback.answer()
+        return
+    cap = msg.caption or ""
+    if "Картинка сохранена" in cap:
+        await callback.answer("Уже сохранено.", show_alert=True)
+        return
+    try:
+        base_html = msg.html_text
+        new_caption = f"{base_html}\n\n<i>Картинка сохранена</i>"
+        await msg.edit_caption(caption=new_caption, parse_mode=HTML, reply_markup=None)
+    except Exception:
+        logging.exception("save_generated_image: edit_caption failed")
+        await callback.answer("Не удалось обновить сообщение.", show_alert=True)
+        return
+    await callback.answer()
 
 
 @router.callback_query(F.data == CB_REGEN)

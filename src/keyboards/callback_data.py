@@ -25,6 +25,7 @@ CB_PICK_FLUX = "img:pick_flux"
 CB_READY_IDEAS = "menu:ready_ideas"
 CB_APPLY_READY_PREFIX = "img:idea:"
 CB_REGEN = "img:regen"
+CB_IMG_SAVE = "img:save"
 CB_IMG_CANCEL = "img:cancel"
 # Выбор модели для подписчиков: img:m:0, img:m:1, ...
 CB_IMG_MODEL_SEL_PREFIX = "img:m:"
@@ -47,6 +48,7 @@ __all__ = [
     "CB_GEN_TEXT",
     "CB_IMG_CANCEL",
     "CB_IMG_MODEL_SEL_PREFIX",
+    "CB_IMG_SAVE",
     "CB_MENU_ABOUT",
     "CB_MENU_BACK_START",
     "CB_MENU_PAY",
