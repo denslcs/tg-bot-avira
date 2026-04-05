@@ -28,6 +28,7 @@ from src.config import (
     ADMIN_SALES_THREAD_GALAXY,
     ADMIN_SALES_THREAD_NOVA,
     ADMIN_SALES_THREAD_SUPERNOVA,
+    ADMIN_SALES_THREAD_STARTER,
     ADMIN_SALES_THREAD_UNIVERSE,
     PAY_URL_CARD_INTL,
     PAY_URL_CARD_RU,
@@ -37,11 +38,14 @@ from src.config import (
 )
 from src.database import (
     add_credits,
+    add_idea_tokens,
     ensure_user,
+    get_user_admin_profile,
+    mark_starter_trial_purchased,
     record_subscription_purchase_now,
     reset_subscription_days,
     release_star_payment_claim,
-    subscription_can_purchase_new_plan,
+    subscription_can_purchase_plan,
     try_claim_star_payment,
 )
 from src.formatting import HTML, esc, format_subscription_ends_at
@@ -66,6 +70,7 @@ from src.subscription_catalog import (
     NONSUB_IMAGE_WINDOW_MAX,
     PLANS,
     PLANS_ORDER,
+    STARTER_ALREADY_PURCHASED_TEXT,
     SUBSCRIPTION_PERIOD_DAYS,
     SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS,
 )
@@ -77,6 +82,7 @@ logger = logging.getLogger(__name__)
 
 def _admin_sales_thread_for_plan(plan_id: str) -> int:
     return {
+        "starter": ADMIN_SALES_THREAD_STARTER,
         "nova": ADMIN_SALES_THREAD_NOVA,
         "supernova": ADMIN_SALES_THREAD_SUPERNOVA,
         "galaxy": ADMIN_SALES_THREAD_GALAXY,
@@ -131,8 +137,7 @@ async def _notify_admin_sales(
 
 
 async def _can_buy_plan(user_id: int, plan_id: str) -> tuple[bool, str | None]:
-    _ = plan_id
-    return await subscription_can_purchase_new_plan(user_id)
+    return await subscription_can_purchase_plan(user_id, plan_id)
 
 
 def _subscriptions_pricing_image_path() -> Path | None:
@@ -141,14 +146,18 @@ def _subscriptions_pricing_image_path() -> Path | None:
 
 
 def _plans_menu_caption() -> str:
+    st = PLANS["starter"]
     return (
-        "<b>Тарифы</b> — при оплате на баланс начисляются <b>кредиты</b> "
-        f"(срок подписки <b>{esc(SUBSCRIPTION_PERIOD_DAYS)}</b> дн.). "
-        "Ограничений на количество генераций по подписке нет — всё зависит от баланса кредитов.\n\n"
-        f"<blockquote><i>Оплата подписки:</i> не чаще <b>одного раза в {esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дней "
-        f"(с момента последней покупки). При активной подписке новый тариф недоступен до окончания срока.</blockquote>\n\n"
-        f"<blockquote><i>Без подписки:</i> не более <b>{esc(NONSUB_IMAGE_WINDOW_MAX)}</b> генераций картинок "
-        f"за <b>{esc(NONSUB_IMAGE_WINDOW_DAYS)}</b> дней (UTC), каждая за кредиты; дальше — только подписка или сброс окна.</blockquote>"
+        "<b>Тарифы</b> — при оплате на баланс начисляются <b>кредиты</b>.\n"
+        f"<blockquote><b>Starter</b> — пробный пакет на <b>{esc(st.period_days)}</b> дн., все модели как у Universe, "
+        f"<b>одна покупка на аккаунт</b> (повторно недоступен). Остальные тарифы — <b>{esc(SUBSCRIPTION_PERIOD_DAYS)}</b> дн.</blockquote>\n"
+        "Ограничений на число генераций по подписке нет — списываются кредиты.\n\n"
+        f"<blockquote><i>Полные тарифы:</i> не чаще <b>одного раза в {esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дней "
+        f"между покупками. При активной подписке сменить тариф нельзя до окончания срока. "
+        f"<i>Starter в эту паузу не входит.</i></blockquote>\n\n"
+        f"<blockquote><i>Без подписки:</i> до <b>{esc(NONSUB_IMAGE_WINDOW_MAX)}</b> картинок за цикл; после полного исчерпания "
+        f"новый цикл через <b>{esc(NONSUB_IMAGE_WINDOW_DAYS)}</b> суток от момента исчерпания (UTC). "
+        "Кредиты лимит не обходят.</blockquote>"
     )
 
 
@@ -227,16 +236,40 @@ def _methods_keyboard(item_id: str, *, is_pack: bool, back_callback_data: str = 
 def _pay_methods_text(plan_id: str) -> str:
     p = PLANS[plan_id]
     title = esc(p.title)
+    days = p.period_days
+    starter_block = ""
+    cooldown_block = (
+        f"<blockquote><i>Оплата полного тарифа не чаще одного раза в {esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)} дней</i> "
+        f"(после последней такой покупки). Оплата ⭐ учитывается автоматически.</blockquote>\n"
+    )
+    if plan_id == "starter":
+        starter_block = (
+            "<blockquote><b>Пробный Starter (3 дня):</b> как Universe — полный набор моделей, "
+            "без дневного лимита «готовых идей», +100 кредитов; токены при покупке не начисляются. "
+            "После окончания — полные тарифы Nova / SuperNova / Galaxy / Universe. "
+            "<b>Повторно Starter купить нельзя.</b></blockquote>\n"
+        )
+        cooldown_block = (
+            "<blockquote><i>Starter не увеличивает паузу между покупками полных тарифов.</i></blockquote>\n"
+        )
+    idea_tok_line = ""
+    if p.idea_tokens_on_purchase > 0:
+        idea_tok_line = (
+            f"<i>Токены готовых идей при оплате:</i> <b>+{esc(p.idea_tokens_on_purchase)}</b>\n"
+        )
     return (
         "<b>💳 Выбери способ оплаты</b>\n\n"
         f"🎁 <b>Подписка:</b> {title}\n"
         f"<i>Кредиты на баланс:</i> <b>+{esc(p.bonus_credits)}</b>\n"
-        f"Срок: <b>{esc(SUBSCRIPTION_PERIOD_DAYS)}</b> дн.\n"
-        "<blockquote><i>С подпиской</i> — ограничений на число генераций нет: списываются кредиты.</blockquote>\n"
-        f"<blockquote><i>Оплата подписки не чаще одного раза в {esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)} дней</i> "
-        f"(после последней покупки). Оплата ⭐ учитывается автоматически.</blockquote>\n"
-        f"<blockquote><i>Без подписки:</i> не более <b>{esc(NONSUB_IMAGE_WINDOW_MAX)}</b> генераций за "
-        f"<b>{esc(NONSUB_IMAGE_WINDOW_DAYS)}</b> дней (UTC), каждая за кредиты; дальше — подписка или сброс окна.</blockquote>\n\n"
+        f"Срок: <b>{esc(days)}</b> дн.\n"
+        f"{starter_block}"
+        f"{idea_tok_line}"
+        "<blockquote><i>Картинки по своему описанию</i> — без дневного лимита по числу запросов (с кредитами). "
+        "<i>Готовые идеи</i> — дневной лимит по тарифу (Starter и Universe — без дневного лимита); "
+        "сверх лимита — токены.</blockquote>\n"
+        f"{cooldown_block}"
+        f"<blockquote><i>Без подписки:</i> до <b>{esc(NONSUB_IMAGE_WINDOW_MAX)}</b> картинок за цикл; после исчерпания цикла "
+        f"следующий через <b>{esc(NONSUB_IMAGE_WINDOW_DAYS)}</b> суток от этого момента (UTC). Кредиты лимит не обходят.</blockquote>\n\n"
         "<i>Оформляя оплату, ты соглашаешься с условиями сервиса и политикой возврата "
         "(подробности — в поддержке или на странице оплаты).</i>"
     )
@@ -244,12 +277,17 @@ def _pay_methods_text(plan_id: str) -> str:
 
 def _pack_methods_text(pack_id: str) -> str:
     p = BONUS_PACKS[pack_id]
+    tok = (
+        f"<i>Токены готовых идей:</i> <b>+{esc(p.idea_tokens)}</b>\n"
+        if p.idea_tokens > 0
+        else ""
+    )
     return (
         "<b>💳 Выбери способ оплаты</b>\n\n"
         f"🎁 <b>Пакет бонусов:</b> <b>{esc(p.title)}</b>\n"
         f"<i>Начисление на баланс:</i> <b>+{esc(p.credits)}</b> кредитов\n"
-        f"<i>Примерно готовых промптов:</i> <b>{esc(p.prompt_estimate)}</b>\n"
-        "<blockquote><i>Пакет не продлевает подписку — только пополняет кредиты.</i></blockquote>\n\n"
+        f"{tok}"
+        "<blockquote><i>Пакет не продлевает подписку — только кредиты и токены на баланс.</i></blockquote>\n\n"
         "<i>Оформляя оплату, ты соглашаешься с условиями сервиса и политикой возврата "
         "(подробности — в поддержке или на странице оплаты).</i>"
     )
@@ -258,14 +296,14 @@ def _pack_methods_text(pack_id: str) -> str:
 def _bonus_packs_caption() -> str:
     lines = [
         "<b>🎁 Пакеты бонусов</b>\n"
-        "<blockquote><i>Докупка кредитов без продления подписки.</i></blockquote>",
+        "<blockquote><i>Докупка кредитов и токенов готовых идей без продления подписки.</i></blockquote>",
     ]
     for pid in BONUS_PACKS_ORDER:
         p = BONUS_PACKS[pid]
+        extra_tok = f" · +{esc(p.idea_tokens)} токенов готовых идей" if p.idea_tokens > 0 else ""
         lines.append(
-            f"<b>{esc(p.credits)} кредитов</b>\n"
-            f"💰 Цена: {esc(p.price_rub)} ₽, ${p.price_usd:g}\n"
-            f"🎯 Промптов: {esc(p.prompt_estimate)}"
+            f"<b>{esc(p.credits)} кредитов</b>{extra_tok}\n"
+            f"💰 Цена: {esc(p.price_rub)} ₽, ${p.price_usd:g}"
         )
     return "\n\n".join(lines)
 
@@ -384,6 +422,20 @@ async def pay_pick_plan(callback: CallbackQuery) -> None:
         return
     allowed, reason = await _can_buy_plan(callback.from_user.id, plan_id)
     if not allowed:
+        if plan_id == "starter" and callback.from_user is not None:
+            prof = await get_user_admin_profile(callback.from_user.id)
+            if prof and prof.starter_trial_used:
+                await callback.answer()
+                await callback.message.answer(
+                    STARTER_ALREADY_PURCHASED_TEXT,
+                    parse_mode=HTML,
+                    reply_markup=InlineKeyboardMarkup(
+                        inline_keyboard=[
+                            [InlineKeyboardButton(text="⬅️ К тарифам", callback_data=CB_PAY_MENU)]
+                        ]
+                    ),
+                )
+                return
         await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
         return
     chat_id = callback.message.chat.id
@@ -559,25 +611,34 @@ async def pay_stars_invoice(callback: CallbackQuery) -> None:
             return
         p = PLANS[item_id]
         payload = f"plan:{callback.from_user.id}:{item_id}"
+        pd = p.period_days
+        desc_extra = (
+            f" +{p.idea_tokens_on_purchase} токенов готовых идей"
+            if p.idea_tokens_on_purchase > 0
+            else ""
+        )
         await callback.message.bot.send_invoice(
             chat_id=callback.message.chat.id,
             title=f"Avira — {p.title}",
             description=(
-                f"Подписка {p.title}: +{p.bonus_credits} кредитов, "
-                f"{SUBSCRIPTION_PERIOD_DAYS} дн. Лимитов по количеству генераций нет."
+                f"Подписка {p.title}: +{p.bonus_credits} кредитов{desc_extra}, "
+                f"{pd} дн. Картинки — по кредитам; готовые идеи — лимиты по тарифу."
             ),
             payload=payload,
             currency="XTR",
-            prices=[LabeledPrice(label=f"{p.title} ({SUBSCRIPTION_PERIOD_DAYS} дн.)", amount=p.stars)],
+            prices=[LabeledPrice(label=f"{p.title} ({pd} дн.)", amount=p.stars)],
             provider_token="",
         )
     elif item_id in BONUS_PACKS:
         b = BONUS_PACKS[item_id]
         payload = f"pack:{callback.from_user.id}:{item_id}"
+        tok_d = f" +{b.idea_tokens} токенов готовых идей" if b.idea_tokens > 0 else ""
         await callback.message.bot.send_invoice(
             chat_id=callback.message.chat.id,
             title=f"Avira — бонус-пакет {b.credits} кредитов",
-            description=f"Пакет бонусов: +{b.credits} кредитов на баланс (без продления подписки).",
+            description=(
+                f"Пакет бонусов: +{b.credits} кредитов{tok_d} на баланс (без продления подписки)."
+            ),
             payload=payload,
             currency="XTR",
             prices=[LabeledPrice(label=f"{b.credits} кредитов", amount=b.stars)],
@@ -609,7 +670,7 @@ async def pre_checkout(q: PreCheckoutQuery) -> None:
         if item_id not in PLANS:
             await q.answer(ok=False, error_message="Неизвестный тариф. Запроси новый счёт.")
             return
-        allowed, reason = await subscription_can_purchase_new_plan(q.from_user.id)
+        allowed, reason = await subscription_can_purchase_plan(q.from_user.id, item_id)
         if not allowed:
             await q.answer(ok=False, error_message=(reason or "Покупка подписки сейчас недоступна.")[:250])
             return
@@ -653,7 +714,7 @@ async def successful_payment(message: Message) -> None:
             await release_star_payment_claim(charge_id)
             await message.answer("Оплата получена, но тариф не найден. Напиши в поддержку.")
             return
-        allowed, reason = await subscription_can_purchase_new_plan(message.from_user.id)
+        allowed, reason = await subscription_can_purchase_plan(message.from_user.id, item_id)
         if not allowed:
             await release_star_payment_claim(charge_id)
             await message.answer(
@@ -664,18 +725,24 @@ async def successful_payment(message: Message) -> None:
             )
             return
         p = PLANS[item_id]
-        new_end = await reset_subscription_days(message.from_user.id, SUBSCRIPTION_PERIOD_DAYS, item_id)
+        new_end = await reset_subscription_days(message.from_user.id, p.period_days, item_id)
         if not new_end:
             await release_star_payment_claim(charge_id)
             await message.answer(
                 "Ошибка записи подписки в базу. Сохрани это сообщение и напиши в поддержку — проверим оплату."
             )
             return
-        await record_subscription_purchase_now(message.from_user.id)
+        if item_id == "starter":
+            await mark_starter_trial_purchased(message.from_user.id)
+        else:
+            await record_subscription_purchase_now(message.from_user.id)
         credited = await add_credits(message.from_user.id, p.bonus_credits)
+        tok_ok = False
+        if credited and p.idea_tokens_on_purchase > 0:
+            tok_ok = await add_idea_tokens(message.from_user.id, p.idea_tokens_on_purchase)
         end_h = format_subscription_ends_at(new_end)
         q_lines = [
-            f"<i>Срок:</i> <b>{esc(SUBSCRIPTION_PERIOD_DAYS)}</b> дн.; действует до <b>{esc(end_h)}</b>",
+            f"<i>Срок:</i> <b>{esc(p.period_days)}</b> дн.; действует до <b>{esc(end_h)}</b>",
         ]
         if credited:
             q_lines.append(
@@ -685,24 +752,46 @@ async def successful_payment(message: Message) -> None:
             q_lines.append(
                 f"<i>Бонус +{esc(p.bonus_credits)} не начислен — напиши в поддержку.</i>"
             )
+        if p.idea_tokens_on_purchase > 0:
+            if tok_ok:
+                q_lines.append(
+                    f"<i>Токены готовых идей:</i> <b>+{esc(p.idea_tokens_on_purchase)}</b>"
+                )
+            else:
+                q_lines.append(
+                    "<i>Токены не начислены автоматически — напиши в поддержку.</i>"
+                )
         quote_inner = "\n".join(q_lines)
+        starter_tail = ""
+        if item_id == "starter":
+            starter_tail = (
+                "\n\n<blockquote><i>После окончания Starter оформи полный тариф в</i> "
+                "<code>/start</code> <i>→</i> <b>Оплатить</b><i>. Повторно Starter купить нельзя.</i></blockquote>"
+            )
         await message.answer(
             "<b>Спасибо за покупку!</b>\n"
             f"Вы приобрели подписку <b>{esc(p.title)}</b>.\n\n"
             f"<blockquote>{quote_inner}</blockquote>\n\n"
-            "<i>Можно снова открыть «Создать картинку» в</i> <code>/start</code>.",
+            "<i>Можно снова открыть «Создать картинку» в</i> <code>/start</code>."
+            f"{starter_tail}",
             parse_mode=HTML,
         )
         stars_amt = int(sp.total_amount or 0)
         cur = (sp.currency or "XTR").upper()
         credit_ok = "да" if credited else "нет (проверить вручную)"
         pay_kind = _payment_type_label(sp)
+        tok_admin = (
+            f"Токены идей: +{esc(p.idea_tokens_on_purchase)} · начислено: {'да' if tok_ok else 'нет'}\n"
+            if p.idea_tokens_on_purchase > 0
+            else ""
+        )
         admin_txt = (
             "<b>Подписка оплачена</b>\n"
             f"<b>Тип оплаты:</b> {pay_kind}\n"
             f"Тариф: {esc(p.title)} · <code>{esc(item_id)}</code>\n"
             f"Пользователь: {_user_line_html(message.from_user)}\n"
             f"Кредиты по тарифу: <b>+{esc(p.bonus_credits)}</b> · начислено: <i>{esc(credit_ok)}</i>\n"
+            f"{tok_admin}"
             f"До (UTC): <code>{esc(end_h)}</code>\n"
             f"Сумма: <b>{esc(stars_amt)}</b> {esc(cur)}\n"
             f"charge: <code>{esc(charge_id)}</code>"
@@ -719,20 +808,35 @@ async def successful_payment(message: Message) -> None:
         return
     b = BONUS_PACKS[item_id]
     credited = await add_credits(message.from_user.id, b.credits)
+    tok_pack = False
+    if credited and b.idea_tokens > 0:
+        tok_pack = await add_idea_tokens(message.from_user.id, b.idea_tokens)
     if credited:
+        tok_msg = ""
+        if b.idea_tokens > 0:
+            tok_msg = (
+                f" и <b>+{esc(b.idea_tokens)}</b> токенов готовых идей"
+                if tok_pack
+                else " (токены не начислены — напиши в поддержку)"
+            )
         await message.answer(
             "<b>Оплата прошла ✅</b>\n"
             f"Пакет: <b>{esc(b.title)}</b>\n"
-            f"<blockquote><i>Начислено:</i> +{esc(b.credits)} кредитов на баланс.</blockquote>",
+            f"<blockquote><i>Начислено:</i> +{esc(b.credits)} кредитов на баланс{tok_msg}.</blockquote>",
             parse_mode=HTML,
         )
         stars_amt = int(sp.total_amount or 0)
         cur = (sp.currency or "XTR").upper()
         pay_kind = _payment_type_label(sp)
+        tok_adm = (
+            f" · токены идей: +{esc(b.idea_tokens)} ({'да' if tok_pack else 'нет'})"
+            if b.idea_tokens > 0
+            else ""
+        )
         admin_txt = (
             "<b>Пакет бонусов оплачен</b>\n"
             f"<b>Тип оплаты:</b> {pay_kind}\n"
-            f"Пакет: {esc(b.title)} · <code>{esc(item_id)}</code> · <b>+{esc(b.credits)}</b> кр.\n"
+            f"Пакет: {esc(b.title)} · <code>{esc(item_id)}</code> · <b>+{esc(b.credits)}</b> кр.{tok_adm}\n"
             f"Пользователь: {_user_line_html(message.from_user)}\n"
             f"Сумма: <b>{esc(stars_amt)}</b> {esc(cur)}\n"
             f"charge: <code>{esc(charge_id)}</code>"

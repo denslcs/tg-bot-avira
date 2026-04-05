@@ -55,6 +55,42 @@ def format_openrouter_image_user_error(exc: BaseException) -> str:
         )
     if "429" in text or "rate" in text:
         return "Сервис генерации перегружен или сработал лимит. Попробуй через минуту."
+    mod_hints = (
+        "moderation",
+        "moderated",
+        "safety",
+        "content policy",
+        "content_policy",
+        "policy violation",
+        "blocked",
+        "refused",
+        "not allowed",
+        "inappropriate",
+        "harmful",
+        "nsfw",
+    )
+    if any(h in text for h in mod_hints):
+        return (
+            "Модель или сервис отклонили запрос (часто из‑за описания насилия, оружия, взрывчатки и т.п.). "
+            "Попробуй короче и мягче по формулировкам или смени модель в меню (если доступна)."
+        )
+    if any(
+        x in text
+        for x in (
+            "too long",
+            "max length",
+            "maximum length",
+            "token limit",
+            "prompt is too",
+            "exceeds",
+            "length limit",
+        )
+    ):
+        return (
+            "Промпт слишком длинный для этой модели. Сократи описание до пары предложений и попробуй снова."
+        )
+    if "timeout" in text or "timed out" in text:
+        return "Запрос к генерации слишком долгий. Попробуй ещё раз с более коротким описанием."
     return "Не удалось сгенерировать картинку. Попробуй позже или смени формулировку."
 
 

@@ -31,13 +31,14 @@ from src.database import (
     count_generated_images_total,
     ensure_user,
     get_credits,
+    get_daily_image_generation_usage,
     get_nonsub_image_quota_status,
     get_referral_count,
     get_user_admin_profile,
     subscription_is_active,
     take_credits,
 )
-from src.subscription_catalog import NONSUB_IMAGE_WINDOW_DAYS, PLANS
+from src.subscription_catalog import NONSUB_IMAGE_WINDOW_DAYS, PLANS, UNLIMITED_DAILY_IMAGE_GENERATIONS
 from src.formatting import HTML, esc, format_subscription_ends_at
 from src.keyboards.callback_data import (
     CB_IMG_OK,
@@ -239,7 +240,7 @@ async def cmd_help(message: Message) -> None:
         "💳 <code>/pay</code> — <i>подписка и оплата</i>\n"
         "👤 <code>/profile</code> — <i>статус аккаунта и подписки</i>\n"
         "👥 <code>/ref</code> — <i>реферальная система</i>\n"
-        "💡 <code>/ideas</code> — <i>готовые промпты для картинок</i>\n"
+        "💡 <code>/ideas</code> — <i>готовые идеи для картинок</i>\n"
         "📋 <code>/faq</code> — <i>частые вопросы</i>\n"
         "🔄 <code>/newchat</code> или <code>/clear</code> — <i>очистить память диалога</i>\n"
         "💬 <code>/support</code> — <i>обращение в поддержку</i>\n"
@@ -262,7 +263,7 @@ async def menu_about(callback: CallbackQuery) -> None:
         "<b>Что умеет бот</b>\n"
         "<blockquote>"
         "• Сгенерировать картинку по тексту.\n"
-        "• Готовые идеи — пресеты промптов (если добавлены)."
+        "• Готовые идеи — заготовки под генерацию (если добавлены)."
         "</blockquote>"
     )
     await delete_nav_source_message(callback.message)
@@ -336,6 +337,8 @@ async def _build_referral_message(
         balance = await get_credits(user_id)
     except Exception:
         balance = 0
+    prof = await get_user_admin_profile(user_id)
+    idea_tok = int(prof.idea_tokens) if prof else 0
     ref_link = (
         f"https://t.me/{bot_username}?start=ref_{user_id}"
         if bot_username
@@ -348,10 +351,12 @@ async def _build_referral_message(
         f"<i>👤 Профиль</i> {uname_html}\n"
         f"<i>💳 ID</i> <code>{esc(user_id)}</code>\n"
         f"<i>💵 Кредиты</i> <b>{esc(balance)}</b>\n"
+        f"<i>🎯 Токены готовых идей</i> <b>{esc(idea_tok)}</b>\n"
         f"<i>✉️ Приглашения</i> <b>{esc(invited)}</b>"
         "</blockquote>\n\n"
         "<blockquote><i>"
-        "За каждого приглашённого друга — <b>+10</b> кредитов тебе. "
+        "За каждого приглашённого друга — <b>+15</b> кредитов тебе; за каждых <b>двух</b> друзей — "
+        "ещё <b>+1</b> токен готовых идей. "
         "Новому пользователю при первом <code>/start</code> по твоей ссылке — <b>+5</b> кредитов."
         "</i></blockquote>\n\n"
         "<b>🔗 Твоя ссылка</b>\n"
@@ -455,6 +460,8 @@ async def _profile_card_html(user_id: int, username_raw: str | None) -> tuple[st
         )
         return missing, back_to_main_menu_keyboard()
     balance = await get_credits(user_id)
+    idea_tok = int(profile.idea_tokens or 0)
+    ru, rlim = await get_daily_image_generation_usage(user_id, "ready")
     username = f"@{profile.username}" if profile.username else "—"
     active_sub = subscription_is_active(profile.subscription_ends_at)
     if active_sub:
@@ -482,8 +489,32 @@ async def _profile_card_html(user_id: int, username_raw: str | None) -> tuple[st
     else:
         fu, flim = await get_nonsub_image_quota_status(user_id)
         img_limits_line = (
-            f"<i>Генераций картинок без подписки за {NONSUB_IMAGE_WINDOW_DAYS} дн. (UTC):</i> "
-            f"<b>{esc(fu)}/{esc(flim)}</b> (со списанием кредитов; дальше — только подписка или сброс окна).\n"
+            f"<i>Картинки без подписки (цикл до {esc(flim)} шт.):</i> <b>{esc(fu)}/{esc(flim)}</b> "
+            f"<i>— после исчерпания цикл обновится через {NONSUB_IMAGE_WINDOW_DAYS} суток от этого момента (UTC); "
+            "кредиты не обходят лимит.</i>\n"
+        )
+    if active_sub:
+        if rlim >= UNLIMITED_DAILY_IMAGE_GENERATIONS:
+            ready_limits_line = (
+                "<i>Готовые идеи:</i> без дневного лимита по тарифу "
+                "(токены копятся для тарифов с дневным лимитом или без подписки).\n"
+            )
+        else:
+            ready_limits_line = (
+                f"<i>Готовые идеи сегодня (МСК, сброс 00:00):</i> <b>{esc(ru)}/{esc(rlim)}</b> "
+                "<i>— в пределах лимита токены не тратятся; сверх — 1 токен за генерацию.</i>\n"
+            )
+    else:
+        ready_limits_line = (
+            f"<i>Готовые идеи без подписки (цикл {esc(rlim)} шт.):</i> <b>{esc(ru)}/{esc(rlim)}</b> "
+            f"<i>— слот без токена; после исчерпания следующий через {NONSUB_IMAGE_WINDOW_DAYS} суток от момента "
+            "исчерпания (UTC). Кредиты за генерацию списываются всегда; токен — только сверх слота.</i>\n"
+        )
+    starter_cta = ""
+    if not active_sub and profile.starter_trial_used:
+        starter_cta = (
+            "\n<blockquote><b>Пробный Starter уже был.</b> "
+            "Оформи полный тариф: <code>/start</code> → <b>Оплатить</b> (Nova, SuperNova, Galaxy, Universe).</blockquote>"
         )
     body = (
         "<b>👤 Профиль</b>\n"
@@ -491,13 +522,16 @@ async def _profile_card_html(user_id: int, username_raw: str | None) -> tuple[st
         f"<i>Ник:</i> <b>{esc(username)}</b>\n"
         f"<i>ID:</i> <code>{esc(user_id)}</code>\n"
         f"<i>💰 Кредиты:</i> <b>{esc(balance)}</b>\n"
+        f"<i>🎯 Токены готовых идей:</i> <b>{esc(idea_tok)}</b>\n"
         f"<i>Подписка:</i> <b>{esc(sub_status)}</b>\n"
         f"<i>Тариф:</i> <b>{esc(plan_name)}</b>\n"
         f"<i>Окончание:</i> <b>{esc(sub_till)}</b>\n"
         f"<i>Сгенерировано изображений:</i> <b>{esc(gen_total)}</b>\n"
         f"<i>Дней в боте:</i> <b>{esc(days_in_bot)}</b>\n"
         f"{img_limits_line}"
+        f"{ready_limits_line}"
         "</blockquote>"
+        f"{starter_cta}"
     )
     return body, back_to_main_menu_keyboard()
 
@@ -631,11 +665,11 @@ async def cmd_chatid(message: Message) -> None:
                 "2) <b>ID группы</b> — напиши в группе команду <code>/chatid</code> "
                 "(можно в любой теме или в «Общем»). Бот пришлёт число вида <code>-100…</code> "
                 "— его клади в <code>ADMIN_SALES_NOTIFY_CHAT_ID</code>.\n"
-                "3) <b>ID каждой темы</b> — зайди <i>внутрь темы</i> (Nova, Galaxy и т.д.) и "
+                "3) <b>ID каждой темы</b> — зайди <i>внутрь темы</i> (Starter, Nova, Galaxy и т.д.) и "
                 "в этой теме снова напиши <code>/chatid</code>. Появится "
                 "<code>message_thread_id</code> — его в соответствующий "
                 "<code>ADMIN_SALES_THREAD_*</code> в <code>.env</code>.\n"
-                "4) Повтори шаг 3 для всех пяти тем.\n"
+                "4) Повтори шаг 3 для всех тем: Starter, Nova, SuperNova, Galaxy, Universe и бонусы/пакеты.\n"
                 "5) Перезапусти бота.\n\n"
                 "<blockquote><i>Если написать <code>/chatid</code> только в личке без пересылки — "
                 "показывается эта памятка. Пересланное из группы иногда даёт только chat id, "

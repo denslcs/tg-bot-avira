@@ -161,6 +161,7 @@ PAY_URL_CRYPTO: str = os.getenv("PAY_URL_CRYPTO", "").strip()
 # Уведомления о покупках (⭐ Stars) в админ-чат с топиками: id супергруппы и id ветки на тариф / бонусы.
 # Бот должен быть участником чата и иметь право писать в темы. 0 = не слать.
 ADMIN_SALES_NOTIFY_CHAT_ID: int = _parse_int(os.getenv("ADMIN_SALES_NOTIFY_CHAT_ID", "0"), 0)
+ADMIN_SALES_THREAD_STARTER: int = _parse_int(os.getenv("ADMIN_SALES_THREAD_STARTER", "0"), 0)
 ADMIN_SALES_THREAD_NOVA: int = _parse_int(os.getenv("ADMIN_SALES_THREAD_NOVA", "0"), 0)
 ADMIN_SALES_THREAD_SUPERNOVA: int = _parse_int(os.getenv("ADMIN_SALES_THREAD_SUPERNOVA", "0"), 0)
 ADMIN_SALES_THREAD_GALAXY: int = _parse_int(os.getenv("ADMIN_SALES_THREAD_GALAXY", "0"), 0)

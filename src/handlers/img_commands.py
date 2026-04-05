@@ -37,6 +37,7 @@ from src.config import (
 from src.database import (
     ImageChargeMeta,
     add_credits,
+    add_idea_tokens,
     ensure_user,
     get_credits,
     get_daily_image_generation_usage,
@@ -45,11 +46,14 @@ from src.database import (
     get_user_admin_profile,
     release_daily_image_generation,
     release_nonsub_image_quota_slot,
+    release_nonsub_ready_idea_slot,
     save_last_image_context,
     subscription_is_active,
     take_credits,
+    try_consume_idea_token,
     try_reserve_daily_image_generation,
     try_reserve_nonsub_image_quota_slot,
+    try_reserve_nonsub_ready_idea_slot,
 )
 from src.formatting import HTML, esc
 from src.handlers.commands import delete_nav_source_message, restore_main_menu_message
@@ -78,7 +82,11 @@ from src.polza_image import (
     is_polza_image_model,
     polza_text_to_image_bytes,
 )
-from src.subscription_catalog import NONSUB_IMAGE_WINDOW_DAYS, NONSUB_IMAGE_WINDOW_MAX
+from src.subscription_catalog import (
+    NONSUB_IMAGE_WINDOW_DAYS,
+    NONSUB_IMAGE_WINDOW_MAX,
+    UNLIMITED_DAILY_IMAGE_GENERATIONS,
+)
 
 router = Router(name="img_commands")
 
@@ -88,6 +96,28 @@ READY_IDEAS: list[tuple[str, str]] = []
 
 # Подпись для внутреннего контекста «Ещё раз» (пользователю не показываем).
 _IMAGE_CONTEXT_LABEL = "text2img"
+
+# Подсказки для пользователя: в каких стилях модель обычно сильна (без сравнения с другими).
+_STYLE_HINT_KLEIN = (
+    "Удачно смотрится в простом реализме, пейзажах, натюрмортах и спокойных сценах с одной главной идеей."
+)
+_STYLE_HINT_PRO = (
+    "Хорошо ложится на фотореализм, портреты, людей в среде, интерьеры, архитектуру "
+    "и предметные снимки «как с камеры»."
+)
+_STYLE_HINT_GEMINI = (
+    "Сильна в иллюстрациях, ярких образах, сказочных и фантазийных сценах, обложках "
+    "и картинках «к краткой истории»."
+)
+_STYLE_HINT_GEMINI_PREVIEW = (
+    "Хорошо подходит, когда нужен выразительный, необычный кадр и смелая визуальная подача одной и той же задумки."
+)
+_STYLE_HINT_GPT_IMG_15 = (
+    "Уместна для схем, слайдов, простых макетов и картинок, где важно много условий в тексте и понятная композиция."
+)
+_STYLE_HINT_GPT5_IMG = (
+    "Хороша для насыщенных сцен по длинному описанию: богатый по деталям и внимательный к тексту запроса результат."
+)
 
 _WAITING_PROMPT_HTML = (
     "<b>🎨 Картинка по описанию</b>\n"
@@ -130,26 +160,42 @@ class ImageGenState(StatesGroup):
     waiting_prompt = State()
 
 
-def _dedupe_model_choices(items: list[tuple[str, str, int]]) -> list[tuple[str, str, int]]:
+def _dedupe_model_choices(items: list[tuple[str, str, int, str]]) -> list[tuple[str, str, int, str]]:
     """Один id модели — одна кнопка (если в .env Klein и Pro совпали)."""
     seen: set[str] = set()
-    out: list[tuple[str, str, int]] = []
-    for label, mid, cost in items:
+    out: list[tuple[str, str, int, str]] = []
+    for label, mid, cost, hint in items:
         key = (mid or "").strip()
         if not key or key in seen:
             continue
         seen.add(key)
-        out.append((label, mid, cost))
+        out.append((label, mid, cost, hint))
     return out
 
 
-def _model_choices_for_subscription_plan(plan_id: str) -> list[tuple[str, str, int]]:
+def _model_pick_caption_html(*, for_admin: bool, choices: list[tuple[str, str, int, str]]) -> str:
+    intro = (
+        "Режим администратора — доступны все модели. Ниже кратко, в каких стилях каждая из них обычно сильна."
+        if for_admin
+        else "Тариф в профиле определяет список моделей. Ниже — подсказки по стилю. Выбери вариант и опиши картинку."
+    )
+    lines = [
+        "<b>Выбор модели ИИ</b>",
+        f"<blockquote><i>{esc(intro)}</i></blockquote>",
+    ]
+    for label, _mid, cost, hint in choices:
+        lines.append(f"<b>{esc(label)}</b> · {esc(cost)} кр.")
+        lines.append(f"<blockquote><i>{esc(hint)}</i></blockquote>")
+    return "\n".join(lines)
+
+
+def _model_choices_for_subscription_plan(plan_id: str) -> list[tuple[str, str, int, str]]:
     """
-    Подпись кнопки, id модели (OpenRouter или Polza), стоимость в кредитах.
+    Подпись кнопки, id модели (OpenRouter или Polza), стоимость в кредитах, подсказка по стилю.
     Nova: только Klein 4B.
     SuperNova: Klein 4B + Nano Banana.
     Galaxy: Klein 4B + Nano Banana + GPT Image 1.5 (Polza).
-    Universe: Klein, Nano Banana, GPT Image 1.5, FLUX Pro, Nano Banana 2, GPT‑5 Image (Polza).
+    Universe / Starter: полный набор (как Universe). Starter — пробный 3 дня, одна покупка.
     Неизвестный plan_id: как Universe.
     Без подписки панель не используется.
     """
@@ -158,23 +204,26 @@ def _model_choices_for_subscription_plan(plan_id: str) -> list[tuple[str, str, i
     gemini_id = (OPENROUTER_IMAGE_GEMINI_MODEL or "").strip() or "google/gemini-2.5-flash-image"
     preview_id = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or "google/gemini-3.1-flash-image-preview"
 
-    klein = ("⚡ FLUX Klein 4B", klein_id, OPENROUTER_IMAGE_COST_CREDITS)
-    pro = ("🎨 FLUX Pro", pro_id, OPENROUTER_IMAGE_ALT_COST_CREDITS)
-    gemini = ("🍌 Nano Banana", gemini_id, OPENROUTER_IMAGE_GEMINI_COST_CREDITS)
+    klein = ("⚡ FLUX Klein 4B", klein_id, OPENROUTER_IMAGE_COST_CREDITS, _STYLE_HINT_KLEIN)
+    pro = ("🎨 FLUX Pro", pro_id, OPENROUTER_IMAGE_ALT_COST_CREDITS, _STYLE_HINT_PRO)
+    gemini = ("🍌 Nano Banana", gemini_id, OPENROUTER_IMAGE_GEMINI_COST_CREDITS, _STYLE_HINT_GEMINI)
     gemini_preview = (
         "🍌 Nano Banana 2",
         preview_id,
         OPENROUTER_IMAGE_GEMINI_PREVIEW_COST_CREDITS,
+        _STYLE_HINT_GEMINI_PREVIEW,
     )
     gpt_img_15 = (
         "🖼 GPT Image 1.5",
         POLZA_IMAGE_MODEL_GPT_IMAGE_15,
         POLZA_IMAGE_GPT_IMAGE_15_COST_CREDITS,
+        _STYLE_HINT_GPT_IMG_15,
     )
     gpt5_img = (
         "🖼 GPT‑5 Image",
         POLZA_IMAGE_MODEL_GPT5_IMAGE,
         POLZA_IMAGE_GPT5_IMAGE_COST_CREDITS,
+        _STYLE_HINT_GPT5_IMG,
     )
 
     p = (plan_id or "").strip().lower()
@@ -184,6 +233,7 @@ def _model_choices_for_subscription_plan(plan_id: str) -> list[tuple[str, str, i
         return _dedupe_model_choices([klein, gemini])
     if p == "galaxy":
         return _dedupe_model_choices([klein, gemini, gpt_img_15])
+    # starter, universe и неизвестный plan — полная матрица
     return _dedupe_model_choices([klein, gemini, gpt_img_15, pro, gemini_preview, gpt5_img])
 
 
@@ -196,7 +246,7 @@ async def _effective_image_model_and_cost(user_id: int, requested_model: str) ->
     plan_id = (profile.subscription_plan or "").strip().lower() if profile else ""
     choices = _model_choices_for_subscription_plan(plan_id)
     want = (requested_model or "").strip()
-    for _lb, mid, cst in choices:
+    for _lb, mid, cst, _hint in choices:
         if mid.strip() == want:
             return mid.strip(), cst
     if choices:
@@ -205,13 +255,13 @@ async def _effective_image_model_and_cost(user_id: int, requested_model: str) ->
     return OPENROUTER_IMAGE_MODEL.strip(), OPENROUTER_IMAGE_COST_CREDITS
 
 
-def _subscriber_model_pick_keyboard(choices: list[tuple[str, str, int]]) -> InlineKeyboardMarkup:
+def _subscriber_model_pick_keyboard(choices: list[tuple[str, str, int, str]]) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
-    for i, (label, _mid, cost) in enumerate(choices):
+    for i, (label, _mid, cost, _hint) in enumerate(choices):
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"{label} · {cost} кр.",
+                    text=f"{label} · {cost} кр."[:64],
                     callback_data=f"{CB_IMG_MODEL_SEL_PREFIX}{i}",
                     style=BTN_PRIMARY,
                 )
@@ -239,13 +289,84 @@ async def _prepare_image_charge_and_daily_slot(
     if is_admin:
         return True, meta
 
+    is_ready = usage_kind == "ready"
+
+    if is_ready and not has_active_sub:
+        if await try_reserve_nonsub_ready_idea_slot(user_id):
+            meta.nonsub_ready_reserved = True
+        elif await try_consume_idea_token(user_id):
+            meta.idea_token_consumed = True
+        else:
+            await message.answer(
+                "<b>Готовые идеи без подписки</b>\n"
+                f"<blockquote>Бесплатный слот в цикле уже использован — следующий будет через <b>{NONSUB_IMAGE_WINDOW_DAYS}</b> суток "
+                "от момента исчерпания (то же время суток по UTC). Оформи подписку в <code>/start</code> → <b>Оплатить</b> "
+                "или используй <b>токены готовых идей</b> (рефералы, пакеты бонусов).</blockquote>",
+                parse_mode=HTML,
+            )
+            return False, None
+        if charge:
+            ok = await take_credits(user_id, cost)
+            if not ok:
+                if meta.nonsub_ready_reserved:
+                    await release_nonsub_ready_idea_slot(user_id)
+                elif meta.idea_token_consumed:
+                    await add_idea_tokens(user_id, 1)
+                balance = await get_credits(user_id)
+                await message.answer(
+                    f"<blockquote><i>Недостаточно кредитов.</i> Нужно <b>{esc(cost)}</b>, у тебя <b>{esc(balance)}</b>."
+                    "</blockquote>",
+                    parse_mode=HTML,
+                )
+                return False, None
+            meta.credit_charged = True
+        return True, meta
+
+    if is_ready and has_active_sub:
+        if charge:
+            ok = await take_credits(user_id, cost)
+            if not ok:
+                balance = await get_credits(user_id)
+                extra = (
+                    "\n<blockquote><i>Подписка активна, но кредиты закончились.</i> "
+                    "Можно пополнить в <code>/start</code> → <b>Оплатить</b> (пакеты бонусов) "
+                    "или пригласить друзей по <code>/ref</code>.</blockquote>"
+                )
+                await message.answer(
+                    f"<blockquote><i>Недостаточно кредитов.</i> Нужно <b>{esc(cost)}</b>, у тебя <b>{esc(balance)}</b>.</blockquote>"
+                    f"{extra}",
+                    parse_mode=HTML,
+                )
+                return False, None
+            meta.credit_charged = True
+        used, lim = await get_daily_image_generation_usage(user_id, "ready")
+        if lim >= UNLIMITED_DAILY_IMAGE_GENERATIONS:
+            await try_reserve_daily_image_generation(user_id, "ready")
+            return True, meta
+        if used < lim:
+            if await try_reserve_daily_image_generation(user_id, "ready"):
+                meta.daily_reserved = True
+                return True, meta
+        if await try_consume_idea_token(user_id):
+            meta.idea_token_consumed = True
+            return True, meta
+        if meta.credit_charged:
+            await add_credits(user_id, cost)
+        await message.answer(
+            "<b>Лимит готовых идей</b>\n"
+            "<blockquote><i>Сегодня по МСК дневной лимит по тарифу исчерпан, токенов готовых идей нет.</i> "
+            "Лимит обновится в 00:00 МСК; токены — за каждых двух друзей по <code>/ref</code> или в пакетах бонусов.</blockquote>",
+            parse_mode=HTML,
+        )
+        return False, None
+
     if not has_active_sub:
         if not await try_reserve_nonsub_image_quota_slot(user_id):
             await message.answer(
                 "<b>Лимит без подписки</b>\n"
-                f"<blockquote>За <b>{NONSUB_IMAGE_WINDOW_DAYS}</b> дней (UTC) доступно не более "
-                f"<b>{NONSUB_IMAGE_WINDOW_MAX}</b> генераций картинок — даже при большом балансе кредитов. "
-                "Оформи подписку в <code>/start</code> → <b>Оплатить</b> или дождись сброса окна.</blockquote>",
+                f"<blockquote>В цикле доступно не более <b>{NONSUB_IMAGE_WINDOW_MAX}</b> генераций картинок; после полного исчерпания "
+                f"следующий цикл — через <b>{NONSUB_IMAGE_WINDOW_DAYS}</b> суток от этого момента (то же время суток по UTC). "
+                "Кредиты лимит не обходят. Оформи подписку в <code>/start</code> → <b>Оплатить</b> или дождись обновления цикла.</blockquote>",
                 parse_mode=HTML,
             )
             return False, None
@@ -287,7 +408,7 @@ async def _prepare_image_charge_and_daily_slot(
             await add_credits(user_id, cost)
         await message.answer(
             "<b>Лимит занят</b>\n"
-            f"<blockquote><i>Параллельный запрос.</i> Сегодня (UTC): <b>{esc(used)}/{esc(limit)}</b>. "
+            f"<blockquote><i>Параллельный запрос.</i> Сегодня (МСК): <b>{esc(used)}/{esc(limit)}</b>. "
             "Попробуй позже.</blockquote>",
             parse_mode=HTML,
         )
@@ -355,9 +476,17 @@ async def _send_result_photo_with_regen(
     charge: bool,
     deducted_credits: bool,
     served_from_cache: bool = False,
+    usage_kind: str = "self",
 ) -> None:
     await save_last_image_context(
-        user_id, "text", prompt, model, cost, _IMAGE_CONTEXT_LABEL, None
+        user_id,
+        "text",
+        prompt,
+        model,
+        cost,
+        _IMAGE_CONTEXT_LABEL,
+        None,
+        usage_kind=usage_kind,
     )
     if is_admin:
         day_note = ""
@@ -366,8 +495,8 @@ async def _send_result_photo_with_regen(
         if q:
             u, lim = q
             day_note = (
-                f"\n<blockquote><i>Генераций без подписки за {NONSUB_IMAGE_WINDOW_DAYS} дней (UTC):</i> "
-                f"<b>{esc(u)}/{esc(lim)}</b>.</blockquote>"
+                f"\n<blockquote><i>Картинки без подписки (цикл {NONSUB_IMAGE_WINDOW_MAX} шт.):</i> "
+                f"<b>{esc(u)}/{esc(lim)}</b> <i>— сброс цикла через {NONSUB_IMAGE_WINDOW_DAYS} суток после исчерпания (UTC).</i></blockquote>"
             )
         else:
             day_note = ""
@@ -472,6 +601,10 @@ async def _execute_text_generation(
             await add_credits(user_id, cost)
         if meta.nonsub_quota_reserved:
             await release_nonsub_image_quota_slot(user_id)
+        if meta.nonsub_ready_reserved:
+            await release_nonsub_ready_idea_slot(user_id)
+        if meta.idea_token_consumed:
+            await add_idea_tokens(user_id, 1)
         await wait_msg.edit_text(err, parse_mode=HTML, disable_web_page_preview=True)
         return
     await wait_msg.delete()
@@ -488,6 +621,7 @@ async def _execute_text_generation(
         charge=charge,
         deducted_credits=meta.credit_charged,
         served_from_cache=from_cache,
+        usage_kind=usage_kind,
     )
 
 
@@ -499,28 +633,32 @@ async def _send_waiting_prompt_step(
     model: str,
     cost: int,
     replace_message: Message | None = None,
+    model_style_hint: str | None = None,
 ) -> None:
-    await state.update_data(selected_model=model, selected_cost=cost)
+    await state.update_data(selected_model=model, selected_cost=cost, selected_usage_kind="self")
     await state.set_state(ImageGenState.waiting_prompt)
+    body = _WAITING_PROMPT_HTML
+    if model_style_hint:
+        body += f"\n<blockquote><i>{esc(model_style_hint)}</i></blockquote>"
     if replace_message is not None:
         chat_id = replace_message.chat.id
         await delete_nav_source_message(replace_message)
         await bot.send_message(
             chat_id,
-            _WAITING_PROMPT_HTML,
+            body,
             reply_markup=_waiting_prompt_keyboard(),
             parse_mode=HTML,
         )
         return
     await bot.send_message(
         chat_id,
-        _WAITING_PROMPT_HTML,
+        body,
         reply_markup=_waiting_prompt_keyboard(),
         parse_mode=HTML,
     )
 
 
-async def _show_subscriber_model_pick(
+async def _show_image_model_pick(
     message: Message,
     state: FSMContext,
     user_id: int,
@@ -537,11 +675,15 @@ async def _show_subscriber_model_pick(
         )
         return
     await ensure_user(user_id, username)
-    profile = await get_user_admin_profile(user_id)
-    if not profile or not subscription_is_active(profile.subscription_ends_at):
-        await _start_image_flow(message, state, user_id, username, replace_menu=True)
-        return
-    plan_id = (profile.subscription_plan or "").strip().lower()
+    is_admin = user_id in ADMIN_IDS
+    if is_admin:
+        plan_id = "universe"
+    else:
+        profile = await get_user_admin_profile(user_id)
+        if not profile or not subscription_is_active(profile.subscription_ends_at):
+            await _start_image_flow(message, state, user_id, username, replace_menu=True)
+            return
+        plan_id = (profile.subscription_plan or "").strip().lower()
     await state.clear()
     choices = _model_choices_for_subscription_plan(plan_id)
     if len(choices) < 2:
@@ -553,19 +695,17 @@ async def _show_subscriber_model_pick(
             model=m[1],
             cost=m[2],
             replace_message=message,
+            model_style_hint=m[3],
         )
         return
-    await state.update_data(_model_pick_plan=(plan_id or "").strip().lower())
+    await state.update_data(_model_pick_plan=("__admin__" if is_admin else (plan_id or "").strip().lower()))
     await state.set_state(ImageGenState.choosing_model)
     chat_id = message.chat.id
     await delete_nav_source_message(message)
+    cap = _model_pick_caption_html(for_admin=is_admin, choices=choices)
     await message.bot.send_message(
         chat_id,
-        (
-            "<b>Выбор модели ИИ</b>\n"
-            "<blockquote><i>Тариф в профиле определяет доступные модели. "
-            "Выбери вариант — затем опиши картинку текстом.</i></blockquote>"
-        ),
+        cap,
         reply_markup=_subscriber_model_pick_keyboard(choices),
         parse_mode=HTML,
     )
@@ -614,23 +754,27 @@ async def subscriber_picked_model(callback: CallbackQuery, state: FSMContext) ->
         await callback.answer("Некорректный выбор.", show_alert=True)
         return
     idx = int(raw)
-    profile = await get_user_admin_profile(callback.from_user.id)
-    if not profile or not subscription_is_active(profile.subscription_ends_at):
-        await callback.answer("Подписка не активна. Доступна базовая модель.", show_alert=True)
-        await _start_image_flow(
-            callback.message,
-            state,
-            callback.from_user.id,
-            callback.from_user.username,
-            replace_menu=True,
-        )
-        return
-    plan_id = (profile.subscription_plan or "").strip().lower()
+    uid = callback.from_user.id
+    if uid in ADMIN_IDS:
+        plan_id = "universe"
+    else:
+        profile = await get_user_admin_profile(uid)
+        if not profile or not subscription_is_active(profile.subscription_ends_at):
+            await callback.answer("Подписка не активна. Доступна базовая модель.", show_alert=True)
+            await _start_image_flow(
+                callback.message,
+                state,
+                uid,
+                callback.from_user.username,
+                replace_menu=True,
+            )
+            return
+        plan_id = (profile.subscription_plan or "").strip().lower()
     models = _model_choices_for_subscription_plan(plan_id)
     if idx < 0 or idx >= len(models):
         await callback.answer("Нет такой модели.", show_alert=True)
         return
-    _label, model_id, cost = models[idx]
+    _label, model_id, cost, hint = models[idx]
     await callback.answer()
     await _send_waiting_prompt_step(
         callback.bot,
@@ -639,6 +783,7 @@ async def subscriber_picked_model(callback: CallbackQuery, state: FSMContext) ->
         model=model_id,
         cost=cost,
         replace_message=callback.message,
+        model_style_hint=hint,
     )
 
 
@@ -649,7 +794,13 @@ async def remind_pick_model_or_ignore(message: Message, state: FSMContext) -> No
         return
     uid = message.from_user.id
     if uid in ADMIN_IDS:
-        await message.answer("Сначала выбери модель кнопками в сообщении выше 👆")
+        choices = _model_choices_for_subscription_plan("universe")
+        cap = _model_pick_caption_html(for_admin=True, choices=choices)
+        await message.answer(
+            cap,
+            reply_markup=_subscriber_model_pick_keyboard(choices),
+            parse_mode=HTML,
+        )
         return
     profile = await get_user_admin_profile(uid)
     if not profile or not subscription_is_active(profile.subscription_ends_at):
@@ -663,9 +814,11 @@ async def remind_pick_model_or_ignore(message: Message, state: FSMContext) -> No
     plan_id = (profile.subscription_plan or "").strip().lower()
     await state.update_data(_model_pick_plan=plan_id)
     choices = _model_choices_for_subscription_plan(plan_id)
+    cap = _model_pick_caption_html(for_admin=False, choices=choices)
     await message.answer(
-        "Сначала выбери модель кнопками в сообщении выше 👆",
+        cap,
         reply_markup=_subscriber_model_pick_keyboard(choices),
+        parse_mode=HTML,
     )
 
 
@@ -688,12 +841,12 @@ async def back_to_image_flow(callback: CallbackQuery, state: FSMContext) -> None
     await callback.answer()
     uid = callback.from_user.id
     if uid in ADMIN_IDS:
-        await _start_image_flow(callback.message, state, uid, callback.from_user.username, replace_menu=True)
+        await _show_image_model_pick(callback.message, state, uid, callback.from_user.username)
         return
     await ensure_user(uid, callback.from_user.username)
     profile = await get_user_admin_profile(uid)
     if profile and subscription_is_active(profile.subscription_ends_at):
-        await _show_subscriber_model_pick(callback.message, state, uid, callback.from_user.username)
+        await _show_image_model_pick(callback.message, state, uid, callback.from_user.username)
     else:
         await _start_image_flow(callback.message, state, uid, callback.from_user.username, replace_menu=True)
 
@@ -796,7 +949,7 @@ async def apply_ready_idea(callback: CallbackQuery, state: FSMContext) -> None:
         prompt=prompt,
         model=OPENROUTER_IMAGE_MODEL,
         cost=OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS,
-        usage_kind="self",
+        usage_kind="ready",
         use_image_cache=True,
         override_cost=OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS,
     )
@@ -809,21 +962,18 @@ async def open_image_menu(callback: CallbackQuery, state: FSMContext) -> None:
         return
     await callback.answer()
     uid = callback.from_user.id
-    if uid in ADMIN_IDS:
-        await _start_image_flow(callback.message, state, uid, callback.from_user.username, replace_menu=True)
-        return
     await ensure_user(uid, callback.from_user.username)
     profile = await get_user_admin_profile(uid)
     has_sub = bool(profile and subscription_is_active(profile.subscription_ends_at))
-    if not has_sub:
-        await _start_image_flow(callback.message, state, uid, callback.from_user.username, replace_menu=True)
-    else:
-        await _show_subscriber_model_pick(
+    if uid in ADMIN_IDS or has_sub:
+        await _show_image_model_pick(
             callback.message,
             state,
             uid,
             callback.from_user.username,
         )
+    else:
+        await _start_image_flow(callback.message, state, uid, callback.from_user.username, replace_menu=True)
 
 
 @router.message(ImageGenState.waiting_prompt, ~F.text)
@@ -852,6 +1002,9 @@ async def create_image_from_prompt(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     model = str(data.get("selected_model") or OPENROUTER_IMAGE_MODEL)
     cost = int(data.get("selected_cost") or OPENROUTER_IMAGE_COST_CREDITS)
+    uk = str(data.get("selected_usage_kind") or "self")
+    if uk not in ("ready", "self"):
+        uk = "self"
     await _execute_text_generation(
         message,
         state,
@@ -860,7 +1013,7 @@ async def create_image_from_prompt(message: Message, state: FSMContext) -> None:
         prompt=prompt,
         model=model,
         cost=cost,
-        usage_kind="self",
+        usage_kind=uk,
     )
 
 
@@ -901,7 +1054,14 @@ async def regenerate_new_prompt(callback: CallbackQuery, state: FSMContext) -> N
         await callback.answer("Создай картинку через меню.", show_alert=True)
         return
     await callback.answer()
-    await state.update_data(selected_model=ctx.model, selected_cost=ctx.cost)
+    uk = str(ctx.usage_kind or "self")
+    if uk not in ("ready", "self"):
+        uk = "self"
+    await state.update_data(
+        selected_model=ctx.model,
+        selected_cost=ctx.cost,
+        selected_usage_kind=uk,
+    )
     await state.set_state(ImageGenState.waiting_prompt)
     await callback.message.answer(
         f"{_WAITING_PROMPT_HTML}\n\n"

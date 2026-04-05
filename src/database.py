@@ -5,6 +5,7 @@ import math
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import aiosqlite
 
@@ -12,9 +13,13 @@ from src.config import DB_PATH, START_CREDITS
 from src.subscription_catalog import (
     NONSUB_IMAGE_WINDOW_DAYS,
     NONSUB_IMAGE_WINDOW_MAX,
+    NONSUB_READY_IDEA_WINDOW_MAX,
     PLANS,
     SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS,
+    UNLIMITED_DAILY_IMAGE_GENERATIONS,
     daily_image_generation_limit,
+    free_daily_generation_limit,
+    ready_idea_daily_cap_for_plan,
 )
 
 
@@ -42,6 +47,9 @@ class UserAdminProfile:
     subscription_ends_at: str | None
     subscription_plan: str | None
     subscription_last_purchase_at: str | None = None
+    # Пробный Starter: 1 раз за всё время (оплата через бота).
+    starter_trial_used: bool = False
+    idea_tokens: int = 0
 
 
 @dataclass
@@ -62,7 +70,9 @@ class ImageChargeMeta:
 
     credit_charged: bool = False
     nonsub_quota_reserved: bool = False
+    nonsub_ready_reserved: bool = False
     daily_reserved: bool = False
+    idea_token_consumed: bool = False
 
 
 @dataclass
@@ -75,6 +85,7 @@ class LastImageContext:
     cost: int
     model_name: str
     photo_file_id: str | None
+    usage_kind: str = "self"
 
 
 async def _migrate_schema(db: aiosqlite.Connection) -> None:
@@ -125,6 +136,57 @@ async def _migrate_subscription_last_purchase(db: aiosqlite.Connection) -> None:
         cols = {row[1] for row in await cur.fetchall()}
     if "subscription_last_purchase_at" not in cols:
         await db.execute("ALTER TABLE users ADD COLUMN subscription_last_purchase_at TEXT")
+
+
+async def _migrate_starter_trial_used(db: aiosqlite.Connection) -> None:
+    async with db.execute("PRAGMA table_info(users)") as cur:
+        cols = {row[1] for row in await cur.fetchall()}
+    if "starter_trial_used" not in cols:
+        await db.execute(
+            "ALTER TABLE users ADD COLUMN starter_trial_used INTEGER NOT NULL DEFAULT 0"
+        )
+
+
+async def _migrate_idea_tokens_and_ready_window(db: aiosqlite.Connection) -> None:
+    async with db.execute("PRAGMA table_info(users)") as cur:
+        cols = {row[1] for row in await cur.fetchall()}
+    if "idea_tokens" not in cols:
+        await db.execute("ALTER TABLE users ADD COLUMN idea_tokens INTEGER NOT NULL DEFAULT 0")
+    if "ready_idea_window_start" not in cols:
+        await db.execute("ALTER TABLE users ADD COLUMN ready_idea_window_start TEXT")
+    if "ready_idea_window_count" not in cols:
+        await db.execute(
+            "ALTER TABLE users ADD COLUMN ready_idea_window_count INTEGER NOT NULL DEFAULT 0"
+        )
+
+
+async def _migrate_last_image_context_usage_kind(db: aiosqlite.Connection) -> None:
+    async with db.execute("PRAGMA table_info(user_last_image_context)") as cur:
+        cols = {row[1] for row in await cur.fetchall()}
+    if "usage_kind" not in cols:
+        await db.execute(
+            "ALTER TABLE user_last_image_context ADD COLUMN usage_kind TEXT NOT NULL DEFAULT 'self'"
+        )
+
+
+async def _migrate_nonsub_quota_exhaustion_semantics(db: aiosqlite.Connection) -> None:
+    """Очистить метку исчерпания, если счётчик не на максимуме (после смены логики окон)."""
+    await db.execute(
+        """
+        UPDATE users
+        SET free_image_window_start = NULL
+        WHERE free_image_window_count < ?
+        """,
+        (NONSUB_IMAGE_WINDOW_MAX,),
+    )
+    await db.execute(
+        """
+        UPDATE users
+        SET ready_idea_window_start = NULL
+        WHERE ready_idea_window_count < ?
+        """,
+        (NONSUB_READY_IDEA_WINDOW_MAX,),
+    )
 
 
 async def init_db() -> None:
@@ -263,6 +325,10 @@ async def init_db() -> None:
         await _migrate_subscription_plan(db)
         await _migrate_free_image_window(db)
         await _migrate_subscription_last_purchase(db)
+        await _migrate_starter_trial_used(db)
+        await _migrate_idea_tokens_and_ready_window(db)
+        await _migrate_last_image_context_usage_kind(db)
+        await _migrate_nonsub_quota_exhaustion_semantics(db)
         await db.commit()
 
 
@@ -288,23 +354,27 @@ async def save_last_image_context(
     cost: int,
     model_name: str,
     photo_file_id: str | None,
+    *,
+    usage_kind: str = "self",
 ) -> None:
+    uk = "ready" if usage_kind == "ready" else "self"
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """
             INSERT INTO user_last_image_context (
-                user_id, kind, prompt, model, cost, model_name, photo_file_id
+                user_id, kind, prompt, model, cost, model_name, photo_file_id, usage_kind
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 kind=excluded.kind,
                 prompt=excluded.prompt,
                 model=excluded.model,
                 cost=excluded.cost,
                 model_name=excluded.model_name,
-                photo_file_id=excluded.photo_file_id
+                photo_file_id=excluded.photo_file_id,
+                usage_kind=excluded.usage_kind
             """,
-            (user_id, kind, prompt, model, cost, model_name, photo_file_id),
+            (user_id, kind, prompt, model, cost, model_name, photo_file_id, uk),
         )
         await db.commit()
 
@@ -313,7 +383,7 @@ async def get_last_image_context(user_id: int) -> LastImageContext | None:
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             """
-            SELECT kind, prompt, model, cost, model_name, photo_file_id
+            SELECT kind, prompt, model, cost, model_name, photo_file_id, usage_kind
             FROM user_last_image_context
             WHERE user_id = ?
             """,
@@ -322,6 +392,9 @@ async def get_last_image_context(user_id: int) -> LastImageContext | None:
             row = await cur.fetchone()
     if not row:
         return None
+    uk = str(row[6] or "self") if len(row) > 6 else "self"
+    if uk not in ("ready", "self"):
+        uk = "self"
     return LastImageContext(
         kind=str(row[0]),
         prompt=str(row[1]),
@@ -329,6 +402,7 @@ async def get_last_image_context(user_id: int) -> LastImageContext | None:
         cost=int(row[3]),
         model_name=str(row[4]),
         photo_file_id=str(row[5]) if row[5] else None,
+        usage_kind=uk,
     )
 
 
@@ -429,7 +503,7 @@ async def take_credits(user_id: int, amount: int) -> bool:
 
 
 async def apply_referral(invitee_user_id: int, inviter_user_id: int) -> bool:
-    """Apply referral once. Inviter gets +10 credits, invitee gets +5 credits."""
+    """Apply referral once. Inviter +15 credits (+1 idea token each 2 invitees), invitee +5 credits."""
     if invitee_user_id == inviter_user_id:
         logging.info("referral: skip self-ref invitee=%s", invitee_user_id)
         return False
@@ -466,13 +540,24 @@ async def apply_referral(invitee_user_id: int, inviter_user_id: int) -> bool:
                 (invitee_user_id, inviter_user_id),
             )
             await db.execute(
-                "UPDATE users SET credits = credits + 10 WHERE user_id = ?",
+                "UPDATE users SET credits = credits + 15 WHERE user_id = ?",
                 (inviter_user_id,),
             )
             await db.execute(
                 "UPDATE users SET credits = credits + 5 WHERE user_id = ?",
                 (invitee_user_id,),
             )
+            async with db.execute(
+                "SELECT COUNT(*) FROM user_referrals WHERE inviter_user_id = ?",
+                (inviter_user_id,),
+            ) as cur2:
+                cnt_row = await cur2.fetchone()
+            n_inv = int(cnt_row[0]) if cnt_row else 0
+            if n_inv > 0 and n_inv % 2 == 0:
+                await db.execute(
+                    "UPDATE users SET idea_tokens = idea_tokens + 1 WHERE user_id = ?",
+                    (inviter_user_id,),
+                )
             await db.commit()
             return True
         except sqlite3.IntegrityError:
@@ -719,18 +804,19 @@ def _month_utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m")
 
 
-def _day_utc_now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+# Дневные лимиты (генерации, счётчик сообщений): календарная дата по Москве.
+# В user_daily_image_usage колонка исторически day_utc — хранится YYYY-MM-DD по МСК (Europe/Moscow).
+def _day_msk_now() -> str:
+    return datetime.now(ZoneInfo("Europe/Moscow")).date().isoformat()
 
 
-def _needs_free_image_window_reset(start_s: str | None, now: datetime) -> bool:
-    if not start_s:
-        return True
+def _nonsub_exhaustion_cooldown_passed(exhausted_at_iso: str, now: datetime) -> bool:
+    """Прошло ≥ NONSUB_IMAGE_WINDOW_DAYS с момента исчерпания квоты (UTC)."""
     try:
-        t = _parse_dt_utc(start_s)
-        return now >= t + timedelta(days=NONSUB_IMAGE_WINDOW_DAYS)
+        t = _parse_dt_utc(exhausted_at_iso)
     except ValueError:
         return True
+    return now >= t + timedelta(days=NONSUB_IMAGE_WINDOW_DAYS)
 
 
 def daily_image_generation_limit_for_user(
@@ -743,7 +829,7 @@ def daily_image_generation_limit_for_user(
 
 
 async def try_reserve_nonsub_image_quota_slot(user_id: int) -> bool:
-    """Атомарно занять одну из квот генераций без подписки (окно NONSUB_IMAGE_WINDOW_DAYS)."""
+    """Без подписки: слот из лимита NONSUB_IMAGE_WINDOW_MAX; сброс через NONSUB_IMAGE_WINDOW_DAYS после исчерпания."""
     now = datetime.now(timezone.utc)
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("BEGIN IMMEDIATE")
@@ -761,29 +847,46 @@ async def try_reserve_nonsub_image_quota_slot(user_id: int) -> bool:
             return False
         start_s, count_raw = row[0], row[1]
         count = int(count_raw or 0)
-        start_str = str(start_s) if start_s else None
-        if _needs_free_image_window_reset(start_str, now):
-            start_iso = now.isoformat()
-            count = 0
+        start_str = str(start_s).strip() if start_s else None
+
+        if count < NONSUB_IMAGE_WINDOW_MAX and start_str:
+            await db.execute(
+                "UPDATE users SET free_image_window_start = NULL WHERE user_id = ?",
+                (user_id,),
+            )
+            start_str = None
+
+        if count >= NONSUB_IMAGE_WINDOW_MAX:
+            if not start_str:
+                await db.execute(
+                    "UPDATE users SET free_image_window_start = ? WHERE user_id = ?",
+                    (now.isoformat(), user_id),
+                )
+                await db.commit()
+                return False
+            if not _nonsub_exhaustion_cooldown_passed(start_str, now):
+                await db.rollback()
+                return False
             await db.execute(
                 """
                 UPDATE users
-                SET free_image_window_start = ?, free_image_window_count = 0
+                SET free_image_window_count = 0, free_image_window_start = NULL
                 WHERE user_id = ?
                 """,
-                (start_iso, user_id),
+                (user_id,),
             )
-            start_str = start_iso
-        if count >= NONSUB_IMAGE_WINDOW_MAX:
-            await db.rollback()
-            return False
+            count = 0
+            start_str = None
+
+        new_count = count + 1
+        new_start = now.isoformat() if new_count >= NONSUB_IMAGE_WINDOW_MAX else None
         await db.execute(
             """
             UPDATE users
             SET free_image_window_count = ?, free_image_window_start = ?
             WHERE user_id = ?
             """,
-            (count + 1, start_str, user_id),
+            (new_count, new_start, user_id),
         )
         await db.commit()
     return True
@@ -811,14 +914,165 @@ async def release_nonsub_image_quota_slot(user_id: int) -> None:
             return
         new_c = count - 1
         await db.execute(
-            "UPDATE users SET free_image_window_count = ? WHERE user_id = ?",
+            """
+            UPDATE users
+            SET free_image_window_count = ?, free_image_window_start = NULL
+            WHERE user_id = ?
+            """,
             (new_c, user_id),
         )
         await db.commit()
 
 
+async def add_idea_tokens(user_id: int, amount: int) -> bool:
+    if amount <= 0:
+        return False
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            """
+            UPDATE users SET idea_tokens = idea_tokens + ? WHERE user_id = ?
+            """,
+            (amount, user_id),
+        )
+        await db.commit()
+        return cur.rowcount > 0
+
+
+async def try_consume_idea_token(user_id: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            """
+            UPDATE users SET idea_tokens = idea_tokens - 1
+            WHERE user_id = ? AND idea_tokens >= 1
+            """,
+            (user_id,),
+        )
+        await db.commit()
+        return cur.rowcount > 0
+
+
+async def try_reserve_nonsub_ready_idea_slot(user_id: int) -> bool:
+    """Без подписки: 1 «готовая идея» за цикл; сброс через NONSUB_IMAGE_WINDOW_DAYS после исчерпания."""
+    now = datetime.now(timezone.utc)
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("BEGIN IMMEDIATE")
+        async with db.execute(
+            """
+            SELECT ready_idea_window_start, ready_idea_window_count
+            FROM users
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+        if not row:
+            await db.rollback()
+            return False
+        start_s, count_raw = row[0], row[1]
+        count = int(count_raw or 0)
+        start_str = str(start_s).strip() if start_s else None
+
+        if count < NONSUB_READY_IDEA_WINDOW_MAX and start_str:
+            await db.execute(
+                "UPDATE users SET ready_idea_window_start = NULL WHERE user_id = ?",
+                (user_id,),
+            )
+            start_str = None
+
+        if count >= NONSUB_READY_IDEA_WINDOW_MAX:
+            if not start_str:
+                await db.execute(
+                    "UPDATE users SET ready_idea_window_start = ? WHERE user_id = ?",
+                    (now.isoformat(), user_id),
+                )
+                await db.commit()
+                return False
+            if not _nonsub_exhaustion_cooldown_passed(start_str, now):
+                await db.rollback()
+                return False
+            await db.execute(
+                """
+                UPDATE users
+                SET ready_idea_window_count = 0, ready_idea_window_start = NULL
+                WHERE user_id = ?
+                """,
+                (user_id,),
+            )
+            count = 0
+            start_str = None
+
+        new_count = count + 1
+        new_start = now.isoformat() if new_count >= NONSUB_READY_IDEA_WINDOW_MAX else None
+        await db.execute(
+            """
+            UPDATE users
+            SET ready_idea_window_count = ?, ready_idea_window_start = ?
+            WHERE user_id = ?
+            """,
+            (new_count, new_start, user_id),
+        )
+        await db.commit()
+    return True
+
+
+async def release_nonsub_ready_idea_slot(user_id: int) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("BEGIN IMMEDIATE")
+        async with db.execute(
+            "SELECT ready_idea_window_count FROM users WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+        if not row:
+            await db.rollback()
+            return
+        count = int(row[0] or 0)
+        if count <= 0:
+            await db.rollback()
+            return
+        new_c = count - 1
+        await db.execute(
+            """
+            UPDATE users
+            SET ready_idea_window_count = ?, ready_idea_window_start = NULL
+            WHERE user_id = ?
+            """,
+            (new_c, user_id),
+        )
+        await db.commit()
+
+
+async def get_nonsub_ready_quota_status(user_id: int) -> tuple[int, int] | None:
+    """Без подписки: (использовано в цикле, лимит). None если подписка активна."""
+    now = datetime.now(timezone.utc)
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT subscription_ends_at, ready_idea_window_start, ready_idea_window_count
+            FROM users
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return (0, NONSUB_READY_IDEA_WINDOW_MAX)
+    if subscription_is_active(str(row[0]) if row[0] else None):
+        return None
+    start_s, count_raw = row[1], row[2]
+    count = int(count_raw or 0)
+    start_str = str(start_s).strip() if start_s else None
+    if count < NONSUB_READY_IDEA_WINDOW_MAX and start_str:
+        return (count, NONSUB_READY_IDEA_WINDOW_MAX)
+    if count >= NONSUB_READY_IDEA_WINDOW_MAX and start_str and _nonsub_exhaustion_cooldown_passed(
+        start_str, now
+    ):
+        return (0, NONSUB_READY_IDEA_WINDOW_MAX)
+    return (count, NONSUB_READY_IDEA_WINDOW_MAX)
+
+
 async def get_nonsub_image_quota_status(user_id: int) -> tuple[int, int] | None:
-    """Для UI без подписки: (использовано, лимит) в текущем окне; None если подписка активна."""
+    """Для UI без подписки: (использовано, лимит); None если подписка активна."""
     now = datetime.now(timezone.utc)
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -836,7 +1090,12 @@ async def get_nonsub_image_quota_status(user_id: int) -> tuple[int, int] | None:
         return None
     start_s, count_raw = row[1], row[2]
     count = int(count_raw or 0)
-    if _needs_free_image_window_reset(str(start_s) if start_s else None, now):
+    start_str = str(start_s).strip() if start_s else None
+    if count < NONSUB_IMAGE_WINDOW_MAX and start_str:
+        return (count, NONSUB_IMAGE_WINDOW_MAX)
+    if count >= NONSUB_IMAGE_WINDOW_MAX and start_str and _nonsub_exhaustion_cooldown_passed(
+        start_str, now
+    ):
         return (0, NONSUB_IMAGE_WINDOW_MAX)
     return (count, NONSUB_IMAGE_WINDOW_MAX)
 
@@ -851,7 +1110,7 @@ async def get_daily_image_generation_usage(user_id: int, usage_kind: str) -> tup
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             """
-            SELECT subscription_ends_at
+            SELECT subscription_ends_at, subscription_plan
             FROM users
             WHERE user_id = ?
             """,
@@ -859,12 +1118,38 @@ async def get_daily_image_generation_usage(user_id: int, usage_kind: str) -> tup
         ) as cur:
             row = await cur.fetchone()
     if not row:
-        return 0, daily_image_generation_limit(False, kind)
-    limit = daily_image_generation_limit_for_user(
-        str(row[0]) if row[0] else None,
-        kind,
-    )
-    day = _day_utc_now()
+        if kind == "ready":
+            return 0, NONSUB_READY_IDEA_WINDOW_MAX
+        return 0, free_daily_generation_limit(kind)
+    ends = str(row[0]) if row[0] else None
+    plan = str(row[1]) if row[1] else None
+    active = subscription_is_active(ends)
+
+    if kind == "ready" and not active:
+        st = await get_nonsub_ready_quota_status(user_id)
+        if st is None:
+            return 0, NONSUB_READY_IDEA_WINDOW_MAX
+        return int(st[0]), int(st[1])
+
+    if kind == "ready" and active:
+        cap = ready_idea_daily_cap_for_plan(plan)
+        if cap is None:
+            return 0, UNLIMITED_DAILY_IMAGE_GENERATIONS
+        day = _day_msk_now()
+        async with aiosqlite.connect(DB_PATH) as db:
+            async with db.execute(
+                """
+                SELECT count FROM user_daily_image_usage
+                WHERE user_id = ? AND day_utc = ? AND usage_kind = 'ready'
+                """,
+                (user_id, day),
+            ) as cur:
+                urow = await cur.fetchone()
+        used = int(urow[0]) if urow else 0
+        return used, cap
+
+    limit = daily_image_generation_limit_for_user(ends, kind)
+    day = _day_msk_now()
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             """
@@ -889,7 +1174,7 @@ async def try_reserve_daily_image_generation(user_id: int, usage_kind: str) -> b
         await db.execute("BEGIN IMMEDIATE")
         async with db.execute(
             """
-            SELECT subscription_ends_at
+            SELECT subscription_ends_at, subscription_plan
             FROM users
             WHERE user_id = ?
             """,
@@ -899,11 +1184,23 @@ async def try_reserve_daily_image_generation(user_id: int, usage_kind: str) -> b
         if not row:
             await db.rollback()
             return False
-        limit = daily_image_generation_limit_for_user(
-            str(row[0]) if row[0] else None,
-            kind,
-        )
-        day = _day_utc_now()
+        ends = str(row[0]) if row[0] else None
+        plan = str(row[1]) if row[1] else None
+        active = subscription_is_active(ends)
+
+        if kind == "ready":
+            if not active:
+                await db.rollback()
+                return False
+            cap = ready_idea_daily_cap_for_plan(plan)
+            if cap is None:
+                await db.commit()
+                return True
+            limit = cap
+        else:
+            limit = daily_image_generation_limit_for_user(ends, kind)
+
+        day = _day_msk_now()
         async with db.execute(
             """
             SELECT count FROM user_daily_image_usage
@@ -944,7 +1241,7 @@ async def release_monthly_image_generation(user_id: int) -> None:
 
 async def release_daily_image_generation(user_id: int, usage_kind: str) -> None:
     kind = "ready" if usage_kind == "ready" else "self"
-    day = _day_utc_now()
+    day = _day_msk_now()
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("BEGIN IMMEDIATE")
         async with db.execute(
@@ -1288,7 +1585,7 @@ async def get_user_admin_profile(user_id: int) -> UserAdminProfile | None:
         async with db.execute(
             """
             SELECT user_id, username, credits, created_at, subscription_ends_at, subscription_plan,
-                   subscription_last_purchase_at
+                   subscription_last_purchase_at, starter_trial_used, idea_tokens
             FROM users
             WHERE user_id = ?
             """,
@@ -1297,6 +1594,9 @@ async def get_user_admin_profile(user_id: int) -> UserAdminProfile | None:
             row = await cur.fetchone()
     if not row:
         return None
+    stu = row[7]
+    starter_used = bool(int(stu)) if stu is not None else False
+    idea_tok = int(row[8] or 0) if len(row) > 8 else 0
     return UserAdminProfile(
         user_id=int(row[0]),
         username=row[1],
@@ -1305,11 +1605,38 @@ async def get_user_admin_profile(user_id: int) -> UserAdminProfile | None:
         subscription_ends_at=row[4] if row[4] else None,
         subscription_plan=row[5] if row[5] else None,
         subscription_last_purchase_at=row[6] if row[6] else None,
+        starter_trial_used=starter_used,
+        idea_tokens=idea_tok,
     )
 
 
+async def subscription_can_purchase_plan(user_id: int, plan_id: str) -> tuple[bool, str | None]:
+    """Перед оплатой тарифа: активная подписка; Starter — один раз; остальные — кулдаун между покупками."""
+    if plan_id not in PLANS:
+        return False, "Неизвестный тариф."
+    profile = await get_user_admin_profile(user_id)
+    if not profile:
+        return True, None
+    if subscription_is_active(profile.subscription_ends_at):
+        return False, "Подписка уже активна. Продлить можно после окончания срока."
+    if plan_id == "starter":
+        if profile.starter_trial_used:
+            return False, (
+                "Вы уже оформляли пробную подписку Starter — купить её снова нельзя. "
+                "Выбери полный тариф: Nova, SuperNova, Galaxy или Universe."
+            )
+        return True, None
+    rem = subscription_cooldown_days_remaining(profile.subscription_last_purchase_at)
+    if rem > 0:
+        return False, (
+            f"Повторную подписку можно оформить через {rem} дн. "
+            f"(не чаще одного раза в {SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS} дней)."
+        )
+    return True, None
+
+
 async def subscription_can_purchase_new_plan(user_id: int) -> tuple[bool, str | None]:
-    """Перед оплатой тарифа: активная подписка или анти-абуз по интервалу между покупками."""
+    """Совместимость: проверка без выбора тарифа (кулдаун как у полного тарифа, без логики Starter)."""
     profile = await get_user_admin_profile(user_id)
     if not profile:
         return True, None
@@ -1331,6 +1658,16 @@ async def record_subscription_purchase_now(user_id: int) -> None:
         await db.execute(
             "UPDATE users SET subscription_last_purchase_at = ? WHERE user_id = ?",
             (iso, user_id),
+        )
+        await db.commit()
+
+
+async def mark_starter_trial_purchased(user_id: int) -> None:
+    """После успешной оплаты Starter — больше нельзя купить пробный тариф."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET starter_trial_used = 1 WHERE user_id = ?",
+            (user_id,),
         )
         await db.commit()
 
@@ -1553,7 +1890,7 @@ async def list_open_tickets_sla_rows() -> list[SupportTicketDetail]:
 
 
 async def increment_daily_user_messages(user_id: int) -> int:
-    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    day = _day_msk_now()
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """
@@ -1574,7 +1911,7 @@ async def increment_daily_user_messages(user_id: int) -> int:
 
 
 async def get_daily_user_messages(user_id: int) -> int:
-    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    day = _day_msk_now()
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             "SELECT msg_count FROM user_daily_usage WHERE user_id = ? AND day_utc = ?",
