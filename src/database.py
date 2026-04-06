@@ -503,7 +503,7 @@ async def take_credits(user_id: int, amount: int) -> bool:
 
 
 async def apply_referral(invitee_user_id: int, inviter_user_id: int) -> bool:
-    """Apply referral once. Inviter +15 credits (+1 idea token each 2 invitees), invitee +5 credits."""
+    """Apply referral once. Inviter +15 credits (+1 bonus ready-use each 2 invitees), invitee +5 credits."""
     if invitee_user_id == inviter_user_id:
         logging.info("referral: skip self-ref invitee=%s", invitee_user_id)
         return False

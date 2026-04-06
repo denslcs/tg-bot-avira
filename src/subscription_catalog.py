@@ -10,7 +10,7 @@ NONSUB_IMAGE_WINDOW_DAYS суток от момента исчерпания (UT
 round(usd / 2.99 * 225).
 
 Ориентир по кредитам (зависит от OPENROUTER_*_COST_CREDITS и модели в панели):
-Starter 100 (3 дня, как Universe по лимитам и моделям, без токенов при покупке), Nova 500, Supernova 1100, Galaxy 2400, Universe 5000.
+Starter 100 (3 дня, как Universe по моделям), Nova 500, Supernova 1100, Galaxy 2400, Universe 5000.
 Матрица моделей по тарифам: см. _model_choices_for_subscription_plan в img_commands.
 """
 
@@ -25,19 +25,9 @@ NONSUB_IMAGE_WINDOW_MAX: int = 3
 # Без подписки: «готовые идеи» — 1 слот за цикл; сброс через те же сутки после исчерпания.
 NONSUB_READY_IDEA_WINDOW_MAX: int = 1
 
-# Дневной лимит «готовых идей» по тарифу (календарные сутки МСК, см. database._day_msk_now). None = без лимита.
-# Токены не списываются, пока есть место в дневном лимите; после исчерпания — 1 токен за генерацию.
+# Для подписчиков «готовые идеи» без лимита.
 def ready_idea_daily_cap_for_plan(plan_id: str | None) -> int | None:
-    p = (plan_id or "").strip().lower()
-    if p in ("starter", "universe"):
-        return None
-    if p == "nova":
-        return 8
-    if p == "supernova":
-        return 11
-    if p == "galaxy":
-        return 13
-    return 11
+    return None
 
 # Для подписчиков «безлимит» в счётчике суток (внутренний резерв в БД).
 UNLIMITED_DAILY_IMAGE_GENERATIONS: int = 1_000_000_000
@@ -63,7 +53,7 @@ class SubscriptionPlan:
     bonus_credits: int
     # Срок доступа в днях (полные тарифы — 30; пробный Starter — 3).
     period_days: int = 30
-    # Токены «готовых идей» при покупке подписки (если > 0).
+    # Legacy-поле (обратная совместимость).
     idea_tokens_on_purchase: int = 0
 
 
@@ -75,7 +65,7 @@ class BonusPack:
     price_rub: int
     price_usd: float
     stars: int
-    # Токены генераций «готовых идей» (после исчерпания дневного лимита по подписке / вне лимитов).
+    # Legacy-поле (обратная совместимость).
     idea_tokens: int = 0
 
 
@@ -143,7 +133,6 @@ BONUS_PACKS: dict[str, BonusPack] = {
         price_rub=299,
         price_usd=3.73,
         stars=281,
-        idea_tokens=5,
     ),
     "pack500": BonusPack(
         id="pack500",
@@ -152,7 +141,6 @@ BONUS_PACKS: dict[str, BonusPack] = {
         price_rub=499,
         price_usd=6.22,
         stars=468,
-        idea_tokens=7,
     ),
     "pack1000": BonusPack(
         id="pack1000",
@@ -161,7 +149,6 @@ BONUS_PACKS: dict[str, BonusPack] = {
         price_rub=999,
         price_usd=12.45,
         stars=936,
-        idea_tokens=12,
     ),
 }
 

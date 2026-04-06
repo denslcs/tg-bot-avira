@@ -5,6 +5,7 @@ from __future__ import annotations
 """
 
 import logging
+from io import BytesIO
 
 from aiogram import F, Router
 from aiogram.filters import Command
@@ -58,14 +59,17 @@ from src.database import (
 from src.formatting import HTML, esc
 from src.handlers.commands import delete_nav_source_message, restore_main_menu_message
 from src.keyboards.callback_data import (
-    CB_APPLY_READY_PREFIX,
     CB_BACK_IMAGE_MODELS,
     CB_CREATE_IMAGE,
     CB_IMG_CANCEL,
     CB_IMG_MODEL_SEL_PREFIX,
     CB_IMG_OK,
     CB_MENU_BACK_START,
+    CB_READY_CAT_PREFIX,
+    CB_READY_CONFIRM,
     CB_READY_IDEAS,
+    CB_READY_NAV_PREFIX,
+    CB_READY_PHOTO_BACK,
     CB_REGEN,
 )
 from src.keyboards.styles import BTN_DANGER, BTN_PRIMARY, BTN_SUCCESS
@@ -73,6 +77,7 @@ from src.openrouter_image import (
     OpenRouterApiError,
     format_openrouter_image_user_error,
     is_openrouter_image_configured,
+    openrouter_text_and_refs_to_image_bytes,
     openrouter_text_to_image_bytes,
 )
 from src.polza_image import (
@@ -85,14 +90,94 @@ from src.polza_image import (
 from src.subscription_catalog import (
     NONSUB_IMAGE_WINDOW_DAYS,
     NONSUB_IMAGE_WINDOW_MAX,
-    UNLIMITED_DAILY_IMAGE_GENERATIONS,
 )
 
 router = Router(name="img_commands")
 
-# Готовые промпты: (текст на кнопке, полный текст для генерации). Пока пусто — дополни сам.
-# Пример: ("🥤 Коллаж напитков", "coca cola and pepsi bottles, studio photo...")
-READY_IDEAS: list[tuple[str, str]] = []
+READY_IDEA_CATEGORIES: list[tuple[str, str]] = [
+    ("trends", "🔥 Тренды"),
+    ("outfits", "👕 Одежда"),
+    ("locations", "🏝 Локации"),
+    ("texts", "📝 Тексты"),
+    ("movies", "🎬 Фильмы"),
+    ("games", "🎮 Игры"),
+    ("colors", "🎨 Цвета"),
+    ("add_photo", "📥 Добавить фото"),
+]
+
+# title, preview, prompt, photos_required
+READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
+    "trends": [
+        (
+            "Неон-стрит",
+            "Городской вечер, мокрый асфальт, яркий неон и киношный свет.",
+            "Create a cinematic urban portrait with wet asphalt reflections, neon signs, and dynamic bokeh. Keep subject identity natural and realistic.",
+            1,
+        ),
+        (
+            "Luxury minimal",
+            "Чистый luxury-кадр с мягким контрастом и дорогой фактурой.",
+            "Create a premium fashion portrait in luxury minimal style: clean composition, soft high-end lighting, natural skin texture, elegant color grading.",
+            1,
+        ),
+    ],
+    "outfits": [
+        (
+            "Smart casual look",
+            "Собрать аккуратный smart casual образ и сохранить естественность лица.",
+            "Generate a smart casual fashion portrait. Keep facial identity, realistic body proportions, and clean editorial framing.",
+            1,
+        ),
+    ],
+    "locations": [
+        (
+            "Европейская улица",
+            "Перенос в атмосферную европейскую локацию с естественным освещением.",
+            "Place the subject in a picturesque European street scene at golden hour with realistic shadows and cohesive perspective.",
+            1,
+        ),
+    ],
+    "texts": [
+        (
+            "Постер с текстом",
+            "Вертикальный постер: главный герой + крупный читаемый заголовок.",
+            "Create a vertical poster with the subject as the hero. Add readable headline text 'YOUR TEXT HERE' in modern typography and keep composition balanced.",
+            1,
+        ),
+    ],
+    "movies": [
+        (
+            "Кино-кадр noir",
+            "Драматичный кадр с контрастным светом, как сцена из фильма.",
+            "Create a cinematic noir portrait frame with dramatic key light, deep shadows, and subtle film grain.",
+            1,
+        ),
+    ],
+    "games": [
+        (
+            "Game character",
+            "Стилизация под персонажа видеоигры с ярким светом и динамикой.",
+            "Transform subject into a high-end game character portrait with stylized but realistic features, vibrant rim light, and dynamic mood.",
+            1,
+        ),
+    ],
+    "colors": [
+        (
+            "Purple pulse",
+            "Фиолетово-розовая палитра, мягкий glow и чистая кожа.",
+            "Generate a portrait with purple-magenta color palette, soft glow effects, and natural skin details.",
+            1,
+        ),
+    ],
+    "add_photo": [
+        (
+            "Коллаж из двух фото",
+            "Объединить 2 фото: лицо с первого, стиль/ракурс со второго.",
+            "Create one final portrait. Keep face identity from photo #1. Use style, color, and atmosphere inspired by photo #2. Result should be coherent and photorealistic.",
+            2,
+        ),
+    ],
+}
 
 # Подпись для внутреннего контекста «Ещё раз» (пользователю не показываем).
 _IMAGE_CONTEXT_LABEL = "text2img"
@@ -158,6 +243,10 @@ def _missing_config_kb() -> InlineKeyboardMarkup:
 class ImageGenState(StatesGroup):
     choosing_model = State()
     waiting_prompt = State()
+    ready_choosing_category = State()
+    ready_browsing_idea = State()
+    ready_waiting_photos = State()
+    ready_waiting_confirm = State()
 
 
 def _dedupe_model_choices(items: list[tuple[str, str, int, str]]) -> list[tuple[str, str, int, str]]:
@@ -301,7 +390,7 @@ async def _prepare_image_charge_and_daily_slot(
                 "<b>Готовые идеи без подписки</b>\n"
                 f"<blockquote>Бесплатный слот в цикле уже использован — следующий будет через <b>{NONSUB_IMAGE_WINDOW_DAYS}</b> суток "
                 "от момента исчерпания (то же время суток по UTC). Оформи подписку в <code>/start</code> → <b>Оплатить</b> "
-                "или используй <b>токены готовых идей</b> (рефералы, пакеты бонусов).</blockquote>",
+                "или получи дополнительный запуск: <b>+1 за каждых 2 приглашённых друзей</b> по <code>/ref</code>.</blockquote>",
                 parse_mode=HTML,
             )
             return False, None
@@ -339,26 +428,7 @@ async def _prepare_image_charge_and_daily_slot(
                 )
                 return False, None
             meta.credit_charged = True
-        used, lim = await get_daily_image_generation_usage(user_id, "ready")
-        if lim >= UNLIMITED_DAILY_IMAGE_GENERATIONS:
-            await try_reserve_daily_image_generation(user_id, "ready")
-            return True, meta
-        if used < lim:
-            if await try_reserve_daily_image_generation(user_id, "ready"):
-                meta.daily_reserved = True
-                return True, meta
-        if await try_consume_idea_token(user_id):
-            meta.idea_token_consumed = True
-            return True, meta
-        if meta.credit_charged:
-            await add_credits(user_id, cost)
-        await message.answer(
-            "<b>Лимит готовых идей</b>\n"
-            "<blockquote><i>Сегодня по МСК дневной лимит по тарифу исчерпан, токенов готовых идей нет.</i> "
-            "Лимит обновится в 00:00 МСК; токены — за каждых двух друзей по <code>/ref</code> или в пакетах бонусов.</blockquote>",
-            parse_mode=HTML,
-        )
-        return False, None
+        return True, meta
 
     if not has_active_sub:
         if not await try_reserve_nonsub_image_quota_slot(user_id):
@@ -417,20 +487,99 @@ async def _prepare_image_charge_and_daily_slot(
     return True, meta
 
 
-def ready_ideas_keyboard() -> InlineKeyboardMarkup:
+def _ready_categories_keyboard() -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
-    for idx, (title, _) in enumerate(READY_IDEAS):
-        rows.append(
+    pair: list[InlineKeyboardButton] = []
+    for slug, title in READY_IDEA_CATEGORIES:
+        pair.append(
+            InlineKeyboardButton(
+                text=title[:64],
+                callback_data=f"{CB_READY_CAT_PREFIX}{slug}",
+                style=BTN_PRIMARY,
+            )
+        )
+        if len(pair) == 2:
+            rows.append(pair)
+            pair = []
+    if pair:
+        rows.append(pair)
+    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _ideas_for_category(category: str) -> list[tuple[str, str, str, int]]:
+    return READY_IDEA_ITEMS.get((category or "").strip().lower(), [])
+
+
+def _ready_browser_keyboard(index: int, total: int) -> InlineKeyboardMarkup:
+    prev_i = (index - 1) % total
+    next_i = (index + 1) % total
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=title[:64],
-                    callback_data=f"{CB_APPLY_READY_PREFIX}{idx}",
+                    text="⬅️",
+                    callback_data=f"{CB_READY_NAV_PREFIX}prev:{prev_i}",
                     style=BTN_PRIMARY,
+                ),
+                InlineKeyboardButton(
+                    text="✅ Выбрать",
+                    callback_data=f"{CB_READY_NAV_PREFIX}pick:{index}",
+                    style=BTN_SUCCESS,
+                ),
+                InlineKeyboardButton(
+                    text="➡️",
+                    callback_data=f"{CB_READY_NAV_PREFIX}next:{next_i}",
+                    style=BTN_PRIMARY,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="↩️ Категории",
+                    callback_data=f"{CB_READY_NAV_PREFIX}back_cats",
                 )
-            ]
-        )
-    rows.append(_BACK_MAIN)
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+            ],
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)],
+        ]
+    )
+
+
+def _ready_wait_photo_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="↩️ К идеям", callback_data=CB_READY_PHOTO_BACK)],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data=CB_IMG_CANCEL, style=BTN_DANGER)],
+        ]
+    )
+
+
+def _ready_confirm_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Подтвердить", callback_data=CB_READY_CONFIRM, style=BTN_SUCCESS)],
+            [InlineKeyboardButton(text="↩️ Назад к фото", callback_data=CB_READY_PHOTO_BACK)],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data=CB_IMG_CANCEL, style=BTN_DANGER)],
+        ]
+    )
+
+
+def _ready_category_caption() -> str:
+    return (
+        "<b>💡 Готовые идеи</b>\n"
+        "<blockquote><i>Выбери направление. Затем листай варианты, нажми «Выбрать», "
+        "загрузи фото и подтверди запуск.</i></blockquote>"
+    )
+
+
+def _ready_idea_caption(*, category_title: str, title: str, preview: str, index: int, total: int, photos_required: int) -> str:
+    p_line = "2 фото" if photos_required == 2 else "1 фото"
+    return (
+        f"<b>{esc(category_title)}</b>\n"
+        f"<blockquote><i>{esc(index + 1)}/{esc(total)}</i></blockquote>\n"
+        f"<b>{esc(title)}</b>\n"
+        f"<blockquote><i>{esc(preview)}</i></blockquote>\n"
+        f"<i>Нужно для запуска:</i> <b>{esc(p_line)}</b>"
+    )
 
 
 def _regen_keyboard() -> InlineKeyboardMarkup:
@@ -622,6 +771,97 @@ async def _execute_text_generation(
         deducted_credits=meta.credit_charged,
         served_from_cache=from_cache,
         usage_kind=usage_kind,
+    )
+
+
+async def _download_telegram_photo_bytes(bot, file_id: str) -> bytes:
+    tg_file = await bot.get_file(file_id)
+    if not tg_file.file_path:
+        raise RuntimeError("Пустой file_path у фото")
+    buf = BytesIO()
+    await bot.download_file(tg_file.file_path, destination=buf)
+    data = buf.getvalue()
+    if not data:
+        raise RuntimeError("Пустой файл фото")
+    return data
+
+
+async def _execute_ready_with_refs_generation(
+    message: Message,
+    state: FSMContext | None,
+    *,
+    user_id: int,
+    username: str | None,
+    prompt: str,
+    refs_file_ids: list[str],
+    cost: int,
+) -> None:
+    await ensure_user(user_id, username)
+    is_admin = user_id in ADMIN_IDS
+    charge = not is_admin
+    model = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip()
+    if not model:
+        model = OPENROUTER_IMAGE_MODEL
+    if not is_openrouter_image_configured():
+        await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
+        return
+
+    prep = await _prepare_image_charge_and_daily_slot(
+        message, user_id=user_id, is_admin=is_admin, charge=charge, cost=cost, usage_kind="ready"
+    )
+    ok, meta = prep
+    if not ok or meta is None:
+        return
+    wait_msg = await message.answer("Идет генерация картинки")
+    try:
+        refs: list[bytes] = []
+        for fid in refs_file_ids:
+            refs.append(await _download_telegram_photo_bytes(message.bot, fid))
+        image_bytes = await openrouter_text_and_refs_to_image_bytes(
+            prompt,
+            refs=refs,
+            model=model,
+        )
+        from_cache = False
+    except Exception as exc:
+        if isinstance(exc, OpenRouterApiError):
+            logging.warning(
+                "OpenRouter refs отказ user_id=%s http=%s: %s",
+                user_id,
+                exc.http_status,
+                exc,
+            )
+            err = format_openrouter_image_user_error(exc)
+        else:
+            logging.exception("Image refs generation failed user_id=%s", user_id)
+            err = format_openrouter_image_user_error(exc)
+        if meta.daily_reserved:
+            await release_daily_image_generation(user_id, "ready")
+        if meta.credit_charged:
+            await add_credits(user_id, cost)
+        if meta.nonsub_quota_reserved:
+            await release_nonsub_image_quota_slot(user_id)
+        if meta.nonsub_ready_reserved:
+            await release_nonsub_ready_idea_slot(user_id)
+        if meta.idea_token_consumed:
+            await add_idea_tokens(user_id, 1)
+        await wait_msg.edit_text(err, parse_mode=HTML, disable_web_page_preview=True)
+        return
+    await wait_msg.delete()
+    await _send_result_photo_with_regen(
+        message,
+        state,
+        user_id=user_id,
+        image_bytes=image_bytes,
+        filename="image.png",
+        prompt=prompt,
+        model=model,
+        cost=cost,
+        is_admin=is_admin,
+        charge=charge,
+        deducted_credits=meta.credit_charged,
+        served_from_cache=from_cache,
+        usage_kind="ready",
     )
 
 
@@ -874,17 +1114,9 @@ async def _send_ready_ideas_screen(
             await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
         return
     await ensure_user(user_id, username)
-    if READY_IDEAS:
-        sub = (
-            "<blockquote><i>Нажми вариант — сразу запустится генерация по готовому тексту.</i></blockquote>"
-        )
-    else:
-        sub = (
-            "<blockquote><i>Пока нет заготовок — список добавит администратор. "
-            "Можно описать картинку вручную: «Создать картинку».</i></blockquote>"
-        )
-    cap = f"<b>💡 Готовые идеи</b>\n{sub}"
-    kb = ready_ideas_keyboard()
+    await state.set_state(ImageGenState.ready_choosing_category)
+    cap = _ready_category_caption()
+    kb = _ready_categories_keyboard()
     if edit:
         chat_id = message.chat.id
         await delete_nav_source_message(message)
@@ -915,43 +1147,251 @@ async def cmd_ready_ideas(message: Message, state: FSMContext) -> None:
     await _send_ready_ideas_screen(message, state, message.from_user.id, message.from_user.username)
 
 
-@router.callback_query(F.data.startswith(CB_APPLY_READY_PREFIX))
-async def apply_ready_idea(callback: CallbackQuery, state: FSMContext) -> None:
+async def _open_ready_card(
+    message: Message,
+    state: FSMContext,
+    *,
+    category: str,
+    index: int,
+    edit: bool,
+) -> None:
+    ideas = _ideas_for_category(category)
+    if not ideas:
+        chat_id = message.chat.id
+        if edit:
+            await delete_nav_source_message(message)
+            await message.bot.send_message(
+                chat_id,
+                "<b>В этой категории пока пусто.</b>\n<blockquote><i>Выбери другое направление.</i></blockquote>",
+                reply_markup=_ready_categories_keyboard(),
+                parse_mode=HTML,
+            )
+        else:
+            await message.answer(
+                "<b>В этой категории пока пусто.</b>\n<blockquote><i>Выбери другое направление.</i></blockquote>",
+                reply_markup=_ready_categories_keyboard(),
+                parse_mode=HTML,
+            )
+        await state.set_state(ImageGenState.ready_choosing_category)
+        return
+    total = len(ideas)
+    idx = index % total
+    title, preview, _prompt, photos_required = ideas[idx]
+    cat_title = dict(READY_IDEA_CATEGORIES).get(category, category)
+    cap = _ready_idea_caption(
+        category_title=cat_title,
+        title=title,
+        preview=preview,
+        index=idx,
+        total=total,
+        photos_required=photos_required,
+    )
+    await state.update_data(_ready_category=category, _ready_index=idx)
+    await state.set_state(ImageGenState.ready_browsing_idea)
+    kb = _ready_browser_keyboard(idx, total)
+    chat_id = message.chat.id
+    if edit:
+        await delete_nav_source_message(message)
+        await message.bot.send_message(chat_id, cap, reply_markup=kb, parse_mode=HTML)
+    else:
+        await message.answer(cap, reply_markup=kb, parse_mode=HTML)
+
+
+@router.callback_query(F.data.startswith(CB_READY_CAT_PREFIX))
+async def ready_pick_category(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.from_user is None or callback.message is None or not callback.data:
         await callback.answer("Ошибка запроса.", show_alert=True)
         return
-    if not READY_IDEAS:
-        await callback.answer("Список готовых идей пока пуст.", show_alert=True)
+    await callback.answer()
+    category = callback.data.replace(CB_READY_CAT_PREFIX, "", 1).strip().lower()
+    await _open_ready_card(callback.message, state, category=category, index=0, edit=True)
+
+
+@router.callback_query(F.data.startswith(CB_READY_NAV_PREFIX))
+async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.from_user is None or callback.message is None or not callback.data:
+        await callback.answer("Ошибка запроса.", show_alert=True)
+        return
+    await callback.answer()
+    payload = callback.data.replace(CB_READY_NAV_PREFIX, "", 1)
+    if payload == "back_cats":
+        await state.set_state(ImageGenState.ready_choosing_category)
+        chat_id = callback.message.chat.id
+        await delete_nav_source_message(callback.message)
+        await callback.bot.send_message(
+            chat_id,
+            _ready_category_caption(),
+            reply_markup=_ready_categories_keyboard(),
+            parse_mode=HTML,
+        )
+        return
+    parts = payload.split(":")
+    if len(parts) != 2 or not parts[1].isdigit():
+        await callback.answer("Некорректная навигация.", show_alert=True)
+        return
+    action, idx_raw = parts[0], parts[1]
+    data = await state.get_data()
+    category = str(data.get("_ready_category") or "").strip().lower()
+    ideas = _ideas_for_category(category)
+    if not ideas:
+        await callback.answer("Категория недоступна.", show_alert=True)
+        return
+    idx = int(idx_raw) % len(ideas)
+    if action in ("prev", "next"):
+        await _open_ready_card(callback.message, state, category=category, index=idx, edit=True)
+        return
+    if action == "pick":
+        title, _preview, _prompt, photos_required = ideas[idx]
+        await state.update_data(_ready_category=category, _ready_index=idx, _ready_photos=[], _ready_need=photos_required)
+        await state.set_state(ImageGenState.ready_waiting_photos)
+        chat_id = callback.message.chat.id
+        await delete_nav_source_message(callback.message)
+        await callback.bot.send_message(
+            chat_id,
+            (
+                f"<b>Выбрано:</b> {esc(title)}\n"
+                f"<blockquote><i>Отправь {esc('2 фото' if photos_required == 2 else '1 фото')}.\n"
+                "После загрузки появится кнопка подтверждения.</i></blockquote>"
+            ),
+            reply_markup=_ready_wait_photo_keyboard(),
+            parse_mode=HTML,
+        )
+        return
+    await callback.answer("Неизвестное действие.", show_alert=True)
+
+
+@router.callback_query(F.data == CB_READY_PHOTO_BACK)
+async def ready_photo_back(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.from_user is None or callback.message is None or not callback.data:
+        await callback.answer("Ошибка запроса.", show_alert=True)
+        return
+    await callback.answer()
+    data = await state.get_data()
+    category = str(data.get("_ready_category") or "").strip().lower()
+    idx = int(data.get("_ready_index") or 0)
+    if not category:
+        await _send_ready_ideas_screen(
+            callback.message,
+            state,
+            callback.from_user.id,
+            callback.from_user.username,
+            edit=True,
+        )
+        return
+    await _open_ready_card(callback.message, state, category=category, index=idx, edit=True)
+
+
+@router.message(ImageGenState.ready_waiting_photos, ~F.photo)
+async def ready_need_photo_hint(message: Message) -> None:
+    await message.answer(
+        "Пришли фото сообщением. Когда соберем нужное количество, появится подтверждение.",
+        reply_markup=_ready_wait_photo_keyboard(),
+    )
+
+
+@router.message(ImageGenState.ready_waiting_photos, F.photo)
+async def ready_collect_photos(message: Message, state: FSMContext) -> None:
+    if not message.from_user:
+        return
+    data = await state.get_data()
+    need = int(data.get("_ready_need") or 1)
+    photos = list(data.get("_ready_photos") or [])
+    if len(photos) >= need:
+        await message.answer("Фото уже загружены. Нажми «Подтвердить» или «Отмена».", reply_markup=_ready_confirm_keyboard())
+        return
+    ph = message.photo[-1]
+    if not ph.file_id:
+        await message.answer("Не удалось прочитать фото, попробуй ещё раз.")
+        return
+    photos.append(ph.file_id)
+    await state.update_data(_ready_photos=photos)
+    if len(photos) < need:
+        await message.answer(
+            f"Фото получено: <b>{esc(len(photos))}/{esc(need)}</b>. Пришли ещё.",
+            reply_markup=_ready_wait_photo_keyboard(),
+            parse_mode=HTML,
+        )
+        return
+    await state.set_state(ImageGenState.ready_waiting_confirm)
+    await message.answer(
+        (
+            f"<b>Фото зафиксированы:</b> <b>{esc(len(photos))}</b>\n"
+            "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
+        ),
+        reply_markup=_ready_confirm_keyboard(),
+        parse_mode=HTML,
+    )
+
+
+def _build_ready_prompt(base_prompt: str, photo_count: int) -> str:
+    return (
+        f"{(base_prompt or '').strip()}\n\n"
+        f"Use exactly {photo_count} reference image(s) from input. Preserve facial identity and natural skin texture."
+    )
+
+
+@router.callback_query(F.data == CB_READY_CONFIRM)
+async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.from_user is None or callback.message is None:
+        await callback.answer("Ошибка запроса.", show_alert=True)
         return
     if not is_openrouter_image_configured():
         await callback.answer()
         await callback.message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
         return
-    try:
-        idx = int(callback.data.replace(CB_APPLY_READY_PREFIX, ""))
-        _, prompt = READY_IDEAS[idx]
-    except (ValueError, IndexError):
-        await callback.answer("Некорректный вариант.", show_alert=True)
+    data = await state.get_data()
+    category = str(data.get("_ready_category") or "").strip().lower()
+    idx = int(data.get("_ready_index") or 0)
+    photos = list(data.get("_ready_photos") or [])
+    ideas = _ideas_for_category(category)
+    if not ideas or idx < 0 or idx >= len(ideas):
+        await callback.answer("Идея не найдена. Выбери заново.", show_alert=True)
+        await _send_ready_ideas_screen(
+            callback.message,
+            state,
+            callback.from_user.id,
+            callback.from_user.username,
+            edit=True,
+        )
         return
-    prompt = (prompt or "").strip()
-    if not prompt:
-        await callback.answer("Пустой промпт в этой идее.", show_alert=True)
+    _title, _preview, base_prompt, need = ideas[idx]
+    if len(photos) < need:
+        await callback.answer("Сначала загрузи нужное число фото.", show_alert=True)
         return
     await callback.answer()
+    prompt = _build_ready_prompt(base_prompt, len(photos))
     await state.clear()
     user_id = callback.from_user.id
     await ensure_user(user_id, callback.from_user.username)
-    await _execute_text_generation(
+    await _execute_ready_with_refs_generation(
         callback.message,
-        None,
+        state,
         user_id=user_id,
         username=callback.from_user.username,
         prompt=prompt,
-        model=OPENROUTER_IMAGE_MODEL,
         cost=OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS,
-        usage_kind="ready",
-        use_image_cache=True,
-        override_cost=OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS,
+        refs_file_ids=photos,
+    )
+
+
+@router.message(ImageGenState.ready_choosing_category)
+async def ready_choose_category_hint(message: Message) -> None:
+    await message.answer(
+        "Сначала выбери категорию кнопками выше 👆",
+        reply_markup=_ready_categories_keyboard(),
+    )
+
+
+@router.message(ImageGenState.ready_browsing_idea)
+async def ready_browse_hint(message: Message) -> None:
+    await message.answer("Листай идеи кнопками ⬅️/➡️ и нажми «✅ Выбрать».")
+
+
+@router.message(ImageGenState.ready_waiting_confirm)
+async def ready_waiting_confirm_hint(message: Message) -> None:
+    await message.answer(
+        "Нажми «✅ Подтвердить» для запуска или «❌ Отмена».",
+        reply_markup=_ready_confirm_keyboard(),
     )
 
 

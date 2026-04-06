@@ -89,9 +89,8 @@ OPENROUTER_IMAGE_MODEL: str = (
     or "black-forest-labs/flux.2-klein-4b"
 )
 OPENROUTER_IMAGE_COST_CREDITS: int = max(1, _parse_int(os.getenv("OPENROUTER_IMAGE_COST_CREDITS", "5"), 5))
-OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS: int = max(
-    1, _parse_int(os.getenv("OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS", "20"), 20)
-)
+# Фиксированная цена «Готовых идей» (не из .env).
+OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS: int = 20
 # Вторая модель для подписчиков (панель выбора). Должна быть с output=image на OpenRouter.
 # Пусто — только базовая модель, без панели. Не языковые модели вроде qwen/... — они не рисуют картинки.
 OPENROUTER_IMAGE_MODEL_ALT: str = os.getenv(

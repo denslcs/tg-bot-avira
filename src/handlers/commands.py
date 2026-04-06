@@ -38,7 +38,7 @@ from src.database import (
     subscription_is_active,
     take_credits,
 )
-from src.subscription_catalog import NONSUB_IMAGE_WINDOW_DAYS, PLANS, UNLIMITED_DAILY_IMAGE_GENERATIONS
+from src.subscription_catalog import NONSUB_IMAGE_WINDOW_DAYS, PLANS
 from src.formatting import HTML, esc, format_subscription_ends_at
 from src.keyboards.callback_data import (
     CB_IMG_OK,
@@ -338,7 +338,7 @@ async def _build_referral_message(
     except Exception:
         balance = 0
     prof = await get_user_admin_profile(user_id)
-    idea_tok = int(prof.idea_tokens) if prof else 0
+    ready_bonus_uses = int(prof.idea_tokens) if prof else 0
     ref_link = (
         f"https://t.me/{bot_username}?start=ref_{user_id}"
         if bot_username
@@ -351,12 +351,12 @@ async def _build_referral_message(
         f"<i>👤 Профиль</i> {uname_html}\n"
         f"<i>💳 ID</i> <code>{esc(user_id)}</code>\n"
         f"<i>💵 Кредиты</i> <b>{esc(balance)}</b>\n"
-        f"<i>🎯 Токены готовых идей</i> <b>{esc(idea_tok)}</b>\n"
+        f"<i>🎯 Бонусных запусков «Готовых идей»</i> <b>{esc(ready_bonus_uses)}</b>\n"
         f"<i>✉️ Приглашения</i> <b>{esc(invited)}</b>"
         "</blockquote>\n\n"
         "<blockquote><i>"
         "За каждого приглашённого друга — <b>+15</b> кредитов тебе; за каждых <b>двух</b> друзей — "
-        "ещё <b>+1</b> токен готовых идей. "
+        "ещё <b>+1</b> дополнительный запуск «Готовых идей» без подписки. "
         "Новому пользователю при первом <code>/start</code> по твоей ссылке — <b>+5</b> кредитов."
         "</i></blockquote>\n\n"
         "<b>🔗 Твоя ссылка</b>\n"
@@ -460,7 +460,7 @@ async def _profile_card_html(user_id: int, username_raw: str | None) -> tuple[st
         )
         return missing, back_to_main_menu_keyboard()
     balance = await get_credits(user_id)
-    idea_tok = int(profile.idea_tokens or 0)
+    ready_bonus_uses = int(profile.idea_tokens or 0)
     ru, rlim = await get_daily_image_generation_usage(user_id, "ready")
     username = f"@{profile.username}" if profile.username else "—"
     active_sub = subscription_is_active(profile.subscription_ends_at)
@@ -494,21 +494,12 @@ async def _profile_card_html(user_id: int, username_raw: str | None) -> tuple[st
             "кредиты не обходят лимит.</i>\n"
         )
     if active_sub:
-        if rlim >= UNLIMITED_DAILY_IMAGE_GENERATIONS:
-            ready_limits_line = (
-                "<i>Готовые идеи:</i> без дневного лимита по тарифу "
-                "(токены копятся для тарифов с дневным лимитом или без подписки).\n"
-            )
-        else:
-            ready_limits_line = (
-                f"<i>Готовые идеи сегодня (МСК, сброс 00:00):</i> <b>{esc(ru)}/{esc(rlim)}</b> "
-                "<i>— в пределах лимита токены не тратятся; сверх — 1 токен за генерацию.</i>\n"
-            )
+        ready_limits_line = "<i>Готовые идеи:</i> без лимита по подписке.\n"
     else:
         ready_limits_line = (
             f"<i>Готовые идеи без подписки (цикл {esc(rlim)} шт.):</i> <b>{esc(ru)}/{esc(rlim)}</b> "
-            f"<i>— слот без токена; после исчерпания следующий через {NONSUB_IMAGE_WINDOW_DAYS} суток от момента "
-            "исчерпания (UTC). Кредиты за генерацию списываются всегда; токен — только сверх слота.</i>\n"
+            f"<i>— бесплатный слот в цикле; после исчерпания следующий через {NONSUB_IMAGE_WINDOW_DAYS} суток от момента "
+            "исчерпания (UTC). Дополнительно: +1 запуск за каждых 2 приглашённых друзей по /ref.</i>\n"
         )
     starter_cta = ""
     if not active_sub and profile.starter_trial_used:
@@ -522,7 +513,7 @@ async def _profile_card_html(user_id: int, username_raw: str | None) -> tuple[st
         f"<i>Ник:</i> <b>{esc(username)}</b>\n"
         f"<i>ID:</i> <code>{esc(user_id)}</code>\n"
         f"<i>💰 Кредиты:</i> <b>{esc(balance)}</b>\n"
-        f"<i>🎯 Токены готовых идей:</i> <b>{esc(idea_tok)}</b>\n"
+        f"<i>🎯 Бонусные запуски «Готовых идей» (за рефералов):</i> <b>{esc(ready_bonus_uses)}</b>\n"
         f"<i>Подписка:</i> <b>{esc(sub_status)}</b>\n"
         f"<i>Тариф:</i> <b>{esc(plan_name)}</b>\n"
         f"<i>Окончание:</i> <b>{esc(sub_till)}</b>\n"

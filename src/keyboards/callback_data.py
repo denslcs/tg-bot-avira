@@ -24,6 +24,10 @@ CB_PICK_QWEN = "img:pick_qwen"
 CB_PICK_FLUX = "img:pick_flux"
 CB_READY_IDEAS = "menu:ready_ideas"
 CB_APPLY_READY_PREFIX = "img:idea:"
+CB_READY_CAT_PREFIX = "img:idea_cat:"
+CB_READY_NAV_PREFIX = "img:idea_nav:"
+CB_READY_PHOTO_BACK = "img:idea_photo_back"
+CB_READY_CONFIRM = "img:idea_confirm"
 CB_REGEN = "img:regen"
 CB_IMG_OK = "img:ok"
 CB_IMG_CANCEL = "img:cancel"
@@ -42,6 +46,10 @@ CB_PAY_CRYPTO_PREFIX = "pay:c:"
 
 __all__ = [
     "CB_APPLY_READY_PREFIX",
+    "CB_READY_CAT_PREFIX",
+    "CB_READY_NAV_PREFIX",
+    "CB_READY_PHOTO_BACK",
+    "CB_READY_CONFIRM",
     "CB_BACK_IMAGE_MODELS",
     "CB_CREATE_IMAGE",
     "CB_GEN_EDIT",

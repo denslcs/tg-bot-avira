@@ -161,6 +161,11 @@ def _data_url_to_bytes(data_url: str) -> bytes:
     return base64.b64decode(raw, validate=False)
 
 
+def _bytes_to_data_url(image_bytes: bytes, mime: str = "image/jpeg") -> str:
+    b64 = base64.b64encode(image_bytes).decode("ascii")
+    return f"data:{mime};base64,{b64}"
+
+
 def _extract_first_image_bytes(payload: dict[str, Any]) -> bytes:
     choices = payload.get("choices") or []
     if not choices:
@@ -287,3 +292,93 @@ async def openrouter_text_to_image_bytes(
             await asyncio.to_thread(_write_cache_file_sync, path, result)
 
     return result, False
+
+
+async def openrouter_text_and_refs_to_image_bytes(
+    prompt: str,
+    *,
+    refs: list[bytes],
+    model: str | None = None,
+) -> bytes:
+    """
+    Текст + 1..N референс-фото -> PNG/JPEG bytes.
+    Отправляет мультимодальный content (text + image_url data URL) в OpenRouter.
+    """
+    if not OPENROUTER_API_KEY:
+        raise RuntimeError("Не задан OPENROUTER_API_KEY")
+    if not refs:
+        raise RuntimeError("Не переданы референс-фото")
+    m = (model or OPENROUTER_IMAGE_MODEL).strip() or OPENROUTER_IMAGE_MODEL
+
+    url = f"{OPENROUTER_API_BASE}/chat/completions"
+    headers: dict[str, str] = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    if OPENROUTER_HTTP_REFERER:
+        headers["HTTP-Referer"] = OPENROUTER_HTTP_REFERER
+    if OPENROUTER_APP_TITLE:
+        headers["X-Title"] = OPENROUTER_APP_TITLE
+
+    content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+    for ref in refs:
+        content.append(
+            {
+                "type": "image_url",
+                "image_url": {"url": _bytes_to_data_url(ref)},
+            }
+        )
+
+    modalities_variants = (["image"], ["image", "text"])
+    config_attempts = _image_config_attempts()
+    last_data: dict[str, Any] | None = None
+    result: bytes | None = None
+
+    async with httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=30.0)) as client:
+        for mods in modalities_variants:
+            for image_cfg in config_attempts:
+                body: dict[str, Any] = {
+                    "model": m,
+                    "messages": [{"role": "user", "content": content}],
+                    "modalities": mods,
+                    "image_config": image_cfg,
+                }
+                resp = await client.post(url, headers=headers, json=body)
+                try:
+                    data = resp.json()
+                except Exception:
+                    resp.raise_for_status()
+                    raise RuntimeError(resp.text[:500] if resp.text else "Некорректный JSON") from None
+                last_data = data if isinstance(data, dict) else None
+                if resp.status_code >= 400:
+                    err = data.get("error") if isinstance(data, dict) else None
+                    msg = ""
+                    if isinstance(err, dict):
+                        msg = str(err.get("message") or err.get("metadata") or "")
+                    logger.warning("OpenRouter refs error status=%s cfg=%s body=%s", resp.status_code, image_cfg, data)
+                    if "image_size" in image_cfg and image_cfg is not config_attempts[-1]:
+                        logger.info("OpenRouter refs: повтор запроса без image_size")
+                        continue
+                    raise OpenRouterApiError(msg or f"HTTP {resp.status_code}", http_status=resp.status_code)
+                if not isinstance(data, dict):
+                    raise RuntimeError("Неожиданный формат ответа")
+                try:
+                    result = _extract_first_image_bytes(data)
+                    break
+                except RuntimeError as e:
+                    if "нет изображения" in str(e).lower():
+                        if mods is modalities_variants[-1] and image_cfg is config_attempts[-1]:
+                            raise
+                        if image_cfg is not config_attempts[-1]:
+                            continue
+                        logger.info(
+                            "OpenRouter refs: нет images с modalities=%s, пробуем следующий вариант", mods
+                        )
+                        break
+                    raise
+            if result is not None:
+                break
+
+    if result is None:
+        raise RuntimeError(str(last_data)[:300] if last_data else "Пустой ответ OpenRouter")
+    return result

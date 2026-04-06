@@ -402,25 +402,22 @@ async def support_private_messages(message: Message) -> None:
 
         username = f"@{message.from_user.username}" if message.from_user.username else "без_username"
         profile = await get_user_admin_profile(user_id)
-        sub_status = "не активна"
-        sub_plan = "—"
         sub_till = "—"
+        sub_line = "не активна"
         days_in_bot = 0
-        generated_total = 0
+        generated_total = await count_generated_images_total(user_id)
         if profile:
             days_in_bot = _days_in_main_bot(profile.created_at)
-            generated_total = await count_generated_images_total(user_id)
-            sub_plan = profile.subscription_plan or "—"
             sub_till = profile.subscription_ends_at or "—"
             if subscription_is_active(profile.subscription_ends_at):
-                sub_status = "активна"
+                plan = (profile.subscription_plan or "").strip()
+                sub_line = f"активна ({plan})" if plan else "активна"
         payload = (
             f"[Тикет #{ticket.ticket_id}] Сообщение от пользователя\n"
             f"user_id: {user_id}\n"
             f"username: {username}\n"
-            f"подписка: {sub_status}\n"
-            f"тариф: {sub_plan}\n"
-            f"подписка до (UTC): {sub_till}\n"
+            f"подписка/тариф: {sub_line}\n"
+            f"действует до (UTC): {sub_till}\n"
             f"дней в основном боте: {days_in_bot}\n"
             f"сгенерировано изображений: {generated_total}\n\n"
             f"{support_text}"
