@@ -1358,10 +1358,10 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
 
 def _build_ready_prompt(
     base_prompt: str,
-    photo_count: int,
     telegram_username: str | None,
     *,
     include_telegram_nick: bool = True,
+    refs_hint: str | None = None,
 ) -> str:
     nick = (telegram_username or "").strip()
     nick_line = f"@{nick}" if nick else "user_without_username"
@@ -1370,10 +1370,12 @@ def _build_ready_prompt(
         if include_telegram_nick
         else ""
     )
+    hint_part = f"{refs_hint.strip()}\n" if refs_hint and refs_hint.strip() else ""
     return (
         f"{(base_prompt or '').strip()}\n\n"
         f"{nick_part}"
-        f"Use exactly {photo_count} reference image(s) from input. Preserve facial identity and natural skin texture."
+        f"{hint_part}"
+        "Use all reference images from input. Preserve facial identity and natural skin texture."
     )
 
 
@@ -1382,17 +1384,83 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
     if callback.from_user is None or callback.message is None:
         await callback.answer("Ошибка запроса.", show_alert=True)
         return
-    if not is_openrouter_image_configured():
-        await callback.answer()
-        await callback.message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
-        return
-    data = await state.get_data()
-    category = str(data.get("_ready_category") or "").strip().lower()
-    idx = int(data.get("_ready_index") or 0)
-    photos = list(data.get("_ready_photos") or [])
-    ideas = _ideas_for_category(category)
-    if not ideas or idx < 0 or idx >= len(ideas):
-        await callback.answer("Идея не найдена. Выбери заново.", show_alert=True)
+    # Сразу снимаем «часики» у кнопки, чтобы клик всегда ощущался.
+    await callback.answer()
+    try:
+        if not is_openrouter_image_configured():
+            await callback.message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
+            return
+        chat_id = callback.message.chat.id
+        await callback.bot.send_message(chat_id, "✅ Подтверждено. Готовлю генерацию...")
+        data = await state.get_data()
+        category = str(data.get("_ready_category") or "").strip().lower()
+        idx_raw = data.get("_ready_index")
+        try:
+            idx = int(idx_raw if idx_raw is not None else 0)
+        except (TypeError, ValueError):
+            idx = -1
+        photos = list(data.get("_ready_photos") or [])
+        ideas = _ideas_for_category(category)
+        if not ideas or idx < 0 or idx >= len(ideas):
+            await callback.answer("Идея не найдена. Выбери заново.", show_alert=True)
+            await _send_ready_ideas_screen(
+                callback.message,
+                state,
+                callback.from_user.id,
+                callback.from_user.username,
+                edit=True,
+            )
+            return
+        title, _preview, base_prompt, need = ideas[idx]
+        if len(photos) < need:
+            await callback.bot.send_message(chat_id, "Сначала загрузи нужное число фото.")
+            return
+        await callback.bot.send_message(chat_id, "Запускаю генерацию…")
+        include_nick = title != "Clash Royale элитные варвары"
+        extra_refs: list[bytes] = []
+        static_ref = _READY_IDEA_STATIC_REF_BY_TITLE.get(title)
+        if static_ref:
+            p = Path(static_ref)
+            if p.is_file():
+                try:
+                    extra_refs.append(p.read_bytes())
+                except OSError:
+                    logging.warning("Failed to read static ready ref: %s", static_ref)
+            else:
+                logging.warning("Static ready ref is missing: %s", static_ref)
+        refs_hint = "Reference mapping: image #1 is user identity photo."
+        if extra_refs:
+            refs_hint = (
+                "Reference mapping: image #1 is target scene/layout reference; "
+                "image #2 is user identity photo. Keep scene composition from #1 and face identity from #2."
+            )
+        prompt = _build_ready_prompt(
+            base_prompt,
+            callback.from_user.username,
+            include_telegram_nick=include_nick,
+            refs_hint=refs_hint,
+        )
+        await state.clear()
+        user_id = callback.from_user.id
+        await ensure_user(user_id, callback.from_user.username)
+        extra_first = title in ("Фотка в эндер мире", "Clash Royale элитные варвары")
+        await _execute_ready_with_refs_generation(
+            callback.message,
+            state,
+            user_id=user_id,
+            username=callback.from_user.username,
+            prompt=prompt,
+            cost=OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS,
+            refs_file_ids=photos,
+            extra_refs=extra_refs,
+            extra_refs_first=extra_first,
+        )
+    except Exception:
+        logging.exception("ready_confirm_and_generate failed")
+        await callback.bot.send_message(
+            callback.message.chat.id,
+            "Ошибка запуска. Попробуй снова — открыл раздел «Готовые идеи».",
+        )
         await _send_ready_ideas_screen(
             callback.message,
             state,
@@ -1400,45 +1468,6 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             callback.from_user.username,
             edit=True,
         )
-        return
-    title, _preview, base_prompt, need = ideas[idx]
-    if len(photos) < need:
-        await callback.answer("Сначала загрузи нужное число фото.", show_alert=True)
-        return
-    await callback.answer()
-    include_nick = title != "Clash Royale элитные варвары"
-    prompt = _build_ready_prompt(
-        base_prompt,
-        len(photos),
-        callback.from_user.username,
-        include_telegram_nick=include_nick,
-    )
-    extra_refs: list[bytes] = []
-    static_ref = _READY_IDEA_STATIC_REF_BY_TITLE.get(title)
-    if static_ref:
-        p = Path(static_ref)
-        if p.is_file():
-            try:
-                extra_refs.append(p.read_bytes())
-            except OSError:
-                logging.warning("Failed to read static ready ref: %s", static_ref)
-        else:
-            logging.warning("Static ready ref is missing: %s", static_ref)
-    await state.clear()
-    user_id = callback.from_user.id
-    await ensure_user(user_id, callback.from_user.username)
-    extra_first = title in ("Фотка в эндер мире", "Clash Royale элитные варвары")
-    await _execute_ready_with_refs_generation(
-        callback.message,
-        state,
-        user_id=user_id,
-        username=callback.from_user.username,
-        prompt=prompt,
-        cost=OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS,
-        refs_file_ids=photos,
-        extra_refs=extra_refs,
-        extra_refs_first=extra_first,
-    )
 
 
 @router.message(ImageGenState.ready_choosing_category)
