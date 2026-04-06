@@ -156,9 +156,9 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     ],
     "games": [
         (
-            "Minecraft с жителем",
+            "Фотка в эндер мире",
             "Последняя фотка перед битвой с драконом в Minecraft (высокое качество).",
-            "Use the uploaded reference scene image as composition/layout source. Replace the girl in that scene with the user from the uploaded user photo. Keep the environment and camera angle close to the reference scene. Face identity priority: use the user photo as the only source for face identity, keep face realistic and unchanged, no face swap artifacts, no beard, no cartoon face. Keep full-body framing and natural pose integrated into the scene. Style: Minecraft environment, but person remains realistic (not blocky). Improve image quality: sharp details, clean textures, cinematic lighting, high-resolution look.",
+            "STRICT REFERENCE MATCH: Copy the composition from the reference scene image as closely as possible (camera angle, framing, pose direction, environment layout, character scale, and lighting mood). Replace only the girl in that reference with the user from the uploaded user photo. Keep the background and overall scene structure aligned to the reference. Face identity lock: use user photo as the only source for face identity, keep face realistic and unchanged, no face swap artifacts, no beard, no cartoon face. Keep full-body framing and natural pose integrated into the same scene. Style: Minecraft environment, person remains realistic (not blocky). Output quality: sharp details, clean textures, high-resolution cinematic look.",
             1,
         ),
         (
@@ -194,7 +194,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
 
 _READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str] = {
     # Локальный референс композиции для шаблона Minecraft.
-    "Minecraft с жителем": (
+    "Фотка в эндер мире": (
         r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_images__1_-3f249951-39c4-494e-996c-0141fbe54c73.png"
     ),
     # Локальный референс композиции для шаблона Clash Royale.
@@ -820,6 +820,7 @@ async def _execute_ready_with_refs_generation(
     refs_file_ids: list[str],
     cost: int,
     extra_refs: list[bytes] | None = None,
+    extra_refs_first: bool = False,
 ) -> None:
     await ensure_user(user_id, username)
     is_admin = user_id in ADMIN_IDS
@@ -831,18 +832,23 @@ async def _execute_ready_with_refs_generation(
         await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
         return
 
+    chat_id = message.chat.id
     prep = await _prepare_image_charge_and_daily_slot(
         message, user_id=user_id, is_admin=is_admin, charge=charge, cost=cost, usage_kind="ready"
     )
     ok, meta = prep
     if not ok or meta is None:
         return
-    wait_msg = await message.answer("Идет генерация картинки")
+    # Убираем карточку подтверждения только после успешного старта шага генерации.
+    await delete_nav_source_message(message)
+    wait_msg = await message.bot.send_message(chat_id, "Идет генерация картинки")
     try:
         refs: list[bytes] = []
+        if extra_refs and extra_refs_first:
+            refs.extend(extra_refs)
         for fid in refs_file_ids:
             refs.append(await _download_telegram_photo_bytes(message.bot, fid))
-        if extra_refs:
+        if extra_refs and not extra_refs_first:
             refs.extend(extra_refs)
         image_bytes = await openrouter_text_and_refs_to_image_bytes(
             prompt,
@@ -1400,7 +1406,6 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
         await callback.answer("Сначала загрузи нужное число фото.", show_alert=True)
         return
     await callback.answer()
-    await delete_nav_source_message(callback.message)
     include_nick = title != "Clash Royale элитные варвары"
     prompt = _build_ready_prompt(
         base_prompt,
@@ -1422,6 +1427,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
     await state.clear()
     user_id = callback.from_user.id
     await ensure_user(user_id, callback.from_user.username)
+    extra_first = title in ("Фотка в эндер мире", "Clash Royale элитные варвары")
     await _execute_ready_with_refs_generation(
         callback.message,
         state,
@@ -1431,6 +1437,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
         cost=OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS,
         refs_file_ids=photos,
         extra_refs=extra_refs,
+        extra_refs_first=extra_first,
     )
 
 
