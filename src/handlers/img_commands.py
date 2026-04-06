@@ -157,7 +157,13 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Minecraft с ником",
             "Реалистичный человек в сцене Minecraft: объятие с жителем, светящийся изумруд, ник над головой.",
-            "CRITICAL: Keep the person's face 100% realistic and unchanged. No pixelation, no Minecraft skin, no face swap. Insert the FULL-BODY person from the photo into a Minecraft scene. The person must be shown from head to toe, standing on the ground. Preserve their face, hair, clothing, shoes, and body shape exactly as they are — realistic, NOT blocky. Above their head, add their Telegram nickname in Minecraft-style yellow text with a black outline. Make them stand next to a Minecraft Villager. The Villager must look ALIVE and ANIMATED — not like a static blocky NPC. Give it natural posture, slight head tilt, blinking eyes, and a friendly expression as if it's a living creature hugging back. The person is hugging the Villager with one arm. In the person's free hand, they are holding a glowing emerald. Background: Minecraft village with wooden houses, dirt path, and warm sunset lighting. Match lighting naturally between the person, the Villager, and the environment. Output: Full-body realistic person + living animated Villager + Minecraft environment.",
+            "CRITICAL: Keep the person's face 100% realistic and unchanged. No pixelation, no Minecraft skin, no face swap. Insert the FULL-BODY person from the photo into a Minecraft scene. The person must be shown from head to toe, standing on the ground. Preserve their face, hair, clothing, shoes, and body shape exactly as they are — realistic, NOT blocky. Above their head, add their Telegram nickname in Minecraft-style yellow text with a black outline. Make them stand next to a Minecraft Villager. The person is hugging the Villager with one arm. In the person's free hand, they are holding a glowing emerald. The Villager must look ALIVE and EXPRESSIVE. Give it clear ENVY on its face — eyes locked onto the emerald with desire, eyebrows slightly furrowed, mouth slightly open or drooling a little. The Villager looks like it desperately wants to take the emerald for itself. Make its posture lean slightly toward the emerald, one hand reaching out slightly but hesitating. Background: Minecraft village with wooden houses, dirt path, and warm sunset lighting. Match lighting naturally between the person, the Villager, and the environment. Output: Full-body realistic person + envious Villager staring at the emerald + Minecraft environment.",
+            1,
+        ),
+        (
+            "Clash Royale: Red King",
+            "Полнофигурный Red King без бороды бежит к камере, сзади гигантский файербол.",
+            "CRITICAL: Keep the person's face 100% realistic and unchanged. No pixelation, no cartoon face, no beard. Insert the FULL-BODY person from the photo into a Clash Royale battle scene. The person must be shown from head to toe, in motion. Preserve their face, hair, skin texture, and body shape exactly as they are — realistic, NOT cartoonish. Dress the person in the outfit of the RED KING from Clash Royale: golden crown with rubies, red royal cape with fur trim, dark red armor with gold details, red boots. DO NOT add a beard — keep the person's original face clean-shaven as in the photo. The person is SPRINTING DIRECTLY TOWARD THE CAMERA, looking back over their shoulder with a scared/worried expression. Behind them, a MASSIVE, HIGHLY DETAILED FIREBALL is flying directly toward them. The fireball is huge, glowing intensely, with realistic flames, embers, and smoke trails. It dominates the background. The fireball illuminates everything around — the ground, the person's face and cape, the environment — with bright orange and red fiery light. Intense dramatic lighting. Background: A standard Clash Royale arena (the bridge, wooden towers, river, green grass path). Everything around is lit by the fireball's glow. Output: Full-body realistic Red King (no beard) sprinting toward camera + massive detailed fireball chasing him + Clash Royale arena background.",
             1,
         ),
         (
@@ -1506,6 +1512,15 @@ async def regenerate_new_prompt(callback: CallbackQuery, state: FSMContext) -> N
     uk = str(ctx.usage_kind or "self")
     if uk not in ("ready", "self"):
         uk = "self"
+    if uk == "ready":
+        await _send_ready_ideas_screen(
+            callback.message,
+            state,
+            user_id,
+            callback.from_user.username,
+            edit=False,
+        )
+        return
     await state.update_data(
         selected_model=ctx.model,
         selected_cost=ctx.cost,
