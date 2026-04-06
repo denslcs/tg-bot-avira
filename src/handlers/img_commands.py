@@ -165,7 +165,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Clash Royale элитные варвары",
             "Выпала возможность прочувствовать себя в в шкуре элитного варвара.",
-            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoon face, no plastic skin, no added beard or mustache. PRO REFERENCE TASK: use all input references. Reference mapping: image #1 is target Clash Royale layout/composition; image #2 is user identity photo. Replace ONLY the FRONT elite barbarian with the user. Keep full-body framing, same pose direction, and the same armor style (golden horned helmet, wristbands, barbarian belt/skirt, barefoot). Keep the second barbarian in the background. Preserve arena composition from the reference (red carpet, bridge/towers, battle atmosphere). Render with cinematic warm lighting, clean textures, strong detail, slight depth of field, and natural seamless face integration.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoon face, no plastic skin, no added beard or mustache. Create a Clash Royale elite barbarian scene: replace the FRONT barbarian with the user, full-body, same armor style (golden horned helmet, wristbands, barbarian belt/skirt, barefoot), clean-shaven face. Keep one second barbarian in the background. Arena details: red carpet, bridge/towers, battle atmosphere, warm cinematic lighting, slight depth of field, clean textures, high detail, natural seamless face integration.",
             1,
         ),
         (
@@ -193,16 +193,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     ],
 }
 
-_READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str] = {
-    # Локальный референс композиции для шаблона Minecraft.
-    "Фотка в эндер мире": (
-        r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_images__1_-3f249951-39c4-494e-996c-0141fbe54c73.png"
-    ),
-    # Локальный референс композиции для шаблона Clash Royale.
-    "Clash Royale элитные варвары": (
-        r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_elite-barbarians-clash-royale-v0-ipl5z3r43f6b1__1_-7585c28f-3fe6-47c2-b69c-944b0fad2af7.png"
-    ),
-}
+_READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str] = {}
 
 # Подпись для внутреннего контекста «Ещё раз» (пользователю не показываем).
 _IMAGE_CONTEXT_LABEL = "text2img"
@@ -1451,11 +1442,6 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             else:
                 logging.warning("Static ready ref is missing: %s", static_ref)
         refs_hint = "Reference mapping: image #1 is user identity photo."
-        if extra_refs:
-            refs_hint = (
-                "Reference mapping: image #1 is target scene/layout reference; "
-                "image #2 is user identity photo. Keep scene composition from #1 and face identity from #2."
-            )
         prompt = _build_ready_prompt(
             base_prompt,
             callback.from_user.username,
@@ -1465,7 +1451,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
         await state.clear()
         user_id = callback.from_user.id
         await ensure_user(user_id, callback.from_user.username)
-        extra_first = title in ("Фотка в эндер мире", "Clash Royale элитные варвары")
+        extra_first = False
         await _execute_ready_with_refs_generation(
             callback.message,
             state,
