@@ -155,6 +155,12 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     ],
     "games": [
         (
+            "Minecraft с ником",
+            "Реалистичный человек в сцене Minecraft: объятие с жителем, светящийся изумруд, ник над головой.",
+            "CRITICAL: Keep the person's face 100% realistic and unchanged. No pixelation, no Minecraft skin, no face swap. Insert the person from the photo into a Minecraft scene. Preserve their face, hair, clothing exactly as they are — realistic, NOT blocky. Above their head, add their Telegram nickname in Minecraft-style yellow text with a black outline. Make them stand next to a Minecraft Villager, hugging it with one arm. In their free hand, they are holding a glowing emerald. Background: Minecraft village with wooden houses, path, and sunset lighting. Match lighting naturally. Output: realistic person + Minecraft environment.",
+            1,
+        ),
+        (
             "Game character",
             "Стилизация под персонажа видеоигры с ярким светом и динамикой.",
             "Transform subject into a high-end game character portrait with stylized but realistic features, vibrant rim light, and dynamic mood.",
@@ -1323,9 +1329,12 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
     )
 
 
-def _build_ready_prompt(base_prompt: str, photo_count: int) -> str:
+def _build_ready_prompt(base_prompt: str, photo_count: int, telegram_username: str | None) -> str:
+    nick = (telegram_username or "").strip()
+    nick_line = f"@{nick}" if nick else "user_without_username"
     return (
         f"{(base_prompt or '').strip()}\n\n"
+        f"Telegram nickname to render above the head: {nick_line}\n"
         f"Use exactly {photo_count} reference image(s) from input. Preserve facial identity and natural skin texture."
     )
 
@@ -1359,7 +1368,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
         await callback.answer("Сначала загрузи нужное число фото.", show_alert=True)
         return
     await callback.answer()
-    prompt = _build_ready_prompt(base_prompt, len(photos))
+    prompt = _build_ready_prompt(base_prompt, len(photos), callback.from_user.username)
     await state.clear()
     user_id = callback.from_user.id
     await ensure_user(user_id, callback.from_user.username)
