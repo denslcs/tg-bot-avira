@@ -26,6 +26,7 @@ from src.config import (
     OPENROUTER_IMAGE_COST_CREDITS,
     OPENROUTER_IMAGE_GEMINI_COST_CREDITS,
     OPENROUTER_IMAGE_GEMINI_MODEL,
+    OPENROUTER_IMAGE_GEMINI_PRO_MODEL,
     OPENROUTER_IMAGE_GEMINI_PREVIEW_COST_CREDITS,
     OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL,
     OPENROUTER_IMAGE_MODEL,
@@ -158,13 +159,13 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Фотка в эндер мире",
             "Последняя фотка перед битвой с драконом в Minecraft (высокое качество).",
-            "STRICT REFERENCE MATCH: Copy the composition from the reference scene image as closely as possible (camera angle, framing, pose direction, environment layout, character scale, and lighting mood). Replace only the girl in that reference with the user from the uploaded user photo. Keep the background and overall scene structure aligned to the reference. Face identity lock: use user photo as the only source for face identity, keep face realistic and unchanged, no face swap artifacts, no beard, no cartoon face. Keep full-body framing and natural pose integrated into the same scene. Style: Minecraft environment, person remains realistic (not blocky). Output quality: sharp details, clean textures, high-resolution cinematic look.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoonization, no pixelated face, no extra facial hair. Create a high-quality Minecraft End dimension scene: the user is sitting on top of an obsidian block at the edge of a cliff, looking directly at the camera. Camera angle: top-down, slightly tilted perspective from above. Add the user's Telegram nickname above the head in Minecraft-style yellow text with a dark outline. In the background, an Ender Dragon is flying in the sky. Keep the End-world atmosphere (obsidian, void-like depth, dramatic ambient light), with cinematic composition, sharp details, clean textures, and natural lighting integration on the user. Final output must look coherent, polished, and artifact-free.",
             1,
         ),
         (
             "Clash Royale элитные варвары",
             "Выпала возможность прочувствовать себя в в шкуре элитного варвара.",
-            "Use the uploaded user photo for face identity (100% unchanged, realistic, clean-shaven, no face swap). Replace only the FRONT elite barbarian with the user: full-body, same pose and armor style (golden horned helmet, wristbands, belt/skirt, barefoot). Keep Clash Royale look. Keep the second barbarian in background. Arena with red carpet, bridge/towers, warm cinematic light, slight depth of field.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoon face, no plastic skin, no added beard or mustache. PRO REFERENCE TASK: use all input references. Reference mapping: image #1 is target Clash Royale layout/composition; image #2 is user identity photo. Replace ONLY the FRONT elite barbarian with the user. Keep full-body framing, same pose direction, and the same armor style (golden horned helmet, wristbands, barbarian belt/skirt, barefoot). Keep the second barbarian in the background. Preserve arena composition from the reference (red carpet, bridge/towers, battle atmosphere). Render with cinematic warm lighting, clean textures, strong detail, slight depth of field, and natural seamless face integration.",
             1,
         ),
         (
@@ -825,9 +826,14 @@ async def _execute_ready_with_refs_generation(
     await ensure_user(user_id, username)
     is_admin = user_id in ADMIN_IDS
     charge = not is_admin
-    model = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip()
+    model = (OPENROUTER_IMAGE_GEMINI_PRO_MODEL or "").strip()
     if not model:
-        model = OPENROUTER_IMAGE_MODEL
+        await message.answer(
+            "<b>Готовые идеи временно недоступны.</b>\n"
+            "<blockquote><i>Администратору: задай <code>OPENROUTER_IMAGE_GEMINI_PRO_MODEL</code> в <code>.env</code>.</i></blockquote>",
+            parse_mode=HTML,
+        )
+        return
     if not is_openrouter_image_configured():
         await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
         return
@@ -843,18 +849,34 @@ async def _execute_ready_with_refs_generation(
     await delete_nav_source_message(message)
     wait_msg = await message.bot.send_message(chat_id, "Идет генерация картинки")
     try:
+        user_refs: list[bytes] = []
         refs: list[bytes] = []
         if extra_refs and extra_refs_first:
             refs.extend(extra_refs)
         for fid in refs_file_ids:
-            refs.append(await _download_telegram_photo_bytes(message.bot, fid))
+            b = await _download_telegram_photo_bytes(message.bot, fid)
+            user_refs.append(b)
+            refs.append(b)
         if extra_refs and not extra_refs_first:
             refs.extend(extra_refs)
-        image_bytes = await openrouter_text_and_refs_to_image_bytes(
-            prompt,
-            refs=refs,
-            model=model,
-        )
+        try:
+            image_bytes = await openrouter_text_and_refs_to_image_bytes(
+                prompt,
+                refs=refs,
+                model=model,
+            )
+        except Exception:
+            # Иногда модель/провайдер отказывает именно на сочетании "scene ref + user ref".
+            # Делаем безопасный повтор с фото пользователя, чтобы сценарий не ломался.
+            if extra_refs and user_refs:
+                logging.warning("Ready refs primary call failed; retrying with user refs only", exc_info=True)
+                image_bytes = await openrouter_text_and_refs_to_image_bytes(
+                    prompt,
+                    refs=user_refs,
+                    model=model,
+                )
+            else:
+                raise
         from_cache = False
     except Exception as exc:
         if isinstance(exc, OpenRouterApiError):

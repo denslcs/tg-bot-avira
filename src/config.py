@@ -90,7 +90,7 @@ OPENROUTER_IMAGE_MODEL: str = (
 )
 OPENROUTER_IMAGE_COST_CREDITS: int = max(1, _parse_int(os.getenv("OPENROUTER_IMAGE_COST_CREDITS", "5"), 5))
 # Фиксированная цена «Готовых идей» (не из .env).
-OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS: int = 20
+OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS: int = 30
 # Вторая модель для подписчиков (панель выбора). Должна быть с output=image на OpenRouter.
 # Пусто — только базовая модель, без панели. Не языковые модели вроде qwen/... — они не рисуют картинки.
 OPENROUTER_IMAGE_MODEL_ALT: str = os.getenv(
@@ -114,6 +114,8 @@ OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL: str = (
 OPENROUTER_IMAGE_GEMINI_PREVIEW_COST_CREDITS: int = max(
     1, _parse_int(os.getenv("OPENROUTER_IMAGE_GEMINI_PREVIEW_COST_CREDITS", "8"), 8)
 )
+# Опциональная Pro-модель для ready-флоу с референсами (если задана — приоритетнее Banana 2).
+OPENROUTER_IMAGE_GEMINI_PRO_MODEL: str = os.getenv("OPENROUTER_IMAGE_GEMINI_PRO_MODEL", "").strip()
 # В API уходит aspect_ratio 1:1 (~1024×1024, ~1 Мп по доке OpenRouter).
 # Значение вроде «1K» у FLUX на OpenRouter может давать больше мегапикселей и цену ~2.5× к тарифу «$ за Мп».
 # Пустой OPENROUTER_IMAGE_OUTPUT_SIZE — не передаём image_size (только 1:1), ближе к одному мегапикселю в биллинге.
