@@ -819,12 +819,11 @@ async def _execute_ready_with_refs_generation(
     charge = not is_admin
     model = (OPENROUTER_IMAGE_GEMINI_PRO_MODEL or "").strip()
     if not model:
-        await message.answer(
-            "<b>Готовые идеи временно недоступны.</b>\n"
-            "<blockquote><i>Администратору: задай <code>OPENROUTER_IMAGE_GEMINI_PRO_MODEL</code> в <code>.env</code>.</i></blockquote>",
-            parse_mode=HTML,
-        )
-        return
+        model = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip()
+    if not model:
+        model = (OPENROUTER_IMAGE_GEMINI_MODEL or "").strip()
+    if not model:
+        model = OPENROUTER_IMAGE_MODEL
     if not is_openrouter_image_configured():
         await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
         return
