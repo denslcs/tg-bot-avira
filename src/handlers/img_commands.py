@@ -138,6 +138,12 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             "Place the subject in a picturesque European street scene at golden hour with realistic shadows and cohesive perspective.",
             1,
         ),
+        (
+            "На отдыхе в Италии",
+            "Кинематографичный кадр на белой яхте у побережья Амальфи, мягкий закатный свет.",
+            "CRITICAL IDENTITY LOCK: Use the uploaded user photo as the only source of facial identity. Keep face and hair unchanged and realistic: same facial structure, skin texture, age, and expression. No face swap artifacts, no beautification, no plastic skin. Create a cinematic medium-wide portrait (not close-up): a young man sits relaxed on a white luxury yacht near the Italian Amalfi coastline at sunset. Outfit: elegant unbuttoned blue shirt and white shorts. Scene details: stainless steel railing, cream seat cushion, refined leather details, visible coastal city in background. Lighting: warm natural sunset with strong realistic reflections and contrast, detailed shadows, and a natural aesthetic afternoon tone. Final image should feel realistic, clean, high-detail, and polished.",
+            1,
+        ),
     ],
     "texts": [
         (
@@ -154,12 +160,18 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             "Create a cinematic noir portrait frame with dramatic key light, deep shadows, and subtle film grain.",
             1,
         ),
+        (
+            "Игра престолов: Дом Старков",
+            "Пользователь в доспехах Старков, на фоне развевается знамя с лютоволком.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face realistic and unchanged: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoon face, no plastic skin. Create a cinematic Game of Thrones style portrait: the user is wearing House Stark armor (dark northern steel/leather style, fur accents), standing confidently. Background: a large waving Stark banner with the direwolf sigil, cold northern atmosphere, dramatic overcast lighting, subtle wind and particles. Keep the scene grounded and realistic with high detail and natural face integration.",
+            1,
+        ),
     ],
     "games": [
         (
             "Фотка в эндер мире",
             "Последняя фотка перед битвой с драконом в Minecraft (высокое качество).",
-            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoonization, no pixelated face, no extra facial hair. Create a high-quality Minecraft End dimension scene: the user is sitting on top of an obsidian block at the edge of a cliff, looking directly at the camera. Camera angle: top-down, slightly tilted perspective from above. Add the user's Telegram nickname above the head in Minecraft-style yellow text with a dark outline. In the background, an Ender Dragon is flying in the sky. Keep the End-world atmosphere (obsidian, void-like depth, dramatic ambient light), with cinematic composition, sharp details, clean textures, and natural lighting integration on the user. Apply End-themed lighting on the user as well: purple-black ambient glow and subtle violet shadows on skin and clothing, so the user color grading matches the End environment naturally. Final output must look coherent, polished, and artifact-free.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoonization, no pixelated face, no extra facial hair. Create a high-quality Minecraft End dimension scene: the user is sitting on top of an obsidian block at the edge of a cliff, looking directly at the camera. Camera angle: top-down, slightly tilted perspective from above. Outfit requirement: the user must wear Minecraft-inspired diamond armor on torso and legs (diamond chestplate + diamond leggings), integrated naturally with the scene. Add the user's Telegram nickname above the head in Minecraft-style yellow text with a dark outline. In the background, an Ender Dragon is flying in the sky. Keep the End-world atmosphere (obsidian, void-like depth, dramatic ambient light), with cinematic composition, sharp details, clean textures, and natural lighting integration on the user. Apply End-themed lighting on the user as well: purple-black ambient glow and subtle violet shadows on skin, armor, and clothing, so the user color grading matches the End environment naturally. Final output must look coherent, polished, and artifact-free.",
             1,
         ),
         (
@@ -194,10 +206,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
 }
 
 _READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str] = {
-    # Референс композиции для шаблона Clash Royale.
-    "Clash Royale элитные варвары": (
-        r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_elite-barbarians-clash-royale-v0-ipl5z3r43f6b1__1_-c6614aa6-e32e-4d77-9f88-38e29baca25e.png"
-    ),
+    # Пусто: для стабильности используем только фото пользователя + промпт.
 }
 
 # Подпись для внутреннего контекста «Ещё раз» (пользователю не показываем).
@@ -1446,11 +1455,6 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             else:
                 logging.warning("Static ready ref is missing: %s", static_ref)
         refs_hint = "Reference mapping: image #1 is user identity photo."
-        if extra_refs and title == "Clash Royale элитные варвары":
-            refs_hint = (
-                "Reference mapping: image #1 is target Clash composition reference; "
-                "image #2 is user identity photo. Replace only the FRONT barbarian from #1."
-            )
         prompt = _build_ready_prompt(
             base_prompt,
             callback.from_user.username,
@@ -1460,7 +1464,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
         await state.clear()
         user_id = callback.from_user.id
         await ensure_user(user_id, callback.from_user.username)
-        extra_first = title == "Clash Royale элитные варвары"
+        extra_first = False
         await _execute_ready_with_refs_generation(
             callback.message,
             state,
