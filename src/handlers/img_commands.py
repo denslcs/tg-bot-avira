@@ -159,13 +159,13 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Фотка в эндер мире",
             "Последняя фотка перед битвой с драконом в Minecraft (высокое качество).",
-            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoonization, no pixelated face, no extra facial hair. Create a high-quality Minecraft End dimension scene: the user is sitting on top of an obsidian block at the edge of a cliff, looking directly at the camera. Camera angle: top-down, slightly tilted perspective from above. Add the user's Telegram nickname above the head in Minecraft-style yellow text with a dark outline. In the background, an Ender Dragon is flying in the sky. Keep the End-world atmosphere (obsidian, void-like depth, dramatic ambient light), with cinematic composition, sharp details, clean textures, and natural lighting integration on the user. Final output must look coherent, polished, and artifact-free.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoonization, no pixelated face, no extra facial hair. Create a high-quality Minecraft End dimension scene: the user is sitting on top of an obsidian block at the edge of a cliff, looking directly at the camera. Camera angle: top-down, slightly tilted perspective from above. Add the user's Telegram nickname above the head in Minecraft-style yellow text with a dark outline. In the background, an Ender Dragon is flying in the sky. Keep the End-world atmosphere (obsidian, void-like depth, dramatic ambient light), with cinematic composition, sharp details, clean textures, and natural lighting integration on the user. Apply End-themed lighting on the user as well: purple-black ambient glow and subtle violet shadows on skin and clothing, so the user color grading matches the End environment naturally. Final output must look coherent, polished, and artifact-free.",
             1,
         ),
         (
             "Clash Royale элитные варвары",
             "Выпала возможность прочувствовать себя в в шкуре элитного варвара.",
-            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoon face, no plastic skin, no added beard or mustache. Create a Clash Royale elite barbarian scene: replace the FRONT barbarian with the user, full-body, same armor style (golden horned helmet, wristbands, barbarian belt/skirt, barefoot), clean-shaven face. Keep one second barbarian in the background. Arena details: red carpet, bridge/towers, battle atmosphere, warm cinematic lighting, slight depth of field, clean textures, high detail, natural seamless face integration.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoon face, no plastic skin, no added beard or mustache. REFERENCE COMPOSITION RULE: Use the provided Clash Royale reference image as layout/composition anchor. Replace ONLY the FRONT (right-side, closest to camera) elite barbarian with the user. Keep the back barbarian unchanged in the background. Keep full-body framing of the front character, same pose direction and camera perspective from the reference, and same armor style (golden horned helmet, wristbands, barbarian belt/skirt, barefoot). Arena details: red carpet, bridge/towers, battle atmosphere, warm cinematic lighting, slight depth of field, clean textures, high detail, natural seamless face integration.",
             1,
         ),
         (
@@ -193,7 +193,12 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     ],
 }
 
-_READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str] = {}
+_READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str] = {
+    # Референс композиции для шаблона Clash Royale.
+    "Clash Royale элитные варвары": (
+        r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_elite-barbarians-clash-royale-v0-ipl5z3r43f6b1__1_-c6614aa6-e32e-4d77-9f88-38e29baca25e.png"
+    ),
+}
 
 # Подпись для внутреннего контекста «Ещё раз» (пользователю не показываем).
 _IMAGE_CONTEXT_LABEL = "text2img"
@@ -1441,6 +1446,11 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             else:
                 logging.warning("Static ready ref is missing: %s", static_ref)
         refs_hint = "Reference mapping: image #1 is user identity photo."
+        if extra_refs and title == "Clash Royale элитные варвары":
+            refs_hint = (
+                "Reference mapping: image #1 is target Clash composition reference; "
+                "image #2 is user identity photo. Replace only the FRONT barbarian from #1."
+            )
         prompt = _build_ready_prompt(
             base_prompt,
             callback.from_user.username,
@@ -1450,7 +1460,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
         await state.clear()
         user_id = callback.from_user.id
         await ensure_user(user_id, callback.from_user.username)
-        extra_first = False
+        extra_first = title == "Clash Royale элитные варвары"
         await _execute_ready_with_refs_generation(
             callback.message,
             state,
