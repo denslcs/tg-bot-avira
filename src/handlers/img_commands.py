@@ -155,15 +155,15 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     ],
     "games": [
         (
-            "Minecraft с ником",
-            "Реалистичный человек в сцене Minecraft: объятие с жителем, светящийся изумруд, ник над головой.",
+            "Minecraft с жителем",
+            "Совместная фотка вместе с жителем, который подозрительно смотрит на изумруд в твоих руках.",
             "CRITICAL IDENTITY LOCK: The uploaded photo is the SOLE AND ONLY source for the person's face. The face in the output must be 100% IDENTICAL to the face in the uploaded photo. STRICT FACE PRESERVATION RULES: DO NOT change facial structure (jawline, cheekbones, chin shape). DO NOT change eye shape, eye color, eyebrow shape, or eye spacing. DO NOT change nose shape or nostril appearance. DO NOT change lip shape, lip thickness, or mouth width. DO NOT change skin texture, pores, wrinkles, or blemishes. DO NOT change age, skin tone, or facial expression. DO NOT apply beautification, smoothing, or retouching. DO NOT add beard, mustache, makeup, or any facial hair not present. DO NOT make the face look like a Minecraft character or pixelated. DO NOT swap the face with any other face. ALLOWED changes: background, clothing, the Villager character, lighting, shadows, and the emerald in hand. FORBIDDEN: Any alteration to the face. The face must be EXACTLY as in the uploaded photo. Now insert the FULL-BODY person from the photo into a Minecraft scene. The person must be shown from head to toe, standing on the ground. Preserve their clothing, shoes, and body shape exactly as they are — realistic, NOT blocky. Above their head, add their Telegram nickname in Minecraft-style yellow text with a black outline. Make them stand next to a Minecraft Villager. The person is hugging the Villager with one arm. In the person's free hand, they are holding a glowing emerald. The Villager must look ALIVE and EXPRESSIVE. Give it clear ENVY on its face — eyes locked onto the emerald with desire, eyebrows slightly furrowed, mouth slightly open, posture leaning toward the emerald, one hand reaching out hesitantly. Background: Minecraft village with wooden houses, dirt path, and warm sunset lighting. Match lighting naturally between the person, the Villager, and the environment. Output: Full-body realistic person (face IDENTICAL to uploaded photo) + envious Villager + Minecraft environment.",
             1,
         ),
         (
-            "Clash Royale: Red King",
-            "Полнофигурный Red King без бороды бежит к камере, сзади гигантский файербол.",
-            "Create a highly detailed 3D scene in the style of Clash Royale. The setting is an arena with cinematic lighting, a slightly blurred crowd in the background, and a red carpet on the ground. In the foreground, show a full-body character standing in a confident pose (arms crossed in front, similar to a barbarian stance). IMPORTANT: Replace the barbarian's face with the face from the user's uploaded photo. The face must be fully realistic, not stylized, and unchanged. Preserve exact facial features, proportions, and expression. The character must be clean-shaven (no beard). Body and outfit: Muscular barbarian-style body (stylized, like in Clash Royale), golden horned helmet (elite barbarian style), spiked leather wristbands, barbarian belt and short skirt, barefoot. Background: Add a second barbarian in the background, turned slightly to the side (like the reference image). Style and rendering: Blend of a realistic human face with a stylized game body, cinematic lighting with soft highlights, depth of field (slightly blurred background), ultra-detailed, 4K quality. Additional requirements: Eye-level camera angle, full-body shot, seamless and natural face integration (no artifacts, no plastic skin effect).",
+            "Clash Royale элитные варвары",
+            "Выпала возможность прочувствовать себя в в шкуре элитного варвара.",
+            "CRITICAL: Use the uploaded photo as the only source for the face. Keep the face 100% unchanged and realistic: same features, same proportions, same expression, clean-shaven, no cartoon effect, no face swap. Create a full-body Clash Royale style scene: the person stands in a confident barbarian pose (arms crossed), wearing elite barbarian outfit (golden horned helmet, leather wristbands, barbarian belt/short skirt, barefoot). Keep body stylized game-like, but face realistic. Background: Clash Royale arena with bridge and towers, warm cinematic lighting, slight depth of field. Add one second barbarian in the background turned slightly sideways.",
             1,
         ),
         (
@@ -1374,6 +1374,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
         await callback.answer("Сначала загрузи нужное число фото.", show_alert=True)
         return
     await callback.answer()
+    await delete_nav_source_message(callback.message)
     prompt = _build_ready_prompt(base_prompt, len(photos), callback.from_user.username)
     await state.clear()
     user_id = callback.from_user.id
