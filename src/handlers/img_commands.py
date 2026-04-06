@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 from io import BytesIO
+from pathlib import Path
 
 from aiogram import F, Router
 from aiogram.filters import Command
@@ -156,14 +157,14 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     "games": [
         (
             "Minecraft с жителем",
-            "Совместная фотка вместе с жителем, который подозрительно смотрит на изумруд в твоих руках.",
-            "CRITICAL IDENTITY LOCK: The uploaded photo is the SOLE AND ONLY source for the person's face. The face in the output must be 100% IDENTICAL to the face in the uploaded photo. STRICT FACE PRESERVATION RULES: DO NOT change facial structure (jawline, cheekbones, chin shape). DO NOT change eye shape, eye color, eyebrow shape, or eye spacing. DO NOT change nose shape or nostril appearance. DO NOT change lip shape, lip thickness, or mouth width. DO NOT change skin texture, pores, wrinkles, or blemishes. DO NOT change age, skin tone, or facial expression. DO NOT apply beautification, smoothing, or retouching. DO NOT add beard, mustache, makeup, or any facial hair not present. DO NOT make the face look like a Minecraft character or pixelated. DO NOT swap the face with any other face. ALLOWED changes: background, clothing, the Villager character, lighting, shadows, and the emerald in hand. FORBIDDEN: Any alteration to the face. The face must be EXACTLY as in the uploaded photo. Now insert the FULL-BODY person from the photo into a Minecraft scene. The person must be shown from head to toe, standing on the ground. Preserve their clothing, shoes, and body shape exactly as they are — realistic, NOT blocky. Above their head, add their Telegram nickname in Minecraft-style yellow text with a black outline. Make them stand next to a Minecraft Villager. The person is hugging the Villager with one arm. In the person's free hand, they are holding a glowing emerald. The Villager must look ALIVE and EXPRESSIVE. Give it clear ENVY on its face — eyes locked onto the emerald with desire, eyebrows slightly furrowed, mouth slightly open, posture leaning toward the emerald, one hand reaching out hesitantly. Background: Minecraft village with wooden houses, dirt path, and warm sunset lighting. Match lighting naturally between the person, the Villager, and the environment. Output: Full-body realistic person (face IDENTICAL to uploaded photo) + envious Villager + Minecraft environment.",
+            "Последняя фотка перед битвой с драконом в Minecraft (высокое качество).",
+            "Use the uploaded reference scene image as composition/layout source. Replace the girl in that scene with the user from the uploaded user photo. Keep the environment and camera angle close to the reference scene. Face identity priority: use the user photo as the only source for face identity, keep face realistic and unchanged, no face swap artifacts, no beard, no cartoon face. Keep full-body framing and natural pose integrated into the scene. Style: Minecraft environment, but person remains realistic (not blocky). Improve image quality: sharp details, clean textures, cinematic lighting, high-resolution look.",
             1,
         ),
         (
             "Clash Royale элитные варвары",
             "Выпала возможность прочувствовать себя в в шкуре элитного варвара.",
-            "CRITICAL: Use the uploaded photo as the only source for the face. Keep the face 100% unchanged and realistic: same features, same proportions, same expression, clean-shaven, no cartoon effect, no face swap. Create a full-body Clash Royale style scene: the person stands in a confident barbarian pose (arms crossed), wearing elite barbarian outfit (golden horned helmet, leather wristbands, barbarian belt/short skirt, barefoot). Keep body stylized game-like, but face realistic. Background: Clash Royale arena with bridge and towers, warm cinematic lighting, slight depth of field. Add one second barbarian in the background turned slightly sideways.",
+            "Use the uploaded user photo for face identity (100% unchanged, realistic, clean-shaven, no face swap). Replace only the FRONT elite barbarian with the user: full-body, same pose and armor style (golden horned helmet, wristbands, belt/skirt, barefoot). Keep Clash Royale look. Keep the second barbarian in background. Arena with red carpet, bridge/towers, warm cinematic light, slight depth of field.",
             1,
         ),
         (
@@ -189,6 +190,17 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             2,
         ),
     ],
+}
+
+_READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str] = {
+    # Локальный референс композиции для шаблона Minecraft.
+    "Minecraft с жителем": (
+        r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_images__1_-3f249951-39c4-494e-996c-0141fbe54c73.png"
+    ),
+    # Локальный референс композиции для шаблона Clash Royale.
+    "Clash Royale элитные варвары": (
+        r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_elite-barbarians-clash-royale-v0-ipl5z3r43f6b1__1_-7585c28f-3fe6-47c2-b69c-944b0fad2af7.png"
+    ),
 }
 
 # Подпись для внутреннего контекста «Ещё раз» (пользователю не показываем).
@@ -807,6 +819,7 @@ async def _execute_ready_with_refs_generation(
     prompt: str,
     refs_file_ids: list[str],
     cost: int,
+    extra_refs: list[bytes] | None = None,
 ) -> None:
     await ensure_user(user_id, username)
     is_admin = user_id in ADMIN_IDS
@@ -829,6 +842,8 @@ async def _execute_ready_with_refs_generation(
         refs: list[bytes] = []
         for fid in refs_file_ids:
             refs.append(await _download_telegram_photo_bytes(message.bot, fid))
+        if extra_refs:
+            refs.extend(extra_refs)
         image_bytes = await openrouter_text_and_refs_to_image_bytes(
             prompt,
             refs=refs,
@@ -1335,12 +1350,23 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
     )
 
 
-def _build_ready_prompt(base_prompt: str, photo_count: int, telegram_username: str | None) -> str:
+def _build_ready_prompt(
+    base_prompt: str,
+    photo_count: int,
+    telegram_username: str | None,
+    *,
+    include_telegram_nick: bool = True,
+) -> str:
     nick = (telegram_username or "").strip()
     nick_line = f"@{nick}" if nick else "user_without_username"
+    nick_part = (
+        f"Telegram nickname to render above the head: {nick_line}\n"
+        if include_telegram_nick
+        else ""
+    )
     return (
         f"{(base_prompt or '').strip()}\n\n"
-        f"Telegram nickname to render above the head: {nick_line}\n"
+        f"{nick_part}"
         f"Use exactly {photo_count} reference image(s) from input. Preserve facial identity and natural skin texture."
     )
 
@@ -1369,13 +1395,30 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             edit=True,
         )
         return
-    _title, _preview, base_prompt, need = ideas[idx]
+    title, _preview, base_prompt, need = ideas[idx]
     if len(photos) < need:
         await callback.answer("Сначала загрузи нужное число фото.", show_alert=True)
         return
     await callback.answer()
     await delete_nav_source_message(callback.message)
-    prompt = _build_ready_prompt(base_prompt, len(photos), callback.from_user.username)
+    include_nick = title != "Clash Royale элитные варвары"
+    prompt = _build_ready_prompt(
+        base_prompt,
+        len(photos),
+        callback.from_user.username,
+        include_telegram_nick=include_nick,
+    )
+    extra_refs: list[bytes] = []
+    static_ref = _READY_IDEA_STATIC_REF_BY_TITLE.get(title)
+    if static_ref:
+        p = Path(static_ref)
+        if p.is_file():
+            try:
+                extra_refs.append(p.read_bytes())
+            except OSError:
+                logging.warning("Failed to read static ready ref: %s", static_ref)
+        else:
+            logging.warning("Static ready ref is missing: %s", static_ref)
     await state.clear()
     user_id = callback.from_user.id
     await ensure_user(user_id, callback.from_user.username)
@@ -1387,6 +1430,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
         prompt=prompt,
         cost=OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS,
         refs_file_ids=photos,
+        extra_refs=extra_refs,
     )
 
 
