@@ -161,9 +161,9 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             1,
         ),
         (
-            "Игра престолов: Дом Старков",
-            "Пользователь в доспехах Старков, на фоне развевается знамя с лютоволком.",
-            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face realistic and unchanged: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoon face, no plastic skin. Create a cinematic Game of Thrones style portrait: the user is wearing House Stark armor (dark northern steel/leather style, fur accents), standing confidently. Background: a large waving Stark banner with the direwolf sigil, cold northern atmosphere, dramatic overcast lighting, subtle wind and particles. Keep the scene grounded and realistic with high detail and natural face integration.",
+            "Кто ты из Вестероса",
+            "Кинематографичный 3D-образ в стиле Game of Thrones: выбери дом Вестероса под внешность пользователя.",
+            "Use the uploaded character from the image as the identity reference and place this person into the final scene. Create an ultra-realistic 3D close-up render of the character standing front-facing. Shoot from a low camera angle so the character dominates the frame. Background should be blurred and misty, with cinematic bokeh, light bloom, and soft shadows. Visual quality requirements: exceptional detail, fine skin texture, clearly defined hair roots, strong cinematic lighting, full 3D depth feeling, premium CG texture quality as if made by top-tier 3D artists. Aspect ratio 3:4, high resolution. Do NOT alter face features or hair — keep them 100% unchanged. Determine which House of Westeros best fits the user, then style the outfit and color palette accordingly.",
             1,
         ),
     ],
@@ -1442,7 +1442,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             await callback.bot.send_message(chat_id, "Сначала загрузи нужное число фото.")
             return
         await callback.bot.send_message(chat_id, "Запускаю генерацию…")
-        include_nick = title != "Clash Royale элитные варвары"
+        include_nick = title not in ("Clash Royale элитные варвары", "На отдыхе в Италии")
         extra_refs: list[bytes] = []
         static_ref = _READY_IDEA_STATIC_REF_BY_TITLE.get(title)
         if static_ref:
