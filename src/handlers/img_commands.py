@@ -1442,7 +1442,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             await callback.bot.send_message(chat_id, "Сначала загрузи нужное число фото.")
             return
         await callback.bot.send_message(chat_id, "Запускаю генерацию…")
-        include_nick = title not in ("Clash Royale элитные варвары", "На отдыхе в Италии")
+        include_nick = title not in ("Clash Royale элитные варвары", "На отдыхе в Италии", "Кто ты из Вестероса")
         extra_refs: list[bytes] = []
         static_ref = _READY_IDEA_STATIC_REF_BY_TITLE.get(title)
         if static_ref:
