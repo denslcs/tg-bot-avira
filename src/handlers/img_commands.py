@@ -156,8 +156,8 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Победа над Байрой на ринге",
             "Реалистичный кадр боксерского боя: пользователь победитель, Байра проигравший.",
-            "Create a highly photorealistic boxing match result scene inspired by a real sports photo. IMPORTANT REFERENCE MAPPING: image #1 is Bayra identity reference, image #2 is user identity reference. CRITICAL IDENTITY LOCK FOR BOTH: preserve Bayra and user faces from their references with high fidelity (same facial structure, eyes, nose, lips, skin texture, and age). Do not replace Bayra with another person and do not distort either face. Keep both faces clearly visible and recognizable. Final moment: the user is the winner and Bayra is the loser. Composition should look like an authentic post-fight ring photo with a referee between fighters raising the user's hand. Arena environment must feel fully real: a large crowded stadium, visible audience around the ring, bright overhead floodlights/spotlights, realistic stage lighting on fighters, subtle haze, and natural broadcast-style contrast. No country flags, no national symbols, no flag patches on outfits. Keep natural body proportions, realistic gloves and uniforms, documentary sports photography style, and clean high-detail realism.",
-            2,
+            "Create a highly photorealistic boxing match result scene inspired by a real sports photo. IMPORTANT REFERENCE MAPPING: image #1 is user identity reference, image #2 is Bayra identity reference. CRITICAL IDENTITY LOCK FOR BOTH: preserve Bayra and user faces from their references with high fidelity (same facial structure, eyes, nose, lips, skin texture, and age). Do not replace Bayra with another person and do not distort either face. Keep both faces clearly visible and recognizable. Final moment: the user is the winner and Bayra is the loser. Composition should look like an authentic post-fight ring photo with a referee between fighters raising the user's hand. Arena environment must feel fully real: a large crowded stadium, visible audience around the ring, bright overhead floodlights/spotlights, realistic stage lighting on fighters, subtle haze, and natural broadcast-style contrast. No country flags, no national symbols, no flag patches on outfits. Keep natural body proportions, realistic gloves and uniforms, documentary sports photography style, and clean high-detail realism.",
+            1,
         ),
     ],
     "texts": [
@@ -221,7 +221,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
 }
 
 _READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str] = {
-    # Пусто: для стабильности используем только фото пользователя + промпт.
+    "Победа над Байрой на ринге": r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_bayram-kakhrumanov-4ac2a49c-e7d4-4f9d-8d4c-c64d7af611f0.png",
 }
 
 # Подпись для внутреннего контекста «Ещё раз» (пользователю не показываем).
@@ -1486,7 +1486,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
                 logging.warning("Static ready ref is missing: %s", static_ref)
         refs_hint = "Reference mapping: image #1 is user identity photo."
         if title == "Победа над Байрой на ринге":
-            refs_hint = "Reference mapping: image #1 is Bayra identity photo. Image #2 is user identity photo."
+            refs_hint = "Reference mapping: image #1 is user identity photo. Image #2 is Bayra identity photo."
         prompt = _build_ready_prompt(
             base_prompt,
             callback.from_user.username,
