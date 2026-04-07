@@ -101,6 +101,7 @@ READY_IDEA_CATEGORIES: list[tuple[str, str]] = [
     ("outfits", "👕 Одежда"),
     ("locations", "🏝 Локации"),
     ("celebrities", "🌟 Знаменитости"),
+    ("for_two", "💞 Для двоих"),
     ("texts", "📝 Тексты"),
     ("movies", "🎬 Фильмы"),
     ("games", "🎮 Игры"),
@@ -145,6 +146,12 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             "CRITICAL IDENTITY LOCK: Use the uploaded user photo as the only source of facial identity. Keep face and hair unchanged and realistic: same facial structure, skin texture, age, and expression. No face swap artifacts, no beautification, no plastic skin. Create a cinematic medium-wide portrait (not close-up): a young man sits relaxed on a white luxury yacht near the Italian Amalfi coastline at sunset. Outfit: elegant unbuttoned blue shirt and white shorts. Scene details: stainless steel railing, cream seat cushion, refined leather details, visible coastal city in background. Lighting: warm natural sunset with strong realistic reflections and contrast, detailed shadows, and a natural aesthetic afternoon tone. Final image should feel realistic, clean, high-detail, and polished.",
             1,
         ),
+        (
+            "Бекрумс VHS",
+            "VHS-кадр в Backrooms: пользователь в движении, эффект записи и широкий угол.",
+            "IMPORTANT REFERENCE MAPPING: image #1 is user identity photo, image #2 is Backrooms scene/style reference. CRITICAL IDENTITY LOCK: keep the user face realistic and recognizable. Create a found-footage VHS style frame in Backrooms atmosphere: long yellow empty corridors, fluorescent ceiling lights, liminal uncanny mood, low-fi analog noise and tape artifacts. The user looks directly into the camera and is caught in dynamic playful movement (slight goofy pose / expressive motion), not static. Wardrobe rule: if input shows only head/portrait, dress the user in a yellow utility jumpsuit; if input is full-body, keep the user's original outfit. Camera rule: slight fisheye look (about 120-degree field of view), camera tilted and positioned a little lower than the user angle. Add on-screen VHS timestamp/date overlay in the lower-left corner (recording-like style) similar to the reference. Keep the result photorealistic while preserving authentic VHS degradation.",
+            1,
+        ),
     ],
     "celebrities": [
         (
@@ -160,6 +167,14 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             1,
         ),
     ],
+    "for_two": [
+        (
+            "Для влюбленных: рыцарь и дама",
+            "Романтическая сцена на закате: рыцарь (фото 1) и женщина (фото 2).",
+            "IMPORTANT REFERENCE MAPPING: image #1 is the knight identity (male), image #2 is the woman identity (female). CRITICAL IDENTITY LOCK FOR BOTH: preserve both faces with high fidelity (facial structure, eyes, nose, lips, skin texture, age) and keep them clearly recognizable. Create a romantic portrait scene with a horse, a medieval knight, and sunset atmosphere. The knight must be based on image #1, without helmet, with visible face. The woman must be based on image #2, in a flowing dress and veil, with visible face. Knight armor should be highly detailed, richly decorated, realistic polished metal. Cinematic fantasy mood, warm golden lighting, volumetric fog, pastel haze. Photorealistic, highly detailed, sharp focus, realistic skin texture, shot on ARRI Alexa, 85mm lens, high resolution.",
+            2,
+        ),
+    ],
     "texts": [
         (
             "Постер с текстом",
@@ -170,15 +185,15 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     ],
     "movies": [
         (
-            "Кино-кадр noir",
-            "Драматичный кадр с контрастным светом, как сцена из фильма.",
-            "Create a cinematic noir portrait frame with dramatic key light, deep shadows, and subtle film grain.",
-            1,
-        ),
-        (
             "Кто ты из Вестероса",
             "Кинематографичный 3D-образ в стиле Game of Thrones: выбери дом Вестероса под внешность пользователя.",
             "Use the uploaded character from the image as the identity reference and place this person into the final scene. Create an ultra-realistic 3D close-up render of the character standing front-facing. Shoot from a low camera angle so the character dominates the frame. Background should be blurred and misty, with cinematic bokeh, light bloom, and soft shadows. Visual quality requirements: exceptional detail, fine skin texture, clearly defined hair roots, strong cinematic lighting, full 3D depth feeling, premium CG texture quality as if made by top-tier 3D artists. Aspect ratio 3:4, high resolution. Do NOT alter face features or hair — keep them 100% unchanged. RANDOM HOUSE RULE: randomly choose exactly one house from this list only: Stark, Lannister, Targaryen, Baratheon. Then style outfit, heraldic details, and color palette strictly according to the selected house.",
+            1,
+        ),
+        (
+            "Персонаж из Аватара",
+            "Пользователь как герой мира Avatar: кинематографичный кадр в стиле фильма.",
+            "CRITICAL IDENTITY LOCK: Use the uploaded user photo as the only identity reference. Keep face structure, age, skin texture, and hairstyle recognizable and realistic. Transform the user into a highly detailed, photorealistic Avatar-universe character (Na'vi aesthetics, blue skin, cinematic tribal costume design, premium textures). GENDER ADAPTATION RULE: infer presentation from the user photo and choose matching character styling automatically. If the user appears male, use a Jake-inspired warrior costume and masculine silhouette. If the user appears female, use a Neytiri-inspired warrior costume and feminine silhouette. Keep the final result respectful, realistic, and coherent. Camera and mood: slightly low upward-facing angle, dramatic cinematic lighting, high contrast, deep saturated blue background, warm highlights on one side of the face and soft velvety shadows on the other. No props, no extra accessories. Emphasize detailed costume materials, realistic skin texture, controlled color grading, and an editorial close portrait feeling.",
             1,
         ),
     ],
@@ -193,12 +208,6 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             "Clash Royale элитные варвары",
             "Выпала возможность прочувствовать себя в в шкуре элитного варвара.",
             "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoon face, no plastic skin, no added beard or mustache. REFERENCE COMPOSITION RULE: Use the provided Clash Royale reference image as layout/composition anchor. Replace ONLY the FRONT (right-side, closest to camera) elite barbarian with the user. Keep the back barbarian as the second character in the scene. POSE RULE: user and the second barbarian should stand close in a friendly side-by-side hug pose, with each character placing one arm over the other's shoulders (mutual arm-over-shoulder). Keep full-body framing of both characters, same arena perspective from the reference, and same armor style (golden horned helmet, wristbands, barbarian belt/skirt, barefoot). Arena details: red carpet, bridge/towers, battle atmosphere, warm cinematic lighting, slight depth of field, clean textures, high detail, natural seamless face integration.",
-            1,
-        ),
-        (
-            "Game character",
-            "Стилизация под персонажа видеоигры с ярким светом и динамикой.",
-            "Transform subject into a high-end game character portrait with stylized but realistic features, vibrant rim light, and dynamic mood.",
             1,
         ),
     ],
@@ -222,6 +231,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
 
 _READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str] = {
     "Победа над Мухаммадом Али на ринге": r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_114b8c4714b8b9b1196d51ad8d72a-1b94cd0d-73ba-44de-b3da-08a08fade423.png",
+    "Бекрумс VHS": r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_the_backrooms__vhs_version__by_dalay_lamma_df1citn-fullview-028659ba-061d-4dfb-9cac-95c0ab34659c.png",
 }
 
 # Подпись для внутреннего контекста «Ещё раз» (пользователю не показываем).
@@ -1461,19 +1471,9 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             await callback.bot.send_message(chat_id, "Сначала загрузи нужное число фото.")
             return
         await callback.bot.send_message(chat_id, "Запускаю генерацию…")
-        include_nick = title not in (
-            "Clash Royale элитные варвары",
-            "На отдыхе в Италии",
-            "Кто ты из Вестероса",
-            "Переговоры с Путиным",
-            "Победа над Мухаммадом Али на ринге",
-        )
+        include_nick = title == "Фотка в эндер мире"
         model_override = None
-        if title in (
-            "На отдыхе в Италии",
-            "Кто ты из Вестероса",
-            "Победа над Мухаммадом Али на ринге",
-        ):
+        if title == "На отдыхе в Италии":
             model_override = (OPENROUTER_IMAGE_MODEL_ALT or "").strip()
         extra_refs: list[bytes] = []
         static_ref = _READY_IDEA_STATIC_REF_BY_TITLE.get(title)
@@ -1489,8 +1489,12 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             else:
                 logging.warning("Static ready ref is missing: %s", static_ref)
         refs_hint = "Reference mapping: image #1 is user identity photo."
+        if title == "Бекрумс VHS":
+            refs_hint = "Reference mapping: image #1 is user identity photo. Image #2 is Backrooms scene/style reference."
         if title == "Победа над Мухаммадом Али на ринге":
             refs_hint = "Reference mapping: image #1 is user identity photo. Image #2 is Muhammad Ali identity photo."
+        if title == "Для влюбленных: рыцарь и дама":
+            refs_hint = "Reference mapping: image #1 is knight identity photo. Image #2 is woman identity photo."
         prompt = _build_ready_prompt(
             base_prompt,
             callback.from_user.username,
