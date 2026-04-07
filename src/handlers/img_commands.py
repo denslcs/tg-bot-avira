@@ -149,7 +149,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Бекрумс VHS",
             "VHS-кадр в Backrooms: пользователь в движении, эффект записи и широкий угол.",
-            "IMPORTANT REFERENCE MAPPING: image #1 is user identity photo, image #2 is Backrooms scene/style reference. CRITICAL IDENTITY LOCK: keep the user face realistic and recognizable. Create a found-footage VHS style frame in Backrooms atmosphere: long yellow empty corridors, fluorescent ceiling lights, liminal uncanny mood, low-fi analog noise and tape artifacts. The user looks directly into the camera and is caught in dynamic playful movement (slight goofy pose / expressive motion), not static. Wardrobe rule: if input shows only head/portrait, dress the user in a yellow utility jumpsuit; if input is full-body, keep the user's original outfit. Camera rule: slight fisheye look (about 120-degree field of view), camera tilted and positioned a little lower than the user angle. Add on-screen VHS timestamp/date overlay in the lower-left corner (recording-like style) similar to the reference. Keep the result photorealistic while preserving authentic VHS degradation.",
+            "CRITICAL IDENTITY LOCK: keep the user face realistic and recognizable. Create a found-footage VHS style frame in Backrooms atmosphere: long yellow empty corridors, fluorescent ceiling lights, liminal uncanny mood, low-fi analog noise and tape artifacts. The user looks directly into the camera and is caught in dynamic playful movement (slight goofy pose / expressive motion), not static. Wardrobe rule: if input shows only head/portrait, dress the user in a yellow utility jumpsuit; if input is full-body, keep the user's original outfit. Camera rule: slight fisheye look (about 120-degree field of view), camera tilted and positioned a little lower than the user angle. Add on-screen VHS timestamp/date overlay in the lower-left corner (recording-like style). Keep the result photorealistic while preserving authentic VHS degradation.",
             1,
         ),
     ],
@@ -231,7 +231,6 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
 
 _READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str] = {
     "Победа над Мухаммадом Али на ринге": r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_114b8c4714b8b9b1196d51ad8d72a-1b94cd0d-73ba-44de-b3da-08a08fade423.png",
-    "Бекрумс VHS": r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_the_backrooms__vhs_version__by_dalay_lamma_df1citn-fullview-028659ba-061d-4dfb-9cac-95c0ab34659c.png",
 }
 
 # Подпись для внутреннего контекста «Ещё раз» (пользователю не показываем).
@@ -1489,8 +1488,6 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             else:
                 logging.warning("Static ready ref is missing: %s", static_ref)
         refs_hint = "Reference mapping: image #1 is user identity photo."
-        if title == "Бекрумс VHS":
-            refs_hint = "Reference mapping: image #1 is user identity photo. Image #2 is Backrooms scene/style reference."
         if title == "Победа над Мухаммадом Али на ринге":
             refs_hint = "Reference mapping: image #1 is user identity photo. Image #2 is Muhammad Ali identity photo."
         if title == "Для влюбленных: рыцарь и дама":
