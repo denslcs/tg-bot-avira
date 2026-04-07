@@ -100,6 +100,7 @@ READY_IDEA_CATEGORIES: list[tuple[str, str]] = [
     ("trends", "🔥 Тренды"),
     ("outfits", "👕 Одежда"),
     ("locations", "🏝 Локации"),
+    ("celebrities", "🌟 Знаменитости"),
     ("texts", "📝 Тексты"),
     ("movies", "🎬 Фильмы"),
     ("games", "🎮 Игры"),
@@ -145,6 +146,14 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             1,
         ),
     ],
+    "celebrities": [
+        (
+            "Переговоры с Путиным",
+            "Пользователь сидит в кабинете Путина на официальных переговорах.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the user's face 100% unchanged and realistic: same facial structure, skin texture, age, and expression. Create a photorealistic formal negotiation scene inside Vladimir Putin's office: Vladimir Putin and the user are seated at a negotiation table facing each other in a calm diplomatic meeting setup. Wardrobe requirement: the user must wear a formal official business suit (classic dark suit, white shirt, tie). Preserve natural human proportions, realistic skin texture, authentic office lighting, detailed interior, clean composition, and professional documentary photo style.",
+            1,
+        ),
+    ],
     "texts": [
         (
             "Постер с текстом",
@@ -163,7 +172,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Кто ты из Вестероса",
             "Кинематографичный 3D-образ в стиле Game of Thrones: выбери дом Вестероса под внешность пользователя.",
-            "Use the uploaded character from the image as the identity reference and place this person into the final scene. Create an ultra-realistic 3D close-up render of the character standing front-facing. Shoot from a low camera angle so the character dominates the frame. Background should be blurred and misty, with cinematic bokeh, light bloom, and soft shadows. Visual quality requirements: exceptional detail, fine skin texture, clearly defined hair roots, strong cinematic lighting, full 3D depth feeling, premium CG texture quality as if made by top-tier 3D artists. Aspect ratio 3:4, high resolution. Do NOT alter face features or hair — keep them 100% unchanged. Determine which House of Westeros best fits the user, then style the outfit and color palette accordingly.",
+            "Use the uploaded character from the image as the identity reference and place this person into the final scene. Create an ultra-realistic 3D close-up render of the character standing front-facing. Shoot from a low camera angle so the character dominates the frame. Background should be blurred and misty, with cinematic bokeh, light bloom, and soft shadows. Visual quality requirements: exceptional detail, fine skin texture, clearly defined hair roots, strong cinematic lighting, full 3D depth feeling, premium CG texture quality as if made by top-tier 3D artists. Aspect ratio 3:4, high resolution. Do NOT alter face features or hair — keep them 100% unchanged. RANDOM HOUSE RULE: randomly choose exactly one house from this list only: Stark, Lannister, Targaryen, Baratheon. Then style outfit, heraldic details, and color palette strictly according to the selected house.",
             1,
         ),
     ],
@@ -171,13 +180,13 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Фотка в эндер мире",
             "Последняя фотка перед битвой с драконом в Minecraft (высокое качество).",
-            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoonization, no pixelated face, no extra facial hair. Create a high-quality Minecraft End dimension scene: the user is sitting on top of an obsidian block at the edge of a cliff, looking directly at the camera. Camera angle: top-down, slightly tilted perspective from above. Outfit requirement: the user must wear Minecraft-inspired diamond armor on torso and legs (diamond chestplate + diamond leggings), integrated naturally with the scene. Add the user's Telegram nickname above the head in Minecraft-style yellow text with a dark outline. In the background, an Ender Dragon is flying in the sky. Keep the End-world atmosphere (obsidian, void-like depth, dramatic ambient light), with cinematic composition, sharp details, clean textures, and natural lighting integration on the user. Apply End-themed lighting on the user as well: purple-black ambient glow and subtle violet shadows on skin, armor, and clothing, so the user color grading matches the End environment naturally. Final output must look coherent, polished, and artifact-free.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoonization, no pixelated face, no extra facial hair. PROPORTION RULE: Keep natural human head-to-body proportions. Head must not look oversized; keep it slightly stylized but close to realistic proportions, with shoulders/torso visibly dominant in volume. Create a high-quality Minecraft End dimension scene: the user is sitting on top of an obsidian block at the edge of a cliff, looking directly at the camera. Camera angle: top-down, slightly tilted perspective from above. Outfit requirement: the user must wear Minecraft-inspired diamond armor on torso and legs (diamond chestplate + diamond leggings), integrated naturally with the scene. Add the user's Telegram nickname above the head in Minecraft-style yellow text with a dark outline. In the background, an Ender Dragon is flying in the sky. Keep the End-world atmosphere (obsidian, void-like depth, dramatic ambient light), with cinematic composition, sharp details, clean textures, and natural lighting integration on the user. Apply End-themed lighting on the user as well: purple-black ambient glow and subtle violet shadows on skin, armor, and clothing, so the user color grading matches the End environment naturally. Final output must look coherent, polished, and artifact-free.",
             1,
         ),
         (
             "Clash Royale элитные варвары",
             "Выпала возможность прочувствовать себя в в шкуре элитного варвара.",
-            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoon face, no plastic skin, no added beard or mustache. REFERENCE COMPOSITION RULE: Use the provided Clash Royale reference image as layout/composition anchor. Replace ONLY the FRONT (right-side, closest to camera) elite barbarian with the user. Keep the back barbarian unchanged in the background. Keep full-body framing of the front character, same pose direction and camera perspective from the reference, and same armor style (golden horned helmet, wristbands, barbarian belt/skirt, barefoot). Arena details: red carpet, bridge/towers, battle atmosphere, warm cinematic lighting, slight depth of field, clean textures, high detail, natural seamless face integration.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoon face, no plastic skin, no added beard or mustache. REFERENCE COMPOSITION RULE: Use the provided Clash Royale reference image as layout/composition anchor. Replace ONLY the FRONT (right-side, closest to camera) elite barbarian with the user. Keep the back barbarian as the second character in the scene. POSE RULE: user and the second barbarian should stand close in a friendly side-by-side hug pose, with each character placing one arm over the other's shoulders (mutual arm-over-shoulder). Keep full-body framing of both characters, same arena perspective from the reference, and same armor style (golden horned helmet, wristbands, barbarian belt/skirt, barefoot). Arena details: red carpet, bridge/towers, battle atmosphere, warm cinematic lighting, slight depth of field, clean textures, high detail, natural seamless face integration.",
             1,
         ),
         (
@@ -825,13 +834,17 @@ async def _execute_ready_with_refs_generation(
     prompt: str,
     refs_file_ids: list[str],
     cost: int,
+    model_override: str | None = None,
     extra_refs: list[bytes] | None = None,
     extra_refs_first: bool = False,
+    strict_refs: bool = False,
 ) -> None:
     await ensure_user(user_id, username)
     is_admin = user_id in ADMIN_IDS
     charge = not is_admin
-    model = (OPENROUTER_IMAGE_GEMINI_PRO_MODEL or "").strip()
+    model = (model_override or "").strip()
+    if not model:
+        model = (OPENROUTER_IMAGE_GEMINI_PRO_MODEL or "").strip()
     if not model:
         model = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip()
     if not model:
@@ -872,7 +885,7 @@ async def _execute_ready_with_refs_generation(
         except Exception:
             # Иногда модель/провайдер отказывает именно на сочетании "scene ref + user ref".
             # Делаем безопасный повтор с фото пользователя, чтобы сценарий не ломался.
-            if extra_refs and user_refs:
+            if (not strict_refs) and extra_refs and user_refs:
                 logging.warning("Ready refs primary call failed; retrying with user refs only", exc_info=True)
                 image_bytes = await openrouter_text_and_refs_to_image_bytes(
                     prompt,
@@ -1442,9 +1455,19 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             await callback.bot.send_message(chat_id, "Сначала загрузи нужное число фото.")
             return
         await callback.bot.send_message(chat_id, "Запускаю генерацию…")
-        include_nick = title not in ("Clash Royale элитные варвары", "На отдыхе в Италии", "Кто ты из Вестероса")
+        include_nick = title not in (
+            "Clash Royale элитные варвары",
+            "На отдыхе в Италии",
+            "Кто ты из Вестероса",
+            "Переговоры с Путиным",
+        )
+        model_override = None
+        if title == "На отдыхе в Италии":
+            model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip()
         extra_refs: list[bytes] = []
         static_ref = _READY_IDEA_STATIC_REF_BY_TITLE.get(title)
+        if title in ("Clash Royale элитные варвары", "На отдыхе в Италии", "Кто ты из Вестероса"):
+            static_ref = None
         if static_ref:
             p = Path(static_ref)
             if p.is_file():
@@ -1465,6 +1488,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
         user_id = callback.from_user.id
         await ensure_user(user_id, callback.from_user.username)
         extra_first = False
+        strict_refs = False
         await _execute_ready_with_refs_generation(
             callback.message,
             state,
@@ -1473,8 +1497,10 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             prompt=prompt,
             cost=OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS,
             refs_file_ids=photos,
+            model_override=model_override,
             extra_refs=extra_refs,
             extra_refs_first=extra_first,
+            strict_refs=strict_refs,
         )
     except Exception:
         logging.exception("ready_confirm_and_generate failed")
