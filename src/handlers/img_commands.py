@@ -153,6 +153,12 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the user's face 100% unchanged and realistic: same facial structure, skin texture, age, and expression. Create a photorealistic formal negotiation scene inside Vladimir Putin's office: Vladimir Putin and the user are seated at a negotiation table facing each other in a calm diplomatic meeting setup. Wardrobe requirement: the user must wear a formal official business suit (classic dark suit, white shirt, tie). Preserve natural human proportions, realistic skin texture, authentic office lighting, detailed interior, clean composition, and professional documentary photo style.",
             1,
         ),
+        (
+            "Победа над Байрой на ринге",
+            "Реалистичный кадр боксерского боя: пользователь победитель, Байра проигравший.",
+            "Create a highly photorealistic boxing match result scene inspired by a real sports photo. IMPORTANT REFERENCE MAPPING: image #1 is Bayra identity reference, image #2 is user identity reference. CRITICAL IDENTITY LOCK FOR BOTH: preserve Bayra and user faces from their references with high fidelity (same facial structure, eyes, nose, lips, skin texture, and age). Do not replace Bayra with another person and do not distort either face. Keep both faces clearly visible and recognizable. Final moment: the user is the winner and Bayra is the loser. Composition should look like an authentic post-fight ring photo with a referee between fighters raising the user's hand. Arena environment must feel fully real: a large crowded stadium, visible audience around the ring, bright overhead floodlights/spotlights, realistic stage lighting on fighters, subtle haze, and natural broadcast-style contrast. No country flags, no national symbols, no flag patches on outfits. Keep natural body proportions, realistic gloves and uniforms, documentary sports photography style, and clean high-detail realism.",
+            2,
+        ),
     ],
     "texts": [
         (
@@ -1460,10 +1466,11 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             "На отдыхе в Италии",
             "Кто ты из Вестероса",
             "Переговоры с Путиным",
+            "Победа над Байрой на ринге",
         )
         model_override = None
         if title == "На отдыхе в Италии":
-            model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip()
+            model_override = (OPENROUTER_IMAGE_MODEL_ALT or "").strip()
         extra_refs: list[bytes] = []
         static_ref = _READY_IDEA_STATIC_REF_BY_TITLE.get(title)
         if title in ("Clash Royale элитные варвары", "На отдыхе в Италии", "Кто ты из Вестероса"):
@@ -1478,6 +1485,8 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             else:
                 logging.warning("Static ready ref is missing: %s", static_ref)
         refs_hint = "Reference mapping: image #1 is user identity photo."
+        if title == "Победа над Байрой на ринге":
+            refs_hint = "Reference mapping: image #1 is Bayra identity photo. Image #2 is user identity photo."
         prompt = _build_ready_prompt(
             base_prompt,
             callback.from_user.username,
