@@ -1469,7 +1469,11 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             "Победа над Мухаммадом Али на ринге",
         )
         model_override = None
-        if title == "На отдыхе в Италии":
+        if title in (
+            "На отдыхе в Италии",
+            "Кто ты из Вестероса",
+            "Победа над Мухаммадом Али на ринге",
+        ):
             model_override = (OPENROUTER_IMAGE_MODEL_ALT or "").strip()
         extra_refs: list[bytes] = []
         static_ref = _READY_IDEA_STATIC_REF_BY_TITLE.get(title)
