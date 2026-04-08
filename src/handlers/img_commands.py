@@ -1304,7 +1304,6 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.from_user is None or callback.message is None or not callback.data:
         await callback.answer("Ошибка запроса.", show_alert=True)
         return
-    await callback.answer()
     payload = callback.data.replace(CB_READY_NAV_PREFIX, "", 1)
     if payload == "back_cats":
         await state.set_state(ImageGenState.ready_choosing_category)
@@ -1314,6 +1313,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
             reply_markup=_ready_categories_keyboard(),
             parse_mode=HTML,
         )
+        await callback.answer()
         return
     parts = payload.split(":")
     if len(parts) != 2 or not parts[1].isdigit():
@@ -1326,9 +1326,17 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
     if not ideas:
         await callback.answer("Категория недоступна.", show_alert=True)
         return
-    idx = int(idx_raw) % len(ideas)
+    total = len(ideas)
+    idx = int(idx_raw) % total
+    current_idx = int(data.get("_ready_index") or 0) % total
+
     if action in ("prev", "next"):
+        # При одном варианте ⬅️/➡️ ведут на тот же индекс — не дублировать сообщение (edit «не изменился»).
+        if idx == current_idx:
+            await callback.answer("В этой категории только один вариант.")
+            return
         await _open_ready_card(callback.message, state, category=category, index=idx, edit=True)
+        await callback.answer()
         return
     if action == "pick":
         title, _preview, _prompt, photos_required = ideas[idx]
@@ -1344,6 +1352,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
             reply_markup=_ready_wait_photo_keyboard(),
             parse_mode=HTML,
         )
+        await callback.answer()
         return
     await callback.answer("Неизвестное действие.", show_alert=True)
 

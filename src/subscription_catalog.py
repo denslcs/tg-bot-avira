@@ -5,11 +5,10 @@
 NONSUB_IMAGE_WINDOW_DAYS суток от момента исчерпания (UTC, то же время суток).
 Каждая генерация со списанием кредитов; кредиты не обходят лимит.
 
-Звёзды (XTR): все тарифы с одной ценой $1.99 → 150 ⭐ (шкала как у Nova: $2.99 → 225 ⭐,
-т.е. round(usd / 2.99 * 225)).
+Звёзды (XTR): round(usd / 2.99 * 225) — та же шкала, что раньше (опорная точка Nova $2.99 → 225 ⭐).
 
-Бонусные кредиты на баланс при оплате: Starter 250 (3 дня), Nova 480, Supernova 900,
-Galaxy 1700, Universe 3400. Матрица моделей по тарифам: _model_choices_for_subscription_plan в img_commands.
+Цены ₽ / $ / ⭐ по тарифам — как до объединения; на баланс при оплате: Starter 250 кр. (3 дня),
+Nova 480, Supernova 900, Galaxy 1700, Universe 3400.
 """
 
 from __future__ import annotations
@@ -76,8 +75,10 @@ STARTER_ALREADY_PURCHASED_TEXT = (
     "<code>/start</code> → <b>Оплатить</b>.</blockquote>"
 )
 
-# Единые цены по всем тарифам; различаются только бонусные кредиты и срок (Starter — 3 дня).
-_STARS_USD_199: int = round(1.99 / 2.99 * 225)  # 150
+def _stars_from_usd(usd: float) -> int:
+    """Та же формула, что в каталоге до смены: Nova $2.99 → 225 ⭐."""
+    return max(1, round(usd / 2.99 * 225))
+
 
 PLANS: dict[str, SubscriptionPlan] = {
     "starter": SubscriptionPlan(
@@ -85,40 +86,40 @@ PLANS: dict[str, SubscriptionPlan] = {
         title="🚀 Starter",
         price_rub=159,
         price_usd=1.99,
-        stars=_STARS_USD_199,
+        stars=_stars_from_usd(1.99),
         bonus_credits=250,
         period_days=3,
     ),
     "nova": SubscriptionPlan(
         id="nova",
         title="✨ Nova",
-        price_rub=159,
-        price_usd=1.99,
-        stars=_STARS_USD_199,
+        price_rub=239,
+        price_usd=2.99,
+        stars=_stars_from_usd(2.99),
         bonus_credits=480,
     ),
     "supernova": SubscriptionPlan(
         id="supernova",
         title="🌟 SuperNova",
-        price_rub=159,
-        price_usd=1.99,
-        stars=_STARS_USD_199,
+        price_rub=399,
+        price_usd=4.99,
+        stars=_stars_from_usd(4.99),
         bonus_credits=900,
     ),
     "galaxy": SubscriptionPlan(
         id="galaxy",
         title="🌌 Galaxy",
-        price_rub=159,
-        price_usd=1.99,
-        stars=_STARS_USD_199,
+        price_rub=799,
+        price_usd=9.99,
+        stars=_stars_from_usd(9.99),
         bonus_credits=1700,
     ),
     "universe": SubscriptionPlan(
         id="universe",
         title="🌍 Universe",
-        price_rub=159,
-        price_usd=1.99,
-        stars=_STARS_USD_199,
+        price_rub=1599,
+        price_usd=19.99,
+        stars=_stars_from_usd(19.99),
         bonus_credits=3400,
     ),
 }

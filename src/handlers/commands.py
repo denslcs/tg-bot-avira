@@ -124,12 +124,13 @@ async def edit_or_send_nav_message(
     disable_web_page_preview: bool = False,
 ) -> Message | None:
     """
-    Навигация: правим на месте только текстовые сообщения.
+    Навигация: текстовые сообщения — edit_text.
 
-    Сообщения с фото (баннер, прайс, результат генерации) не меняем
-    (подпись и файл остаются как есть). Для UI-фото после отправки нового
-    экрана снимаем inline-клавиатуру со старого сообщения — как при смене
-    панели без удаления картинки. Результат генерации не трогаем.
+    Сообщение с результатом генерации (картинка) не редактируем — шлём новый текст.
+
+    Баннер главного меню и другие UI-фото без результата генерации: при тексте
+    подписи ≤1024 — edit_caption на том же сообщении (картинка не отделяется от меню).
+    Иначе — отдельное текстовое сообщение и снятие клавиатуры с фото (редкий случай).
     """
     if message is None:
         return None
@@ -148,6 +149,18 @@ async def edit_or_send_nav_message(
             return None
 
     if message.photo:
+        if not _is_generated_image_result_message(message) and len(text) <= 1024:
+            try:
+                return await message.edit_caption(
+                    caption=text,
+                    reply_markup=reply_markup,
+                    parse_mode=parse_mode,
+                )
+            except Exception:
+                logging.debug(
+                    "edit_or_send_nav_message: edit_caption failed, fallback below",
+                    exc_info=True,
+                )
         try:
             sent = await message.bot.send_message(
                 message.chat.id,
@@ -216,12 +229,32 @@ async def send_main_menu_screen(
 
 
 async def restore_main_menu_message(message: Message, user_id: int, username: str | None) -> None:
-    """Вернуть главный экран: edit для текста, для фото — новое сообщение (фото в чате не меняем)."""
+    """Вернуть главный экран: баннер остаётся тем же сообщением (подпись + клавиатура), без дубля текста."""
     await ensure_user(user_id, username)
     balance = await get_credits(user_id)
     text = _main_screen_text(balance, "")
     kb = start_menu_keyboard()
-    # Для навигации предпочитаем edit (если возможно), чтобы не плодить сообщения.
+    banner = _start_banner_path()
+
+    if message.photo and not _is_generated_image_result_message(message):
+        try:
+            await message.edit_caption(caption=text, reply_markup=kb, parse_mode=HTML)
+            return
+        except Exception:
+            logging.debug("restore_main_menu_message: edit_caption failed", exc_info=True)
+
+    if message.photo and _is_generated_image_result_message(message):
+        await send_main_menu_screen(message.bot, message.chat.id, user_id, username)
+        return
+
+    if banner and not message.photo:
+        try:
+            await message.delete()
+        except Exception:
+            logging.debug("restore_main_menu_message: delete submenu message failed", exc_info=True)
+        await send_main_menu_screen(message.bot, message.chat.id, user_id, username)
+        return
+
     edited = await edit_or_send_nav_message(message, text=text, reply_markup=kb, parse_mode=HTML)
     if edited is not None:
         return
