@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import os
+import sys
 
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -8,6 +10,7 @@ from aiogram.types import BotCommand, BotCommandScopeChat, BotCommandScopeChatAd
 from src.config import ADMIN_IDS, SUPPORT_CHAT_ID, TELEGRAM_BOT_TOKEN
 from src.database import init_db
 from src.handlers.routers import register_routers
+from src.selfcheck import run_self_check
 
 _USER_COMMANDS = [
     BotCommand(command="start", description="🏠 Главное меню и баланс"),
@@ -57,6 +60,18 @@ async def main() -> None:
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     )
+
+    if "--self-check" in sys.argv or os.getenv("BOT_RUN_SELF_CHECK", "0") == "1":
+        result = await run_self_check()
+        for line in result.checks:
+            logging.info("[self-check] %s", line)
+        if result.errors:
+            for line in result.errors:
+                logging.error("[self-check] %s", line)
+            raise RuntimeError("Self-check failed. Bot start aborted.")
+        logging.info("Self-check passed.")
+        if "--self-check" in sys.argv:
+            return
 
     await init_db()
 

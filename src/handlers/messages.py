@@ -1,3 +1,5 @@
+import logging
+
 from aiogram import F, Router
 from aiogram.enums import ContentType
 from aiogram.fsm.context import FSMContext
@@ -17,6 +19,7 @@ from src.database import (
     get_open_ticket_by_id,
     get_open_ticket_by_thread,
 )
+from src.handlers.global_errors import USER_GENERIC_ERROR
 from src.keyboards.main_menu import start_menu_keyboard
 from src.private_rate_limit import check_private_message_rate
 from src.support_state import (
@@ -29,6 +32,7 @@ from src.support_state import (
 
 
 router = Router(name="messages")
+logger = logging.getLogger(__name__)
 
 @router.message(F.chat.id == SUPPORT_CHAT_ID, F.message_thread_id)
 async def support_topic_admin_reply(message: Message) -> None:
@@ -143,15 +147,22 @@ async def any_message(message: Message, state: FSMContext) -> None:
                 await message.answer(spam_reply)
             return
 
+    reply_text = (
+        "Привет! Я Avira ✨\n\n"
+        "Выбери, что хочешь: картинки, оплата, профиль и остальное — в меню ниже или команда /start."
+    )
     try:
         await add_dialog_message(user_id, "user", text)
-        reply_text = (
-            "Привет! Я Avira ✨\n\n"
-            "Выбери, что хочешь: картинки, оплата, профиль и остальное — в меню ниже или команда /start."
-        )
         await add_dialog_message(user_id, "assistant", reply_text)
     except Exception:
-        raise
+        logger.exception("add_dialog_message failed user_id=%s", user_id)
 
-    await message.answer(reply_text, reply_markup=start_menu_keyboard())
+    try:
+        await message.answer(reply_text, reply_markup=start_menu_keyboard())
+    except Exception:
+        logger.exception("answer fallback menu failed user_id=%s", user_id)
+        try:
+            await message.answer(USER_GENERIC_ERROR)
+        except Exception:
+            logger.exception("answer USER_GENERIC_ERROR failed user_id=%s", user_id)
 

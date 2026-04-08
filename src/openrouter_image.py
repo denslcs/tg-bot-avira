@@ -40,6 +40,12 @@ def is_openrouter_image_configured() -> bool:
     return bool(OPENROUTER_API_KEY)
 
 
+# Не раскрываем пользователю сбои биллинга/баланса на стороне OpenRouter.
+_IMAGE_GEN_TRY_LATER = (
+    "Сейчас не получилось сгенерировать картинку. Попробуй позже или повтори запрос чуть позже."
+)
+
+
 def format_openrouter_image_user_error(exc: BaseException) -> str:
     text = str(exc).lower()
     if "401" in text or ("invalid" in text and "key" in text):
@@ -47,12 +53,10 @@ def format_openrouter_image_user_error(exc: BaseException) -> str:
             "Ошибка доступа к генерации картинок. Администратору: проверь ключ в "
             "<code>.env</code> (без лишних пробелов и кавычек)."
         )
+    if isinstance(exc, OpenRouterApiError) and exc.http_status == 402:
+        return _IMAGE_GEN_TRY_LATER
     if "402" in text or "payment" in text or "credits" in text:
-        return (
-            "На стороне сервиса генерации не хватает средств. "
-            "Пополни баланс на <a href=\"https://openrouter.ai\">openrouter.ai</a> "
-            "(или напиши в поддержку)."
-        )
+        return _IMAGE_GEN_TRY_LATER
     if "429" in text or "rate" in text:
         return "Сервис генерации перегружен или сработал лимит. Попробуй через минуту."
     mod_hints = (
@@ -148,7 +152,7 @@ def _write_cache_file_sync(path: Path, data: bytes) -> None:
             if tmp.is_file():
                 tmp.unlink()
         except OSError:
-            pass
+            logger.debug("OpenRouter cache: could not remove temp file %s", tmp, exc_info=True)
 
 
 def _data_url_to_bytes(data_url: str) -> bytes:

@@ -59,7 +59,7 @@ from src.database import (
     try_reserve_nonsub_ready_idea_slot,
 )
 from src.formatting import HTML, esc
-from src.handlers.commands import delete_nav_source_message, restore_main_menu_message
+from src.handlers.commands import edit_or_send_nav_message, restore_main_menu_message
 from src.keyboards.callback_data import (
     CB_BACK_IMAGE_MODELS,
     CB_CREATE_IMAGE,
@@ -163,7 +163,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Победа над Мухаммадом Али на ринге",
             "Реалистичный кадр боксерского боя: пользователь победитель, Мухаммад Али проигравший.",
-            "Create a highly photorealistic boxing match result scene inspired by a real sports photo. IMPORTANT REFERENCE MAPPING: image #1 is user identity reference, image #2 is Muhammad Ali identity reference. CRITICAL IDENTITY LOCK FOR BOTH: preserve Muhammad Ali and user faces from their references with high fidelity (same facial structure, eyes, nose, lips, skin texture, and age). Do not replace Muhammad Ali with another person and do not distort either face. Keep both faces clearly visible and recognizable. Final moment: the user is the winner and Muhammad Ali is the loser. Composition should look like an authentic post-fight ring photo with a referee between fighters raising the user's hand. Arena environment must feel fully real: a large crowded stadium, visible audience around the ring, bright overhead floodlights/spotlights, realistic stage lighting on fighters, subtle haze, and natural broadcast-style contrast. No country flags, no national symbols, no flag patches on outfits. Keep natural body proportions, realistic gloves and uniforms, documentary sports photography style, and clean high-detail realism.",
+            "Create a highly photorealistic boxing match result scene inspired by a real sports photo. IMPORTANT REFERENCE MAPPING: image #1 is user identity reference, image #2 is Muhammad Ali identity reference. CRITICAL IDENTITY LOCK FOR BOTH: preserve Muhammad Ali and user faces from their references with high fidelity (same facial structure, eyes, nose, lips, skin texture, and age). Do not replace Muhammad Ali with another person and do not distort either face. Keep both faces clearly visible and recognizable. Final moment: the user is the winner and Muhammad Ali is the loser. Composition should look like an authentic post-fight ring photo with a referee between fighters raising the user's hand. Arena environment must feel premium and massive: an enormous sold-out stadium packed with thousands of cheering spectators, mostly dark surroundings, and powerful cinematic spotlights/floodlights cutting through the darkness and focusing on the ring like a world-title mega event. Add realistic light beams, subtle haze, dramatic contrast, and elite pay-per-view broadcast atmosphere. No country flags, no national symbols, no flag patches on outfits. Keep natural body proportions, realistic gloves and uniforms, documentary sports photography style, and clean high-detail realism.",
             1,
         ),
     ],
@@ -275,7 +275,23 @@ _POLZA_MISSING_TEXT = (
     "(см. .env.example).</blockquote>"
 )
 
+# После успешной генерации не удаляем служебное сообщение — только обновляем текст.
+_GEN_STATUS_DONE_TEXT = (
+    "<i>✅ Генерация завершена.</i> Результат — в следующем сообщении."
+)
+
 _BACK_MAIN = [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)]
+
+
+async def _finalize_generation_status_message(wait_msg: Message) -> None:
+    try:
+        await wait_msg.edit_text(
+            _GEN_STATUS_DONE_TEXT,
+            parse_mode=HTML,
+            reply_markup=None,
+        )
+    except Exception:
+        logging.debug("finalize generation status message failed", exc_info=True)
 
 
 def _waiting_prompt_keyboard() -> InlineKeyboardMarkup:
@@ -810,7 +826,7 @@ async def _execute_text_generation(
             await add_idea_tokens(user_id, 1)
         await wait_msg.edit_text(err, parse_mode=HTML, disable_web_page_preview=True)
         return
-    await wait_msg.delete()
+    await _finalize_generation_status_message(wait_msg)
     await _send_result_photo_with_regen(
         message,
         state,
@@ -877,9 +893,14 @@ async def _execute_ready_with_refs_generation(
     ok, meta = prep
     if not ok or meta is None:
         return
-    # Убираем карточку подтверждения только после успешного старта шага генерации.
-    await delete_nav_source_message(message)
-    wait_msg = await message.bot.send_message(chat_id, "Идет генерация картинки")
+    wait_msg = await edit_or_send_nav_message(
+        message,
+        text="Идет генерация картинки",
+        reply_markup=None,
+        parse_mode=None,
+    )
+    if wait_msg is None:
+        wait_msg = await message.bot.send_message(chat_id, "Идет генерация картинки")
     try:
         user_refs: list[bytes] = []
         refs: list[bytes] = []
@@ -934,7 +955,7 @@ async def _execute_ready_with_refs_generation(
             await add_idea_tokens(user_id, 1)
         await wait_msg.edit_text(err, parse_mode=HTML, disable_web_page_preview=True)
         return
-    await wait_msg.delete()
+    await _finalize_generation_status_message(wait_msg)
     await _send_result_photo_with_regen(
         message,
         state,
@@ -968,11 +989,9 @@ async def _send_waiting_prompt_step(
     if model_style_hint:
         body += f"\n<blockquote><i>{esc(model_style_hint)}</i></blockquote>"
     if replace_message is not None:
-        chat_id = replace_message.chat.id
-        await delete_nav_source_message(replace_message)
-        await bot.send_message(
-            chat_id,
-            body,
+        await edit_or_send_nav_message(
+            replace_message,
+            text=body,
             reply_markup=_waiting_prompt_keyboard(),
             parse_mode=HTML,
         )
@@ -992,11 +1011,9 @@ async def _show_image_model_pick(
     username: str | None,
 ) -> None:
     if not is_openrouter_image_configured():
-        chat_id = message.chat.id
-        await delete_nav_source_message(message)
-        await message.bot.send_message(
-            chat_id,
-            _IMAGE_GEN_MISSING_TEXT,
+        await edit_or_send_nav_message(
+            message,
+            text=_IMAGE_GEN_MISSING_TEXT,
             reply_markup=_missing_config_kb(),
             parse_mode=HTML,
         )
@@ -1027,12 +1044,10 @@ async def _show_image_model_pick(
         return
     await state.update_data(_model_pick_plan=("__admin__" if is_admin else (plan_id or "").strip().lower()))
     await state.set_state(ImageGenState.choosing_model)
-    chat_id = message.chat.id
-    await delete_nav_source_message(message)
     cap = _model_pick_caption_html(for_admin=is_admin, choices=choices)
-    await message.bot.send_message(
-        chat_id,
-        cap,
+    await edit_or_send_nav_message(
+        message,
+        text=cap,
         reply_markup=_subscriber_model_pick_keyboard(choices),
         parse_mode=HTML,
     )
@@ -1048,11 +1063,9 @@ async def _start_image_flow(
 ) -> None:
     if not is_openrouter_image_configured():
         if replace_menu:
-            chat_id = message.chat.id
-            await delete_nav_source_message(message)
-            await message.bot.send_message(
-                chat_id,
-                _IMAGE_GEN_MISSING_TEXT,
+            await edit_or_send_nav_message(
+                message,
+                text=_IMAGE_GEN_MISSING_TEXT,
                 reply_markup=_missing_config_kb(),
                 parse_mode=HTML,
             )
@@ -1189,11 +1202,9 @@ async def _send_ready_ideas_screen(
     await state.clear()
     if not is_openrouter_image_configured():
         if edit:
-            chat_id = message.chat.id
-            await delete_nav_source_message(message)
-            await message.bot.send_message(
-                chat_id,
-                _IMAGE_GEN_MISSING_TEXT,
+            await edit_or_send_nav_message(
+                message,
+                text=_IMAGE_GEN_MISSING_TEXT,
                 reply_markup=_missing_config_kb(),
                 parse_mode=HTML,
             )
@@ -1205,9 +1216,7 @@ async def _send_ready_ideas_screen(
     cap = _ready_category_caption()
     kb = _ready_categories_keyboard()
     if edit:
-        chat_id = message.chat.id
-        await delete_nav_source_message(message)
-        await message.bot.send_message(chat_id, cap, reply_markup=kb, parse_mode=HTML)
+        await edit_or_send_nav_message(message, text=cap, reply_markup=kb, parse_mode=HTML)
     else:
         await message.answer(cap, reply_markup=kb, parse_mode=HTML)
 
@@ -1244,12 +1253,10 @@ async def _open_ready_card(
 ) -> None:
     ideas = _ideas_for_category(category)
     if not ideas:
-        chat_id = message.chat.id
         if edit:
-            await delete_nav_source_message(message)
-            await message.bot.send_message(
-                chat_id,
-                "<b>В этой категории пока пусто.</b>\n<blockquote><i>Выбери другое направление.</i></blockquote>",
+            await edit_or_send_nav_message(
+                message,
+                text="<b>В этой категории пока пусто.</b>\n<blockquote><i>Выбери другое направление.</i></blockquote>",
                 reply_markup=_ready_categories_keyboard(),
                 parse_mode=HTML,
             )
@@ -1276,10 +1283,8 @@ async def _open_ready_card(
     await state.update_data(_ready_category=category, _ready_index=idx)
     await state.set_state(ImageGenState.ready_browsing_idea)
     kb = _ready_browser_keyboard(idx, total)
-    chat_id = message.chat.id
     if edit:
-        await delete_nav_source_message(message)
-        await message.bot.send_message(chat_id, cap, reply_markup=kb, parse_mode=HTML)
+        await edit_or_send_nav_message(message, text=cap, reply_markup=kb, parse_mode=HTML)
     else:
         await message.answer(cap, reply_markup=kb, parse_mode=HTML)
 
@@ -1303,11 +1308,9 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
     payload = callback.data.replace(CB_READY_NAV_PREFIX, "", 1)
     if payload == "back_cats":
         await state.set_state(ImageGenState.ready_choosing_category)
-        chat_id = callback.message.chat.id
-        await delete_nav_source_message(callback.message)
-        await callback.bot.send_message(
-            chat_id,
-            _ready_category_caption(),
+        await edit_or_send_nav_message(
+            callback.message,
+            text=_ready_category_caption(),
             reply_markup=_ready_categories_keyboard(),
             parse_mode=HTML,
         )
@@ -1331,11 +1334,9 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
         title, _preview, _prompt, photos_required = ideas[idx]
         await state.update_data(_ready_category=category, _ready_index=idx, _ready_photos=[], _ready_need=photos_required)
         await state.set_state(ImageGenState.ready_waiting_photos)
-        chat_id = callback.message.chat.id
-        await delete_nav_source_message(callback.message)
-        await callback.bot.send_message(
-            chat_id,
-            (
+        await edit_or_send_nav_message(
+            callback.message,
+            text=(
                 f"<b>Выбрано:</b> {esc(title)}\n"
                 f"<blockquote><i>Отправь {esc('2 фото' if photos_required == 2 else '1 фото')}.\n"
                 "После загрузки появится кнопка подтверждения.</i></blockquote>"
@@ -1442,10 +1443,13 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
     await callback.answer()
     try:
         if not is_openrouter_image_configured():
-            await callback.message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
+            await edit_or_send_nav_message(
+                callback.message,
+                text=_IMAGE_GEN_MISSING_TEXT,
+                reply_markup=_missing_config_kb(),
+                parse_mode=HTML,
+            )
             return
-        chat_id = callback.message.chat.id
-        await callback.bot.send_message(chat_id, "✅ Подтверждено. Готовлю генерацию...")
         data = await state.get_data()
         category = str(data.get("_ready_category") or "").strip().lower()
         idx_raw = data.get("_ready_index")
@@ -1467,9 +1471,13 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             return
         title, _preview, base_prompt, need = ideas[idx]
         if len(photos) < need:
-            await callback.bot.send_message(chat_id, "Сначала загрузи нужное число фото.")
+            await edit_or_send_nav_message(
+                callback.message,
+                text="Сначала загрузи нужное число фото.",
+                reply_markup=_ready_confirm_keyboard(),
+                parse_mode=None,
+            )
             return
-        await callback.bot.send_message(chat_id, "Запускаю генерацию…")
         include_nick = title == "Фотка в эндер мире"
         model_override = None
         if title == "На отдыхе в Италии":
@@ -1518,9 +1526,11 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
         )
     except Exception:
         logging.exception("ready_confirm_and_generate failed")
-        await callback.bot.send_message(
-            callback.message.chat.id,
-            "Ошибка запуска. Попробуй снова — открыл раздел «Готовые идеи».",
+        await edit_or_send_nav_message(
+            callback.message,
+            text="Ошибка запуска. Попробуй снова — открыл раздел «Готовые идеи».",
+            reply_markup=None,
+            parse_mode=None,
         )
         await _send_ready_ideas_screen(
             callback.message,

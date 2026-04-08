@@ -26,6 +26,7 @@ from src.database import (
     sum_users_credits,
 )
 from src.formatting import HTML, esc, format_subscription_ends_at
+from src.handlers.commands import edit_or_send_nav_message
 from src.keyboards.styles import BTN_PRIMARY
 from src.subscription_catalog import PLANS, PLANS_ORDER
 
@@ -102,7 +103,12 @@ async def adm_help(callback: CallbackQuery) -> None:
         "/chatid — id чата (в группе)"
     )
     if callback.message:
-        await callback.message.answer(text)
+        await edit_or_send_nav_message(
+            callback.message,
+            text=text,
+            reply_markup=_main_kb(),
+            parse_mode=None,
+        )
     await callback.answer()
 
 
@@ -116,7 +122,12 @@ async def adm_tickets(callback: CallbackQuery) -> None:
     body = "\n".join(lines) if lines else "(нет открытых)"
     text = f"Открытых тикетов: {n}\n\n{body}"
     if callback.message:
-        await callback.message.answer(text[:4000])
+        await edit_or_send_nav_message(
+            callback.message,
+            text=text[:4000],
+            reply_markup=_main_kb(),
+            parse_mode=None,
+        )
     await callback.answer()
 
 
@@ -149,7 +160,12 @@ async def adm_stats(callback: CallbackQuery) -> None:
         return
     text = await _main_bot_stats_text()
     if callback.message:
-        await callback.message.answer(text[:4000])
+        await edit_or_send_nav_message(
+            callback.message,
+            text=text[:4000],
+            reply_markup=_main_kb(),
+            parse_mode=None,
+        )
     await callback.answer()
 
 
@@ -177,7 +193,12 @@ async def adm_ratings(callback: CallbackQuery) -> None:
             "«вопрос решён» в чате поддержки — так мы видим качество ответов."
         )
     if callback.message:
-        await callback.message.answer(text)
+        await edit_or_send_nav_message(
+            callback.message,
+            text=text,
+            reply_markup=_main_kb(),
+            parse_mode=None,
+        )
     await callback.answer()
 
 

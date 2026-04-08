@@ -1,3 +1,5 @@
+import logging
+
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
@@ -27,6 +29,8 @@ from src.support_state import (
     schedule_support_draft_timers,
     start_support_draft,
 )
+
+logger = logging.getLogger(__name__)
 
 
 router = Router(name="support_commands")
@@ -103,7 +107,11 @@ async def cmd_support(message: Message) -> None:
                 )
                 await update_ticket_thread(ticket_id=ticket_id, thread_id=latest.thread_id, username=username)
             except TelegramBadRequest:
-                pass
+                logger.warning(
+                    "cmd_support: edit_forum_topic after reopen ticket_id=%s",
+                    ticket_id,
+                    exc_info=True,
+                )
         else:
             ticket_id = await create_support_ticket(
                 user_id=message.from_user.id,
@@ -112,6 +120,7 @@ async def cmd_support(message: Message) -> None:
             )
             await _create_topic_for_ticket(message, ticket_id, username)
     except Exception:
+        logger.exception("cmd_support: failed to create or reopen support topic")
         await message.answer(
             "Не удалось создать тему поддержки.\n"
             "Проверь Topics и права бота в админ-группе."
@@ -151,14 +160,24 @@ async def cmd_resolved(message: Message) -> None:
             ),
         )
     except Exception:
-        pass
+        logger.warning(
+            "cmd_resolved: edit_forum_topic ticket_id=%s thread_id=%s",
+            ticket.ticket_id,
+            ticket.thread_id,
+            exc_info=True,
+        )
     try:
         await message.bot.close_forum_topic(
             chat_id=SUPPORT_CHAT_ID,
             message_thread_id=ticket.thread_id,
         )
     except Exception:
-        pass
+        logger.warning(
+            "cmd_resolved: close_forum_topic ticket_id=%s thread_id=%s",
+            ticket.ticket_id,
+            ticket.thread_id,
+            exc_info=True,
+        )
     await message.answer(f"Тикет #{ticket.ticket_id} закрыт. Спасибо!")
 
 
@@ -190,14 +209,24 @@ async def cmd_close_ticket(message: Message) -> None:
             ),
         )
     except Exception:
-        pass
+        logger.warning(
+            "cmd_close_ticket: edit_forum_topic ticket_id=%s thread_id=%s",
+            ticket.ticket_id,
+            message.message_thread_id,
+            exc_info=True,
+        )
     try:
         await message.bot.close_forum_topic(
             chat_id=SUPPORT_CHAT_ID,
             message_thread_id=message.message_thread_id,
         )
     except Exception:
-        pass
+        logger.warning(
+            "cmd_close_ticket: close_forum_topic ticket_id=%s thread_id=%s",
+            ticket.ticket_id,
+            message.message_thread_id,
+            exc_info=True,
+        )
     await message.answer(f"Тикет #{ticket.ticket_id} закрыт.")
 
 
@@ -286,7 +315,12 @@ async def cmd_tag(message: Message) -> None:
             ),
         )
     except TelegramBadRequest:
-        pass
+        logger.debug(
+            "cmd_tag: edit_forum_topic ticket_id=%s thread_id=%s",
+            ticket.ticket_id,
+            message.message_thread_id,
+            exc_info=True,
+        )
     await message.answer(f"Тег обновлён: {tag_val or 'нет'}")
 
 

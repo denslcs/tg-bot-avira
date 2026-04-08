@@ -88,7 +88,7 @@ OPENROUTER_IMAGE_MODEL: str = (
     os.getenv("OPENROUTER_IMAGE_MODEL", "black-forest-labs/flux.2-klein-4b").strip()
     or "black-forest-labs/flux.2-klein-4b"
 )
-OPENROUTER_IMAGE_COST_CREDITS: int = max(1, _parse_int(os.getenv("OPENROUTER_IMAGE_COST_CREDITS", "5"), 5))
+OPENROUTER_IMAGE_COST_CREDITS: int = max(1, _parse_int(os.getenv("OPENROUTER_IMAGE_COST_CREDITS", "3"), 3))
 # Фиксированная цена «Готовых идей» (не из .env).
 OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS: int = 30
 # Вторая модель для подписчиков (панель выбора). Должна быть с output=image на OpenRouter.
@@ -97,7 +97,7 @@ OPENROUTER_IMAGE_MODEL_ALT: str = os.getenv(
     "OPENROUTER_IMAGE_MODEL_ALT", "black-forest-labs/flux.2-pro"
 ).strip()
 OPENROUTER_IMAGE_ALT_COST_CREDITS: int = max(
-    1, _parse_int(os.getenv("OPENROUTER_IMAGE_ALT_COST_CREDITS", "12"), 12)
+    1, _parse_int(os.getenv("OPENROUTER_IMAGE_ALT_COST_CREDITS", "20"), 20)
 )
 OPENROUTER_IMAGE_GEMINI_MODEL: str = (
     os.getenv("OPENROUTER_IMAGE_GEMINI_MODEL", "google/gemini-2.5-flash-image").strip()
@@ -112,7 +112,7 @@ OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL: str = (
     or "google/gemini-3.1-flash-image-preview"
 )
 OPENROUTER_IMAGE_GEMINI_PREVIEW_COST_CREDITS: int = max(
-    1, _parse_int(os.getenv("OPENROUTER_IMAGE_GEMINI_PREVIEW_COST_CREDITS", "8"), 8)
+    1, _parse_int(os.getenv("OPENROUTER_IMAGE_GEMINI_PREVIEW_COST_CREDITS", "15"), 15)
 )
 # Опциональная Pro-модель для ready-флоу с референсами (если задана — приоритетнее Banana 2).
 OPENROUTER_IMAGE_GEMINI_PRO_MODEL: str = os.getenv("OPENROUTER_IMAGE_GEMINI_PRO_MODEL", "").strip()
@@ -141,10 +141,10 @@ POLZA_IMAGE_MODEL_GPT5_IMAGE: str = (
     os.getenv("POLZA_IMAGE_MODEL_GPT5_IMAGE", "openai/gpt-5-image").strip() or "openai/gpt-5-image"
 )
 POLZA_IMAGE_GPT_IMAGE_15_COST_CREDITS: int = max(
-    1, _parse_int(os.getenv("POLZA_IMAGE_GPT_IMAGE_15_COST_CREDITS", "15"), 15)
+    1, _parse_int(os.getenv("POLZA_IMAGE_GPT_IMAGE_15_COST_CREDITS", "10"), 10)
 )
 POLZA_IMAGE_GPT5_IMAGE_COST_CREDITS: int = max(
-    1, _parse_int(os.getenv("POLZA_IMAGE_GPT5_IMAGE_COST_CREDITS", "22"), 22)
+    1, _parse_int(os.getenv("POLZA_IMAGE_GPT5_IMAGE_COST_CREDITS", "12"), 12)
 )
 POLZA_IMAGE_MODEL_IDS: frozenset[str] = frozenset(
     {POLZA_IMAGE_MODEL_GPT_IMAGE_15, POLZA_IMAGE_MODEL_GPT5_IMAGE}

@@ -221,7 +221,7 @@ async def _upsert_finish_panel(bot, ticket_id: int, thread_id: int) -> None:
             )
             return
         except TelegramBadRequest:
-            pass
+            logger.debug("_upsert_finish_panel: edit admin control message", exc_info=True)
     sent = await bot.send_message(
         chat_id=SUPPORT_CHAT_ID,
         message_thread_id=thread_id,
@@ -279,7 +279,7 @@ async def admin_send_chunk(callback: CallbackQuery) -> None:
         try:
             await callback.message.edit_text("Часть сохранена в очередь ✅", reply_markup=None)
         except Exception:
-            pass
+            logger.debug("admin_send_chunk: edit_text after enqueue", exc_info=True)
     await _upsert_finish_panel(callback.bot, ticket_id, ticket.thread_id)
     await callback.answer("Добавлено в очередь.")
 
@@ -303,7 +303,7 @@ async def admin_cancel_chunk(callback: CallbackQuery) -> None:
         try:
             await callback.message.edit_text("Эта часть отменена.", reply_markup=None)
         except Exception:
-            pass
+            logger.debug("admin_cancel_chunk: edit_text", exc_info=True)
     await callback.answer("Отменено.")
 
 
@@ -342,7 +342,7 @@ async def admin_finish_reply(callback: CallbackQuery) -> None:
                 reply_markup=None,
             )
         except Exception:
-            pass
+            logger.debug("admin_finish_reply: edit_text", exc_info=True)
     await callback.answer("Готово.")
 
 
@@ -502,14 +502,24 @@ async def _close_ticket_after_rating(
             name=tname,
         )
     except Exception:
-        pass
+        logger.warning(
+            "_close_ticket_after_rating: edit_forum_topic ticket_id=%s thread_id=%s",
+            ticket_id,
+            thread_id,
+            exc_info=True,
+        )
     try:
         await bot.close_forum_topic(
             chat_id=SUPPORT_CHAT_ID,
             message_thread_id=thread_id,
         )
     except Exception:
-        pass
+        logger.warning(
+            "_close_ticket_after_rating: close_forum_topic ticket_id=%s thread_id=%s",
+            ticket_id,
+            thread_id,
+            exc_info=True,
+        )
     clear_support_draft(user_id)
 
 

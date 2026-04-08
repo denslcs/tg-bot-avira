@@ -4,7 +4,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from src.config import OPENROUTER_IMAGE_COST_CREDITS, OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS
 from src.formatting import HTML, esc
-from src.handlers.commands import delete_nav_source_message
+from src.handlers.commands import edit_or_send_nav_message
 from src.keyboards.callback_data import CB_MENU_BACK_START
 from src.keyboards.styles import BTN_PRIMARY
 
@@ -106,11 +106,9 @@ async def faq_callback(callback: CallbackQuery) -> None:
     text = f"<b>{esc(title)}</b>\n\n<blockquote>{esc(body)}</blockquote>"
     await callback.answer()
     if callback.message:
-        chat_id = callback.message.chat.id
-        await delete_nav_source_message(callback.message)
-        await callback.bot.send_message(
-            chat_id,
-            text,
+        await edit_or_send_nav_message(
+            callback.message,
+            text=text,
             reply_markup=_faq_keyboard(),
             parse_mode=HTML,
         )

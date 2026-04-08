@@ -1,0 +1,113 @@
+from __future__ import annotations
+
+import asyncio
+from dataclasses import dataclass
+from pathlib import Path
+
+from aiogram import Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
+
+from src.database import init_db
+from src.handlers.global_errors import global_error_handler
+from src.handlers.img_commands import (
+    READY_IDEA_CATEGORIES,
+    READY_IDEA_ITEMS,
+    _READY_IDEA_STATIC_REF_BY_TITLE,
+)
+from src.handlers.routers import register_routers
+
+
+@dataclass
+class SelfCheckResult:
+    ok: bool
+    checks: list[str]
+    errors: list[str]
+
+
+def _check_ready_ideas() -> tuple[list[str], list[str]]:
+    checks: list[str] = []
+    errors: list[str] = []
+
+    category_slugs = [slug for slug, _ in READY_IDEA_CATEGORIES]
+    for slug in category_slugs:
+        if slug not in READY_IDEA_ITEMS:
+            errors.append(f"Category '{slug}' is missing in READY_IDEA_ITEMS.")
+    checks.append("Categories have matching READY_IDEA_ITEMS entries.")
+
+    titles: set[str] = set()
+    for category, items in READY_IDEA_ITEMS.items():
+        if not isinstance(items, list):
+            errors.append(f"Category '{category}' must be a list of idea tuples.")
+            continue
+        for idx, item in enumerate(items):
+            if not isinstance(item, tuple) or len(item) != 4:
+                errors.append(f"Invalid tuple at {category}[{idx}] (expected 4 elements).")
+                continue
+            title, preview, prompt, photos_required = item
+            if not isinstance(title, str) or not title.strip():
+                errors.append(f"Empty title at {category}[{idx}].")
+            if title in titles:
+                errors.append(f"Duplicate idea title found: '{title}'.")
+            titles.add(title)
+            if not isinstance(preview, str) or not preview.strip():
+                errors.append(f"Empty preview at {category}[{idx}] for '{title}'.")
+            if not isinstance(prompt, str) or not prompt.strip():
+                errors.append(f"Empty prompt at {category}[{idx}] for '{title}'.")
+            if photos_required not in (1, 2):
+                errors.append(
+                    f"Invalid photos_required at {category}[{idx}] for '{title}' (expected 1 or 2)."
+                )
+    checks.append("Ready idea tuples validated (title/preview/prompt/photos_required).")
+
+    for title, path in _READY_IDEA_STATIC_REF_BY_TITLE.items():
+        p = Path(path)
+        if not p.is_file():
+            errors.append(f"Static reference for '{title}' does not exist: {path}")
+    checks.append("Static reference files exist.")
+
+    return checks, errors
+
+
+async def run_self_check() -> SelfCheckResult:
+    checks: list[str] = []
+    errors: list[str] = []
+
+    try:
+        await init_db()
+        checks.append("Database initialization OK.")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        errors.append(f"Database initialization failed: {exc}")
+
+    try:
+        dp = Dispatcher(storage=MemoryStorage())
+        register_routers(dp)
+        checks.append("Routers registration OK.")
+        if not any(getattr(h, "callback", None) is global_error_handler for h in dp.errors.handlers):
+            errors.append("Global error handler is not registered on the dispatcher.")
+        else:
+            checks.append("Global error handler registered.")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        errors.append(f"Routers registration failed: {exc}")
+
+    idea_checks, idea_errors = _check_ready_ideas()
+    checks.extend(idea_checks)
+    errors.extend(idea_errors)
+
+    return SelfCheckResult(ok=not errors, checks=checks, errors=errors)
+
+
+async def _main() -> None:
+    result = await run_self_check()
+    print("SELF-CHECK REPORT")
+    for line in result.checks:
+        print(f"[OK] {line}")
+    if result.errors:
+        for line in result.errors:
+            print(f"[ERROR] {line}")
+        raise SystemExit(1)
+    print("All checks passed.")
+
+
+if __name__ == "__main__":
+    asyncio.run(_main())
+

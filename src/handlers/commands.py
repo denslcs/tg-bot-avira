@@ -95,13 +95,15 @@ def _start_banner_path() -> Path | None:
 
 
 def _is_generated_image_result_message(message: Message) -> bool:
-    """Сообщение с готовой картинкой из генерации — такие не трогаем при смене меню."""
+    """Сообщение с готовой картинкой из генерации — не редактировать и не удалять."""
     if not message.photo:
         return False
     cap = message.caption or ""
     if "Картинка сохранена" in cap:
         return True
     if "Готово" in cap and "✅" in cap:
+        return True
+    if "Списано:" in cap and "💰 Баланс" in cap:
         return True
     kb = message.reply_markup
     if kb and kb.inline_keyboard:
@@ -113,16 +115,80 @@ def _is_generated_image_result_message(message: Message) -> bool:
     return False
 
 
-async def delete_nav_source_message(message: Message | None) -> None:
-    """Удалить сообщение с кнопкой навигации, если API позволяет (чтобы не копить чат)."""
+async def edit_or_send_nav_message(
+    message: Message | None,
+    *,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
+    parse_mode: str | None = HTML,
+    disable_web_page_preview: bool = False,
+) -> Message | None:
+    """
+    Навигация: правим на месте только текстовые сообщения.
+
+    Сообщения с фото (баннер, прайс, результат генерации) не меняем
+    (подпись и файл остаются как есть). Для UI-фото после отправки нового
+    экрана снимаем inline-клавиатуру со старого сообщения — как при смене
+    панели без удаления картинки. Результат генерации не трогаем.
+    """
     if message is None:
-        return
+        return None
+
     if _is_generated_image_result_message(message):
-        return
+        try:
+            return await message.bot.send_message(
+                message.chat.id,
+                text,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode,
+                disable_web_page_preview=disable_web_page_preview,
+            )
+        except Exception:
+            logging.exception("edit_or_send_nav_message: send after result photo failed")
+            return None
+
+    if message.photo:
+        try:
+            sent = await message.bot.send_message(
+                message.chat.id,
+                text,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode,
+                disable_web_page_preview=disable_web_page_preview,
+            )
+            try:
+                await message.edit_reply_markup(reply_markup=None)
+            except Exception:
+                logging.debug(
+                    "edit_or_send_nav_message: could not strip keyboard from old photo",
+                    exc_info=True,
+                )
+            return sent
+        except Exception:
+            logging.exception("edit_or_send_nav_message: send for photo message failed")
+            return None
+
     try:
-        await message.delete()
+        return await message.edit_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode=parse_mode,
+            disable_web_page_preview=disable_web_page_preview,
+        )
     except Exception:
-        logging.debug("delete_nav_source_message: не удалось удалить сообщение", exc_info=True)
+        logging.debug("edit_or_send_nav_message: edit_text failed, fallback to send", exc_info=True)
+
+    try:
+        return await message.bot.send_message(
+            message.chat.id,
+            text,
+            reply_markup=reply_markup,
+            parse_mode=parse_mode,
+            disable_web_page_preview=disable_web_page_preview,
+        )
+    except Exception:
+        logging.exception("edit_or_send_nav_message: send fallback failed")
+        return None
 
 
 async def send_main_menu_screen(
@@ -150,10 +216,16 @@ async def send_main_menu_screen(
 
 
 async def restore_main_menu_message(message: Message, user_id: int, username: str | None) -> None:
-    """Удалить текущее сообщение меню и отправить главный экран заново."""
-    chat_id = message.chat.id
-    await delete_nav_source_message(message)
-    await send_main_menu_screen(message.bot, chat_id, user_id, username)
+    """Вернуть главный экран: edit для текста, для фото — новое сообщение (фото в чате не меняем)."""
+    await ensure_user(user_id, username)
+    balance = await get_credits(user_id)
+    text = _main_screen_text(balance, "")
+    kb = start_menu_keyboard()
+    # Для навигации предпочитаем edit (если возможно), чтобы не плодить сообщения.
+    edited = await edit_or_send_nav_message(message, text=text, reply_markup=kb, parse_mode=HTML)
+    if edited is not None:
+        return
+    await send_main_menu_screen(message.bot, message.chat.id, user_id, username)
 
 
 def _parse_ref_start_arg(args: str | None) -> int | None:
@@ -257,7 +329,6 @@ async def menu_about(callback: CallbackQuery) -> None:
     if not callback.message:
         await callback.answer("Сообщение недоступно.", show_alert=True)
         return
-    chat_id = callback.message.chat.id
     await callback.answer()
     text = (
         "<b>Что умеет бот</b>\n"
@@ -266,10 +337,9 @@ async def menu_about(callback: CallbackQuery) -> None:
         "• Готовые идеи — заготовки под генерацию (если добавлены)."
         "</blockquote>"
     )
-    await delete_nav_source_message(callback.message)
-    await callback.bot.send_message(
-        chat_id,
-        text,
+    await edit_or_send_nav_message(
+        callback.message,
+        text=text,
         reply_markup=back_to_main_menu_keyboard(),
         parse_mode=HTML,
     )
@@ -280,13 +350,11 @@ async def menu_support(callback: CallbackQuery) -> None:
     if not callback.message:
         await callback.answer("Сообщение недоступно.", show_alert=True)
         return
-    chat_id = callback.message.chat.id
     await callback.answer()
     if not SUPPORT_BOT_USERNAME:
-        await delete_nav_source_message(callback.message)
-        await callback.bot.send_message(
-            chat_id,
-            (
+        await edit_or_send_nav_message(
+            callback.message,
+            text=(
                 "<blockquote><i>Поддержка пока не настроена</i> "
                 "(пустой <code>SUPPORT_BOT_USERNAME</code>).</blockquote>"
             ),
@@ -301,10 +369,9 @@ async def menu_support(callback: CallbackQuery) -> None:
             _BACK_TO_MENU_ROW,
         ]
     )
-    await delete_nav_source_message(callback.message)
-    await callback.bot.send_message(
-        chat_id,
-        "<b>Поддержка</b>\n<i>Нажми кнопку ниже,</i> чтобы открыть чат.",
+    await edit_or_send_nav_message(
+        callback.message,
+        text="<b>Поддержка</b>\n<i>Нажми кнопку ниже,</i> чтобы открыть чат.",
         reply_markup=keyboard,
         parse_mode=HTML,
     )
@@ -332,10 +399,12 @@ async def _build_referral_message(
     try:
         invited = await get_referral_count(user_id)
     except Exception:
+        logging.warning("_build_referral_message: get_referral_count failed", exc_info=True)
         invited = 0
     try:
         balance = await get_credits(user_id)
     except Exception:
+        logging.warning("_build_referral_message: get_credits failed", exc_info=True)
         balance = 0
     prof = await get_user_admin_profile(user_id)
     ready_bonus_uses = int(prof.idea_tokens) if prof else 0
@@ -378,10 +447,8 @@ async def deliver_referral_screen(bot: Bot, user_id: int, username: str | None, 
     text, kb = await _build_referral_message(user_id, username, me.username)
     try:
         if reply_via:
-            chat_id = reply_via.chat.id
-            await delete_nav_source_message(reply_via)
-            await bot.send_message(
-                chat_id,
+            await edit_or_send_nav_message(
+                reply_via,
                 text=text,
                 reply_markup=kb,
                 parse_mode=HTML,
@@ -538,17 +605,13 @@ async def send_profile_card(
         text = "<blockquote><b>Режим админа</b> — безлимит по кредитам.</blockquote>"
         kb = back_to_main_menu_keyboard()
         if edit_existing:
-            chat_id = message.chat.id
-            await delete_nav_source_message(message)
-            await message.bot.send_message(chat_id, text, reply_markup=kb, parse_mode=HTML)
+            await edit_or_send_nav_message(message, text=text, reply_markup=kb, parse_mode=HTML)
         else:
             await message.answer(text, reply_markup=kb, parse_mode=HTML)
         return
     text, kb = await _profile_card_html(user_id, username_raw)
     if edit_existing:
-        chat_id = message.chat.id
-        await delete_nav_source_message(message)
-        await message.bot.send_message(chat_id, text, reply_markup=kb, parse_mode=HTML)
+        await edit_or_send_nav_message(message, text=text, reply_markup=kb, parse_mode=HTML)
     else:
         await message.answer(text, reply_markup=kb, parse_mode=HTML)
 

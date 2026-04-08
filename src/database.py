@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 import math
 import sqlite3
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -21,6 +23,17 @@ from src.subscription_catalog import (
     free_daily_generation_limit,
     ready_idea_daily_cap_for_plan,
 )
+
+# Ожидание при кратковременной блокировке SQLite вместо немедленной ошибки;
+# WAL (в init_db) даёт меньше конфликтов между читателями при одновременных запросах.
+_BUSY_TIMEOUT_MS = 8000
+
+
+@asynccontextmanager
+async def open_db() -> AsyncIterator[aiosqlite.Connection]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
+        yield db
 
 
 @dataclass
@@ -190,7 +203,8 @@ async def _migrate_nonsub_quota_exhaustion_semantics(db: aiosqlite.Connection) -
 
 
 async def init_db() -> None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
+        await db.execute("PRAGMA journal_mode=WAL")
         await db.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -333,7 +347,7 @@ async def init_db() -> None:
 
 
 async def ensure_user(user_id: int, username: str | None) -> None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             """
             INSERT INTO users (user_id, username, credits)
@@ -358,7 +372,7 @@ async def save_last_image_context(
     usage_kind: str = "self",
 ) -> None:
     uk = "ready" if usage_kind == "ready" else "self"
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             """
             INSERT INTO user_last_image_context (
@@ -380,7 +394,7 @@ async def save_last_image_context(
 
 
 async def get_last_image_context(user_id: int) -> LastImageContext | None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT kind, prompt, model, cost, model_name, photo_file_id, usage_kind
@@ -407,7 +421,7 @@ async def get_last_image_context(user_id: int) -> LastImageContext | None:
 
 
 async def get_credits(user_id: int) -> int:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             "SELECT credits FROM users WHERE user_id = ?",
             (user_id,),
@@ -417,7 +431,7 @@ async def get_credits(user_id: int) -> int:
 
 
 async def spend_one_credit(user_id: int) -> bool:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute(
             """
             UPDATE users
@@ -431,7 +445,7 @@ async def spend_one_credit(user_id: int) -> bool:
 
 
 async def add_dialog_message(user_id: int, role: str, content: str) -> None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             """
             INSERT INTO dialog_messages (user_id, role, content)
@@ -443,7 +457,7 @@ async def add_dialog_message(user_id: int, role: str, content: str) -> None:
 
 
 async def get_last_dialog_messages(user_id: int, limit: int = 10) -> list[DialogMessage]:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT role, content
@@ -461,7 +475,7 @@ async def get_last_dialog_messages(user_id: int, limit: int = 10) -> list[Dialog
 
 
 async def clear_dialog_messages(user_id: int) -> None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             "DELETE FROM dialog_messages WHERE user_id = ?",
             (user_id,),
@@ -472,7 +486,7 @@ async def clear_dialog_messages(user_id: int) -> None:
 async def add_credits(user_id: int, amount: int) -> bool:
     if amount <= 0:
         return False
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute(
             """
             UPDATE users
@@ -489,7 +503,7 @@ async def take_credits(user_id: int, amount: int) -> bool:
     """Списывает ровно amount, только если баланса хватает. Иначе баланс не меняется."""
     if amount <= 0:
         return False
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute(
             """
             UPDATE users
@@ -507,7 +521,7 @@ async def apply_referral(invitee_user_id: int, inviter_user_id: int) -> bool:
     if invitee_user_id == inviter_user_id:
         logging.info("referral: skip self-ref invitee=%s", invitee_user_id)
         return False
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         # Already applied for this invitee.
         async with db.execute(
             "SELECT 1 FROM user_referrals WHERE invitee_user_id = ?",
@@ -574,7 +588,7 @@ async def apply_referral(invitee_user_id: int, inviter_user_id: int) -> bool:
 
 
 async def get_referral_count(inviter_user_id: int) -> int:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             "SELECT COUNT(*) FROM user_referrals WHERE inviter_user_id = ?",
             (inviter_user_id,),
@@ -584,7 +598,7 @@ async def get_referral_count(inviter_user_id: int) -> int:
 
 
 async def create_support_ticket(user_id: int, username: str, thread_id: int) -> int:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute(
             """
             INSERT INTO support_tickets (user_id, username, thread_id, status)
@@ -597,7 +611,7 @@ async def create_support_ticket(user_id: int, username: str, thread_id: int) -> 
 
 
 async def get_open_ticket_by_user(user_id: int) -> SupportTicket | None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT ticket_id, user_id, username, thread_id, status
@@ -621,7 +635,7 @@ async def get_open_ticket_by_user(user_id: int) -> SupportTicket | None:
 
 
 async def get_latest_ticket_by_user(user_id: int) -> SupportTicket | None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT ticket_id, user_id, username, thread_id, status
@@ -645,7 +659,7 @@ async def get_latest_ticket_by_user(user_id: int) -> SupportTicket | None:
 
 
 async def get_open_ticket_by_thread(thread_id: int) -> SupportTicket | None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT ticket_id, user_id, username, thread_id, status
@@ -669,7 +683,7 @@ async def get_open_ticket_by_thread(thread_id: int) -> SupportTicket | None:
 
 
 async def get_open_ticket_by_id(ticket_id: int) -> SupportTicket | None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT ticket_id, user_id, username, thread_id, status
@@ -692,7 +706,7 @@ async def get_open_ticket_by_id(ticket_id: int) -> SupportTicket | None:
 
 
 async def get_ticket_by_id(ticket_id: int) -> SupportTicket | None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT ticket_id, user_id, username, thread_id, status
@@ -715,7 +729,7 @@ async def get_ticket_by_id(ticket_id: int) -> SupportTicket | None:
 
 
 async def close_ticket(ticket_id: int) -> None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             """
             UPDATE support_tickets
@@ -729,7 +743,7 @@ async def close_ticket(ticket_id: int) -> None:
 
 
 async def reopen_ticket(ticket_id: int) -> None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             """
             UPDATE support_tickets
@@ -744,7 +758,7 @@ async def reopen_ticket(ticket_id: int) -> None:
 
 
 async def update_ticket_thread(ticket_id: int, thread_id: int, username: str | None = None) -> None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         if username is None:
             await db.execute(
                 """
@@ -831,7 +845,7 @@ def daily_image_generation_limit_for_user(
 async def try_reserve_nonsub_image_quota_slot(user_id: int) -> bool:
     """Без подписки: слот из лимита NONSUB_IMAGE_WINDOW_MAX; сброс через NONSUB_IMAGE_WINDOW_DAYS после исчерпания."""
     now = datetime.now(timezone.utc)
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("BEGIN IMMEDIATE")
         async with db.execute(
             """
@@ -894,7 +908,7 @@ async def try_reserve_nonsub_image_quota_slot(user_id: int) -> bool:
 
 async def release_nonsub_image_quota_slot(user_id: int) -> None:
     """Откат квоты при неуспешной генерации (после try_reserve_nonsub_image_quota_slot)."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("BEGIN IMMEDIATE")
         async with db.execute(
             """
@@ -927,7 +941,7 @@ async def release_nonsub_image_quota_slot(user_id: int) -> None:
 async def add_idea_tokens(user_id: int, amount: int) -> bool:
     if amount <= 0:
         return False
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute(
             """
             UPDATE users SET idea_tokens = idea_tokens + ? WHERE user_id = ?
@@ -939,7 +953,7 @@ async def add_idea_tokens(user_id: int, amount: int) -> bool:
 
 
 async def try_consume_idea_token(user_id: int) -> bool:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         cur = await db.execute(
             """
             UPDATE users SET idea_tokens = idea_tokens - 1
@@ -954,7 +968,7 @@ async def try_consume_idea_token(user_id: int) -> bool:
 async def try_reserve_nonsub_ready_idea_slot(user_id: int) -> bool:
     """Без подписки: 1 «готовая идея» за цикл; сброс через NONSUB_IMAGE_WINDOW_DAYS после исчерпания."""
     now = datetime.now(timezone.utc)
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("BEGIN IMMEDIATE")
         async with db.execute(
             """
@@ -1016,7 +1030,7 @@ async def try_reserve_nonsub_ready_idea_slot(user_id: int) -> bool:
 
 
 async def release_nonsub_ready_idea_slot(user_id: int) -> None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("BEGIN IMMEDIATE")
         async with db.execute(
             "SELECT ready_idea_window_count FROM users WHERE user_id = ?",
@@ -1045,7 +1059,7 @@ async def release_nonsub_ready_idea_slot(user_id: int) -> None:
 async def get_nonsub_ready_quota_status(user_id: int) -> tuple[int, int] | None:
     """Без подписки: (использовано в цикле, лимит). None если подписка активна."""
     now = datetime.now(timezone.utc)
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT subscription_ends_at, ready_idea_window_start, ready_idea_window_count
@@ -1074,7 +1088,7 @@ async def get_nonsub_ready_quota_status(user_id: int) -> tuple[int, int] | None:
 async def get_nonsub_image_quota_status(user_id: int) -> tuple[int, int] | None:
     """Для UI без подписки: (использовано, лимит); None если подписка активна."""
     now = datetime.now(timezone.utc)
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT subscription_ends_at, free_image_window_start, free_image_window_count
@@ -1107,7 +1121,7 @@ async def get_monthly_image_generation_usage(user_id: int) -> tuple[int, int]:
 
 async def get_daily_image_generation_usage(user_id: int, usage_kind: str) -> tuple[int, int]:
     kind = "ready" if usage_kind == "ready" else "self"
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT subscription_ends_at, subscription_plan
@@ -1136,7 +1150,7 @@ async def get_daily_image_generation_usage(user_id: int, usage_kind: str) -> tup
         if cap is None:
             return 0, UNLIMITED_DAILY_IMAGE_GENERATIONS
         day = _day_msk_now()
-        async with aiosqlite.connect(DB_PATH) as db:
+        async with open_db() as db:
             async with db.execute(
                 """
                 SELECT count FROM user_daily_image_usage
@@ -1150,7 +1164,7 @@ async def get_daily_image_generation_usage(user_id: int, usage_kind: str) -> tup
 
     limit = daily_image_generation_limit_for_user(ends, kind)
     day = _day_msk_now()
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT count FROM user_daily_image_usage
@@ -1170,7 +1184,7 @@ async def try_reserve_monthly_image_generation(user_id: int) -> bool:
 
 async def try_reserve_daily_image_generation(user_id: int, usage_kind: str) -> bool:
     kind = "ready" if usage_kind == "ready" else "self"
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("BEGIN IMMEDIATE")
         async with db.execute(
             """
@@ -1242,7 +1256,7 @@ async def release_monthly_image_generation(user_id: int) -> None:
 async def release_daily_image_generation(user_id: int, usage_kind: str) -> None:
     kind = "ready" if usage_kind == "ready" else "self"
     day = _day_msk_now()
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute("BEGIN IMMEDIATE")
         async with db.execute(
             """
@@ -1301,7 +1315,7 @@ async def try_claim_star_payment(charge_id: str, user_id: int) -> bool:
     if not charge_id:
         return True
     try:
-        async with aiosqlite.connect(DB_PATH) as db:
+        async with open_db() as db:
             await db.execute(
                 """
                 INSERT INTO star_payment_charges (charge_id, user_id)
@@ -1318,7 +1332,7 @@ async def try_claim_star_payment(charge_id: str, user_id: int) -> bool:
 async def release_star_payment_claim(charge_id: str) -> None:
     if not charge_id:
         return
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             "DELETE FROM star_payment_charges WHERE charge_id = ?",
             (charge_id,),
@@ -1331,7 +1345,7 @@ async def extend_subscription(user_id: int, days: int, plan: str | None = None) 
         return None
     if plan is not None and plan not in PLANS:
         return None
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             "SELECT subscription_ends_at FROM users WHERE user_id = ?",
             (user_id,),
@@ -1368,7 +1382,7 @@ async def reset_subscription_days(user_id: int, days: int, plan: str | None = No
         return None
     if plan is not None and plan not in PLANS:
         return None
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             "SELECT user_id FROM users WHERE user_id = ?",
             (user_id,),
@@ -1396,7 +1410,7 @@ async def reset_subscription_days(user_id: int, days: int, plan: str | None = No
 
 
 async def clear_subscription(user_id: int) -> None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             """
             UPDATE users
@@ -1409,14 +1423,14 @@ async def clear_subscription(user_id: int) -> None:
 
 
 async def count_users_total() -> int:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute("SELECT COUNT(*) FROM users") as cur:
             row = await cur.fetchone()
     return int(row[0]) if row else 0
 
 
 async def count_users_active_subscription() -> int:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             "SELECT subscription_ends_at FROM users WHERE subscription_ends_at IS NOT NULL",
         ) as cur:
@@ -1429,14 +1443,14 @@ async def count_users_active_subscription() -> int:
 
 
 async def sum_users_credits() -> int:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute("SELECT COALESCE(SUM(credits), 0) FROM users") as cur:
             row = await cur.fetchone()
     return int(row[0]) if row else 0
 
 
 async def count_dialog_messages_total() -> int:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute("SELECT COUNT(*) FROM dialog_messages") as cur:
             row = await cur.fetchone()
     return int(row[0]) if row else 0
@@ -1444,7 +1458,7 @@ async def count_dialog_messages_total() -> int:
 
 async def count_tickets_created_since_days(days: int) -> int:
     d = max(1, int(days))
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT COUNT(*) FROM support_tickets
@@ -1458,7 +1472,7 @@ async def count_tickets_created_since_days(days: int) -> int:
 
 async def count_tickets_closed_since_days(days: int) -> int:
     d = max(1, int(days))
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT COUNT(*) FROM support_tickets
@@ -1473,7 +1487,7 @@ async def count_tickets_closed_since_days(days: int) -> int:
 
 async def get_support_rating_rollups_since_days(days: int) -> tuple[float | None, int]:
     d = max(1, int(days))
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT AVG(rating), COUNT(*) FROM support_ratings
@@ -1490,7 +1504,7 @@ async def get_support_rating_rollups_since_days(days: int) -> tuple[float | None
 
 async def get_rating_distribution_since_days(days: int) -> list[tuple[int, int]]:
     d = max(1, int(days))
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT rating, COUNT(*) FROM support_ratings
@@ -1505,7 +1519,7 @@ async def get_rating_distribution_since_days(days: int) -> list[tuple[int, int]]
 
 
 async def count_open_tickets_by_tag() -> list[tuple[str | None, int]]:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT tag, COUNT(*) FROM support_tickets
@@ -1523,7 +1537,7 @@ async def count_open_tickets_by_tag() -> list[tuple[str | None, int]]:
 
 
 async def count_open_tickets() -> int:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             "SELECT COUNT(*) FROM support_tickets WHERE status = 'open'",
         ) as cur:
@@ -1532,7 +1546,7 @@ async def count_open_tickets() -> int:
 
 
 async def list_open_tickets_preview(*, limit: int = 15) -> list[str]:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT ticket_id, user_id, username, created_at
@@ -1553,7 +1567,7 @@ async def list_open_tickets_preview(*, limit: int = 15) -> list[str]:
 
 
 async def count_dialog_messages(user_id: int) -> int:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             "SELECT COUNT(*) FROM dialog_messages WHERE user_id = ?",
             (user_id,),
@@ -1564,7 +1578,7 @@ async def count_dialog_messages(user_id: int) -> int:
 
 async def count_generated_images_total(user_id: int) -> int:
     """Общее число генераций картинок пользователя (исторически: monthly + daily)."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             "SELECT COALESCE(SUM(count), 0) FROM user_monthly_image_usage WHERE user_id = ?",
             (user_id,),
@@ -1581,7 +1595,7 @@ async def count_generated_images_total(user_id: int) -> int:
 
 
 async def get_user_admin_profile(user_id: int) -> UserAdminProfile | None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT user_id, username, credits, created_at, subscription_ends_at, subscription_plan,
@@ -1654,7 +1668,7 @@ async def subscription_can_purchase_new_plan(user_id: int) -> tuple[bool, str | 
 async def record_subscription_purchase_now(user_id: int) -> None:
     """Вызывать после успешной оплаты подписки (Stars и т.д.)."""
     iso = datetime.now(timezone.utc).isoformat()
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             "UPDATE users SET subscription_last_purchase_at = ? WHERE user_id = ?",
             (iso, user_id),
@@ -1664,7 +1678,7 @@ async def record_subscription_purchase_now(user_id: int) -> None:
 
 async def mark_starter_trial_purchased(user_id: int) -> None:
     """После успешной оплаты Starter — больше нельзя купить пробный тариф."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             "UPDATE users SET starter_trial_used = 1 WHERE user_id = ?",
             (user_id,),
@@ -1676,7 +1690,7 @@ async def set_subscription_plan_only(user_id: int, plan: str) -> bool:
     """Сменить тариф в БД без изменения срока окончания."""
     if plan not in PLANS:
         return False
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             "UPDATE users SET subscription_plan = ? WHERE user_id = ?",
             (plan, user_id),
@@ -1688,7 +1702,7 @@ async def set_subscription_plan_only(user_id: int, plan: str) -> bool:
 async def record_support_rating(
     ticket_id: int, user_id: int, rating: int, feedback_text: str | None = None
 ) -> None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             """
             INSERT INTO support_ratings (ticket_id, user_id, rating, feedback_text)
@@ -1707,7 +1721,7 @@ async def record_support_rating(
 
 
 async def get_support_rating_rollups() -> tuple[float | None, int]:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT AVG(rating), COUNT(*) FROM support_ratings
@@ -1721,7 +1735,7 @@ async def get_support_rating_rollups() -> tuple[float | None, int]:
 
 
 async def get_ticket_detail_by_id(ticket_id: int) -> SupportTicketDetail | None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT ticket_id, user_id, username, thread_id, status, created_at,
@@ -1748,7 +1762,7 @@ async def get_ticket_detail_by_id(ticket_id: int) -> SupportTicketDetail | None:
 
 
 async def get_ticket_detail_by_thread(thread_id: int) -> SupportTicketDetail | None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT ticket_id, user_id, username, thread_id, status, created_at,
@@ -1776,7 +1790,7 @@ async def get_ticket_detail_by_thread(thread_id: int) -> SupportTicketDetail | N
 
 async def mark_first_reply_to_user(ticket_id: int) -> None:
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             """
             UPDATE support_tickets
@@ -1789,7 +1803,7 @@ async def mark_first_reply_to_user(ticket_id: int) -> None:
 
 
 async def set_ticket_tag(ticket_id: int, tag: str | None) -> None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             "UPDATE support_tickets SET tag = ? WHERE ticket_id = ?",
             (tag, ticket_id),
@@ -1801,7 +1815,7 @@ async def add_support_ticket_note(ticket_id: int, admin_id: int, body: str) -> N
     text = body.strip()
     if not text:
         return
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             """
             INSERT INTO support_ticket_notes (ticket_id, admin_id, body)
@@ -1813,7 +1827,7 @@ async def add_support_ticket_note(ticket_id: int, admin_id: int, body: str) -> N
 
 
 async def list_support_ticket_notes(ticket_id: int, *, limit: int = 30) -> list[tuple[int, int, str, str]]:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT id, admin_id, body, created_at
@@ -1829,14 +1843,14 @@ async def list_support_ticket_notes(ticket_id: int, *, limit: int = 30) -> list[
 
 
 async def get_meta(key: str) -> str | None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute("SELECT value FROM bot_meta WHERE key = ?", (key,)) as cur:
             row = await cur.fetchone()
     return str(row[0]) if row else None
 
 
 async def set_meta(key: str, value: str) -> None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             """
             INSERT INTO bot_meta (key, value) VALUES (?, ?)
@@ -1848,7 +1862,7 @@ async def set_meta(key: str, value: str) -> None:
 
 
 async def count_new_users_days(days: int) -> int:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT COUNT(*) FROM users
@@ -1861,7 +1875,7 @@ async def count_new_users_days(days: int) -> int:
 
 
 async def list_open_tickets_sla_rows() -> list[SupportTicketDetail]:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             """
             SELECT ticket_id, user_id, username, thread_id, status, created_at,
@@ -1891,7 +1905,7 @@ async def list_open_tickets_sla_rows() -> list[SupportTicketDetail]:
 
 async def increment_daily_user_messages(user_id: int) -> int:
     day = _day_msk_now()
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         await db.execute(
             """
             INSERT INTO user_daily_usage (user_id, day_utc, msg_count)
@@ -1912,7 +1926,7 @@ async def increment_daily_user_messages(user_id: int) -> int:
 
 async def get_daily_user_messages(user_id: int) -> int:
     day = _day_msk_now()
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with open_db() as db:
         async with db.execute(
             "SELECT msg_count FROM user_daily_usage WHERE user_id = ? AND day_utc = ?",
             (user_id, day),

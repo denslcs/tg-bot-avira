@@ -6,6 +6,7 @@ from aiogram.types import BotCommand, BotCommandScopeChat, BotCommandScopeChatAd
 
 from src.config import ADMIN_IDS, SUPPORT_BOT_TOKEN, SUPPORT_CHAT_ID
 from src.database import init_db
+from src.handlers.global_errors import register_global_error_handler
 from src.handlers.support_admin_panel import router as support_admin_panel_router
 from src.handlers.support_commands import router as support_commands_router
 from src.handlers.support_jobs import run_support_background_jobs
@@ -64,6 +65,7 @@ async def main() -> None:
     dp.include_router(support_admin_panel_router)
     dp.include_router(support_commands_router)
     dp.include_router(support_messages_router)
+    register_global_error_handler(dp)
     await dp.start_polling(bot)
 
 

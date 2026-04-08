@@ -37,9 +37,50 @@ def is_polza_image_model(model: str) -> bool:
     return (model or "").strip() in POLZA_IMAGE_MODEL_IDS
 
 
+# Не раскрываем пользователю сбои биллинга/квот на стороне Polza.ai.
+_IMAGE_GEN_TRY_LATER = (
+    "Сейчас не получилось сгенерировать картинку. Попробуй позже или повтори запрос чуть позже."
+)
+
+
+def _polza_error_looks_like_provider_billing(exc: PolzaApiError) -> bool:
+    if exc.http_status == 402:
+        return True
+    t = str(exc).lower()
+    hints = (
+        "402",
+        "payment",
+        "insufficient",
+        "balance",
+        "billing",
+        "quota",
+        "not enough",
+        "funds",
+        "квот",
+        "баланс",
+        "оплат",
+        "недостаточно",
+        "лимит",
+        "credit limit",
+    )
+    return any(h in t for h in hints)
+
+
 def format_polza_image_user_error(exc: BaseException) -> str:
     if isinstance(exc, PolzaApiError):
-        return str(exc) or "Ошибка сервиса Polza.ai. Попробуй позже."
+        if _polza_error_looks_like_provider_billing(exc):
+            return _IMAGE_GEN_TRY_LATER
+        msg = str(exc) or ""
+        if "polzaai_api_key" in msg.lower():
+            return (
+                "Ошибка доступа к генерации картинок. Администратору: проверь ключ "
+                "<code>POLZAAI_API_KEY</code> в <code>.env</code>."
+            )
+        if exc.http_status >= 500:
+            return _IMAGE_GEN_TRY_LATER
+        if exc.http_status == 429:
+            return "Сервис генерации перегружен или сработал лимит. Попробуй через минуту."
+        return msg or _IMAGE_GEN_TRY_LATER
     if isinstance(exc, TimeoutError):
         return "Генерация через Polza.ai слишком долгая. Попробуй ещё раз позже."
     return "Не удалось получить картинку через Polza.ai. Попробуй позже или смени модель."
