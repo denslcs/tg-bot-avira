@@ -128,14 +128,8 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     ],
     "outfits": [
         (
-            "Smart casual look",
-            "Собрать аккуратный smart casual образ и сохранить естественность лица.",
-            "Generate a smart casual fashion portrait. Keep facial identity, realistic body proportions, and clean editorial framing.",
-            1,
-        ),
-        (
-            "Костюм и букет в поле",
-            "Fashion editorial: бежевый костюм, букет полевых цветов, низкий ракурс, луг и небо.",
+            "Красивый костюм с букетом",
+            "Букет полевых цветов, луг и небо, и ты в красивом костюме.",
             "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve face structure, skin texture, age, hair — realistic and recognizable; no face swap, no plastic skin. If the reference is face-only or head-and-shoulders: infer full body proportions consistent with the face. If full body is visible: keep body type coherent. EXPRESSION: neutral, serious, direct eye contact with camera. OUTFIT: well-tailored slim-fit suit in stone beige, clean and minimal; fitted dress shirt underneath; no tie. Suit cut should match apparent gender from the reference. PROP: dense wildflower bouquet held at waist height — white peonies, blue delphiniums, baby's breath, dried grasses. POSE: standing upright, centered, full body in frame. CAMERA: low angle from knee height looking upward; subject reads tall against open sky; wildflower meadow at foot level filling lower frame. SETTING: vast open wildflower meadow on a flat arid plain, low mountain range in the distance. Bright midday sun, vivid cerulean sky with sparse white clouds; natural overhead sunlight, high ambient fill. STYLE: fashion editorial, natural light. TECH: Kodak Portra 400 aesthetic, 35mm wide lens, f/5.6, subject sharp, sky dominant in background, high resolution. NEGATIVE: oversaturated, HDR, heavy retouching, plastic skin, warped proportions, lens flare, vignette, digital artifacting, Telegram username text, watermark.",
             1,
         ),
@@ -148,8 +142,8 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     ],
     "locations": [
         (
-            "Ростомер (booking)",
-            "Сверхреалистичный кадр как при полицейском оформлении: две панели, стена ростомера; лицо с твоего фото, серьёзное.",
+            "Ростомер",
+            "Сверхреалистичный кадр как при полицейском оформлении",
             "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve exactly: facial structure, eyes, nose, lips, skin texture, age, hair. Do NOT replace or beautify the face; no face-swap artifacts. EXPRESSION: the subject must look serious, stern, and neutral — typical police booking photo (no smile, no relaxed or playful look). Only adjust expression toward stern while keeping the same person recognizable. INPUT CROP RULE: The reference may be face-only, head-and-shoulders, or full body. If the crop is tight (face or head-and-shoulders): realistically infer the full body needed for a standard booking layout — match apparent gender, age, and build suggested by the face; coherent proportions. If the reference is full body: preserve body type and integrate into the scene. SCENE: Hyperrealistic police booking / arrest documentation photography. Single image split into two panels: front view | back view of the same person; both standing straight, neutral posture, facing a height-measurement wall with black horizontal lines and height marks. Harsh overhead lighting, documentary crime-photography aesthetic, muted neutral color palette, high contrast, clear forensic sharpness. Realistic skin texture, visible pores, natural body hair where appropriate; no glam retouch. When the body is inferred or shown: lean athletic build may be used if consistent with the face; optional dense alphanumeric tattoos on chest, ribs, arms, and back as part of the booking-sheet visual trope — never obscure the face. TECHNICAL: 35mm lens character, high resolution, no motion blur, no depth-of-field softness, no artistic filters or beauty filters. NEGATIVE: European vacation street, yacht, golden-hour romance, soft glamour lighting, illustration, cartoon.",
             1,
         ),
@@ -160,8 +154,8 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             1,
         ),
         (
-            "Бекрумс VHS",
-            "VHS-кадр в Backrooms: пользователь в движении, эффект записи и широкий угол.",
+            "Бекрумс",
+            "VHS-кадр в Backrooms.",
             "CRITICAL IDENTITY LOCK: keep the user face realistic and recognizable. Create a found-footage VHS style frame in Backrooms atmosphere: long yellow empty corridors, fluorescent ceiling lights, liminal uncanny mood, low-fi analog noise and tape artifacts. The user looks directly into the camera and is caught in dynamic playful movement (slight goofy pose / expressive motion), not static. Wardrobe rule: if input shows only head/portrait, dress the user in a yellow utility jumpsuit; if input is full-body, keep the user's original outfit. Camera rule: slight fisheye look (about 120-degree field of view), camera tilted and positioned a little lower than the user angle. Add on-screen VHS timestamp/date overlay in the lower-left corner (recording-like style). Keep the result photorealistic while preserving authentic VHS degradation.",
             1,
         ),
@@ -169,27 +163,33 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     "celebrities": [
         (
             "Переговоры с Путиным",
-            "Пользователь сидит в кабинете Путина на официальных переговорах.",
+            "Ты сидишь в кабинете Путина на официальных переговорах.",
             "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the user's face 100% unchanged and realistic: same facial structure, skin texture, age, and expression. Create a photorealistic formal negotiation scene inside Vladimir Putin's office: Vladimir Putin and the user are seated at a negotiation table facing each other in a calm diplomatic meeting setup. Wardrobe requirement: the user must wear a formal official business suit (classic dark suit, white shirt, tie). Preserve natural human proportions, realistic skin texture, authentic office lighting, detailed interior, clean composition, and professional documentary photo style.",
             1,
         ),
         (
             "Победа над Мухаммадом Али на ринге",
-            "Реалистичный кадр боксерского боя: пользователь победитель, Мухаммад Али проигравший.",
+            "Выпал шанс прославиться на ринге, как Мухаммад Али, но ты его выиграл...",
             "Create a highly photorealistic boxing match result scene inspired by a real sports photo. IMPORTANT REFERENCE MAPPING: image #1 is user identity reference, image #2 is Muhammad Ali identity reference. CRITICAL IDENTITY LOCK FOR BOTH: preserve Muhammad Ali and user faces from their references with high fidelity (same facial structure, eyes, nose, lips, skin texture, and age). Do not replace Muhammad Ali with another person and do not distort either face. Keep both faces clearly visible and recognizable. Final moment: the user is the winner and Muhammad Ali is the loser. Composition should look like an authentic post-fight ring photo with a referee between fighters raising the user's hand. Arena environment must feel premium and massive: an enormous sold-out stadium packed with thousands of cheering spectators, mostly dark surroundings, and powerful cinematic spotlights/floodlights cutting through the darkness and focusing on the ring like a world-title mega event. Add realistic light beams, subtle haze, dramatic contrast, and elite pay-per-view broadcast atmosphere. No country flags, no national symbols, no flag patches on outfits. Keep natural body proportions, realistic gloves and uniforms, documentary sports photography style, and clean high-detail realism.",
+            1,
+        ),
+        (
+            "Хоумлендер и Бутч",
+            "Селфи с двумя героями сериала прямо во время съёмок.",
+            "Ultra-realistic 9:16 vertical iPhone selfie photo, wide-angle front camera, taken by the user, behind-the-scenes movie set photography style, natural daylight mixed with set lights, cinematic atmosphere, high dynamic range, true-to-life colors. CRITICAL IDENTITY LOCK: use the attached user photo as the exact face reference for the person holding the phone (ME in the middle): same facial features, skin texture, haircut, proportions — no beautification, no face replacement. LOCATION: busy behind-the-scenes film set — camera rigs, lighting stands, director chairs, crew, cables, monitors, trailers blurred in background, green screen or stage elements optional. SCENE — friendly backstage selfie, three people close together: LEFT: Homelander from the series The Boys — iconic patriotic superhero suit with cape, realistic fabric and emblem details, mask removed; confident heroic look, blonde hair, natural skin. CENTER: ME holding the smartphone with one hand, smiling confidently, natural selfie posture. RIGHT: Billy Butcher from The Boys — Karl Urban lookalike: stubble beard, weathered face, dark trench coat / leather jacket, casual tough styling, relaxed smirk, mask off. All three laughing or smiling naturally, relaxed teamwork vibe. CLOTHING: Homelander full hero suit; Butcher as described; ME in elegant classic suit, white shirt, dark trousers, leather shoes. PHOTOGRAPHY: Shot on iPhone 15 Pro Max look, HDR, high resolution, realistic skin texture, soft shadows, shallow depth of field, no beauty filters, no AI gloss. MOOD: fun Hollywood backstage moment, gritty-superhero show vibe, authentic. NEGATIVE: blur, distortion, extra fingers, cartoon, plastic skin, fake HDR halos, wrong faces, masks covering Homelander or Butcher faces, duplicate arms, watermark, Telegram username text.",
             1,
         ),
     ],
     "for_two": [
         (
             "Для влюбленных: рыцарь и дама",
-            "Романтическая сцена на закате: рыцарь (фото 1) и женщина (фото 2).",
+            "Романтическая сцена на закате.",
             "IMPORTANT REFERENCE MAPPING: image #1 is the knight identity (male), image #2 is the woman identity (female). CRITICAL IDENTITY LOCK FOR BOTH: preserve both faces with high fidelity (facial structure, eyes, nose, lips, skin texture, age) and keep them clearly recognizable. HAIR LOCK FOR BOTH: if hair is visible in the reference photos, preserve each person's hairstyle, hairline, hair length, and natural hair color (do not replace with generic fantasy hair). Create a romantic portrait scene with a horse, a medieval knight, and sunset atmosphere. The knight must be based on image #1, without helmet, with visible face. The woman must be based on image #2, in a flowing dress and veil, with visible face. Knight armor should be highly detailed, richly decorated, realistic polished metal. Cinematic fantasy mood, warm golden lighting, volumetric fog, pastel haze. Photorealistic, highly detailed, sharp focus, realistic skin texture, shot on ARRI Alexa, 85mm lens, high resolution.",
             2,
         ),
         (
             "Love is…",
-            "Вкладыш жвачки Love is: пара по двум фото, классический стиль, русская подпись, стол и конфеты.",
+            "Вкладыш жвачки Love is.",
             "IMPORTANT REFERENCE MAPPING: image #1 is the man identity, image #2 is the woman identity. CRITICAL IDENTITY LOCK FOR BOTH: preserve both faces with high fidelity (facial structure, eyes, nose, lips, skin texture, age) and keep them clearly recognizable. Create a Love is gum wrapper insert: use the man's and woman's appearance from the uploaded photos. Classic hand-drawn Love is wrapper art style on the insert — soft warm colors, light blue background. Top left on the insert: logo text \"love is…\". Top right: two small red hearts. Bottom: a short touching funny Russian caption in authentic Love is tone. The insert lies on a wooden table; around it scattered small hearts and candies. Photorealistic photo of the physical scene (wrapper, table, props); the illustration ON the insert follows classic Love is strip aesthetics with the couple matching image #1 (man) and image #2 (woman).",
             2,
         ),
@@ -204,34 +204,34 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     ],
     "movies": [
         (
-            "Кто ты из Вестероса",
-            "Кинематографичный 3D-образ в стиле Game of Thrones: выбери дом Вестероса под внешность пользователя.",
+            "Game of Thrones",
+            "Модель сама определит какой дом Вестероса тебе подходит больше!.",
             "Use the uploaded character from the image as the identity reference and place this person into the final scene. Create an ultra-realistic 3D close-up render of the character standing front-facing. Shoot from a low camera angle so the character dominates the frame. Background should be blurred and misty, with cinematic bokeh, light bloom, and soft shadows. Visual quality requirements: exceptional detail, fine skin texture, clearly defined hair roots, strong cinematic lighting, full 3D depth feeling, premium CG texture quality as if made by top-tier 3D artists. Aspect ratio 3:4, high resolution. Do NOT alter face features or hair — keep them 100% unchanged. RANDOM HOUSE RULE: randomly choose exactly one house from this list only: Stark, Lannister, Targaryen, Baratheon. Then style outfit, heraldic details, and color palette strictly according to the selected house.",
             1,
         ),
         (
-            "Персонаж из Аватара",
-            "Пользователь как герой мира Avatar: кинематографичный кадр в стиле фильма.",
+            "Avatar",
+            "Как бы ты выглядел будучи одним из народа Нави.",
             "CRITICAL IDENTITY LOCK: Use the uploaded user photo as the only identity reference. Keep face structure, age, skin texture, and hairstyle recognizable and realistic. Transform the user into a highly detailed, photorealistic Avatar-universe character (Na'vi aesthetics, blue skin, cinematic tribal costume design, premium textures). GENDER ADAPTATION RULE: infer presentation from the user photo and choose matching character styling automatically. If the user appears male, use a Jake-inspired warrior costume and masculine silhouette. If the user appears female, use a Neytiri-inspired warrior costume and feminine silhouette. Keep the final result respectful, realistic, and coherent. Camera and mood: slightly low upward-facing angle, dramatic cinematic lighting, high contrast, deep saturated blue background, warm highlights on one side of the face and soft velvety shadows on the other. No props, no extra accessories. Emphasize detailed costume materials, realistic skin texture, controlled color grading, and an editorial close portrait feeling.",
             1,
         ),
     ],
     "games": [
         (
-            "Фотка в эндер мире",
-            "Последняя фотка перед битвой с драконом в Minecraft (высокое качество).",
+            "Minecraft",
+            "Последняя фотка перед битвой с драконом в Эндер мире.",
             "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoonization, no pixelated face, no extra facial hair. PROPORTION RULE: Keep natural human head-to-body proportions. Head must not look oversized; keep it slightly stylized but close to realistic proportions, with shoulders/torso visibly dominant in volume. Create a high-quality Minecraft End dimension scene: the user is sitting on top of an obsidian block at the edge of a cliff, looking directly at the camera. Camera angle: top-down, slightly tilted perspective from above. Outfit requirement: the user must wear Minecraft-inspired diamond armor on torso and legs (diamond chestplate + diamond leggings), integrated naturally with the scene. Add the user's Telegram nickname above the head in Minecraft-style yellow text with a dark outline. In the background, an Ender Dragon is flying in the sky. Keep the End-world atmosphere (obsidian, void-like depth, dramatic ambient light), with cinematic composition, sharp details, clean textures, and natural lighting integration on the user. Apply End-themed lighting on the user as well: purple-black ambient glow and subtle violet shadows on skin, armor, and clothing, so the user color grading matches the End environment naturally. Final output must look coherent, polished, and artifact-free.",
             1,
         ),
         (
-            "Clash Royale элитные варвары",
+            "Clash Royale",
             "Выпала возможность прочувствовать себя в в шкуре элитного варвара.",
             "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoon face, no plastic skin, no added beard or mustache. REFERENCE COMPOSITION RULE: Use the provided Clash Royale reference image as layout/composition anchor. Replace ONLY the FRONT (right-side, closest to camera) elite barbarian with the user. Keep the back barbarian as the second character in the scene. POSE RULE: user and the second barbarian should stand close in a friendly side-by-side hug pose, with each character placing one arm over the other's shoulders (mutual arm-over-shoulder). Keep full-body framing of both characters, same arena perspective from the reference, and same armor style (golden horned helmet, wristbands, barbarian belt/skirt, barefoot). Arena details: red carpet, bridge/towers, battle atmosphere, warm cinematic lighting, slight depth of field, clean textures, high detail, natural seamless face integration.",
             1,
         ),
         (
             "GTA Vice City",
-            "Низкополигональный Vice City 2002: если в кадре только голова — дорисуем тело и поставим в типичную локацию.",
+            "Погрузись в криминальный мир городка Vice City.",
             "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve face shape, hair, skin tone, and age; convert the person into a GTA Vice City (2002) RenderWare-era playable-character look while keeping likeness readable on the low-poly face. HEAD-ONLY OR TIGHT FACE CROP RULE: If the input shows only the head or a close portrait with no visible body, you MUST invent a full-body Vice City NPC: proportional PS2-era body, simple rig, tropical/1980s Miami casual outfit (shirt, shorts, or era-typical streetwear). Place the character in a clear outdoor Vice City inspired location — palm-lined boulevard, pastel Art Deco buildings, ocean or bay in the distance, Vice City color grading (warm sunset orange–purple haze OR soft neon pink/cyan night accents). Do NOT leave a floating head; the final frame must show the full character in environment. If the input already shows full body, convert the whole figure to the same Vice City mesh style and still set the scene in a classic Vice City street or beachfront. VICE CITY RENDER SPECS: authentic 2002 look — mid-to-low poly geometry, visible edges, flat shading, low-resolution textures, no ray tracing, no modern global illumination, no depth of field, no motion blur, no cinematic bloom. Lighting: match Vice City mood but keep readable PS2-era simplicity. STRICT: no HUD, minimap, health bars, subtitles, or on-screen UI. FORBIDDEN: GTA V realism, ultra HD skin, generic modern Miami stock photo, random unrelated cities. Negative: random Vice City street pasted from real photos, invented HUD, extra random NPCs as main subject, GTA 5 graphics, bokeh, cinematic grading.",
             1,
         ),
@@ -239,13 +239,13 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     "colors": [
         (
             "Оранжевый",
-            "Крупный портрет через плечо: оранжевая шапка, очки, пальто и фон; лицо строго по твоему фото.",
+            "Оранжевая фотка с элементами одежды и аксессуаров оранжевого цвета.",
             "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY face reference — preserve 100% facial identity: same facial structure, skin texture, age, hairline; no face swap, no different person. Match apparent gender presentation from the reference. Create a stylish close-up over-the-shoulder portrait: subject glances back toward the camera with a cool, confident gaze. Wardrobe: orange beanie, orange-tinted rectangular sunglasses, crisp white turtleneck, bright orange overcoat; hair styled consistently with the reference (dark wavy hair if shown). Vivid saturated orange background; soft flattering light emphasizing fabric and skin texture; modern cinematic editorial look. NEGATIVE: Telegram username text, watermark, plastic skin, beauty blur, wrong face.",
             1,
         ),
         (
             "Чёрный студийный",
-            "Ч/б студия, свет Рембрандта, чёрный фон; детали лица и кожи как на фото, без глянца.",
+            "Черный фон черная фотка, ничего больше.",
             "CRITICAL IDENTITY LOCK: Use the uploaded user photo as the only identity source. Preserve exact facial details and natural skin texture — no beauty retouching, no plastic skin, no face replacement. Black-and-white studio portrait. Single Rembrandt-style key light: strong directional contrast with a characteristic triangle of light on the cheek, deep shadows on one side of the face. Background fully black, isolating the subject with mystery and confidence. Dark shirt or jacket. Hyperdetailed skin texture, tack sharp eyes, shallow depth of field. Premium studio photography look inspired by Leica 90mm character (do not render camera body, logos, or UI). NEGATIVE: color, soft flat lighting, glam retouch, text overlay, Telegram nickname.",
             1,
         ),
