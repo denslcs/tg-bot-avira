@@ -184,7 +184,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Для влюбленных: рыцарь и дама",
             "Романтическая сцена на закате: рыцарь (фото 1) и женщина (фото 2).",
-            "IMPORTANT REFERENCE MAPPING: image #1 is the knight identity (male), image #2 is the woman identity (female). CRITICAL IDENTITY LOCK FOR BOTH: preserve both faces with high fidelity (facial structure, eyes, nose, lips, skin texture, age) and keep them clearly recognizable. Create a romantic portrait scene with a horse, a medieval knight, and sunset atmosphere. The knight must be based on image #1, without helmet, with visible face. The woman must be based on image #2, in a flowing dress and veil, with visible face. Knight armor should be highly detailed, richly decorated, realistic polished metal. Cinematic fantasy mood, warm golden lighting, volumetric fog, pastel haze. Photorealistic, highly detailed, sharp focus, realistic skin texture, shot on ARRI Alexa, 85mm lens, high resolution.",
+            "IMPORTANT REFERENCE MAPPING: image #1 is the knight identity (male), image #2 is the woman identity (female). CRITICAL IDENTITY LOCK FOR BOTH: preserve both faces with high fidelity (facial structure, eyes, nose, lips, skin texture, age) and keep them clearly recognizable. HAIR LOCK FOR BOTH: if hair is visible in the reference photos, preserve each person's hairstyle, hairline, hair length, and natural hair color (do not replace with generic fantasy hair). Create a romantic portrait scene with a horse, a medieval knight, and sunset atmosphere. The knight must be based on image #1, without helmet, with visible face. The woman must be based on image #2, in a flowing dress and veil, with visible face. Knight armor should be highly detailed, richly decorated, realistic polished metal. Cinematic fantasy mood, warm golden lighting, volumetric fog, pastel haze. Photorealistic, highly detailed, sharp focus, realistic skin texture, shot on ARRI Alexa, 85mm lens, high resolution.",
             2,
         ),
         (
@@ -773,6 +773,28 @@ def _ready_idea_caption(*, category_title: str, title: str, preview: str, index:
         f"<blockquote><i>{esc(preview)}</i></blockquote>\n"
         f"<i>Нужно для запуска:</i> <b>{esc(p_line)}</b>"
     )
+
+
+def _ready_photo_upload_hint(*, category: str, need: int, received: int) -> str:
+    """Подсказка шага загрузки фото: для парочек фиксируем порядок мужчина -> женщина."""
+    is_for_two = (category or "").strip().lower() == "for_two" and need == 2
+    if is_for_two:
+        if received <= 0:
+            return (
+                "Скинь фото мужчины.\n"
+                "<blockquote><i>Порядок важен: сначала мужчина, потом женщина.</i></blockquote>"
+            )
+        if received == 1:
+            return (
+                "<b>Фото получено: 1/2</b>\n"
+                "<blockquote><i>Теперь скинь фото женщины.</i></blockquote>"
+            )
+        return "<b>Фото получено: 2/2</b>"
+    if received <= 0:
+        return f"Отправь {esc('2 фото' if need == 2 else '1 фото')}."
+    if received < need:
+        return f"Фото получено: <b>{esc(received)}/{esc(need)}</b>. Пришли ещё."
+    return f"Фото получено: <b>{esc(received)}/{esc(need)}</b>."
 
 
 def _regen_keyboard() -> InlineKeyboardMarkup:
@@ -1463,11 +1485,12 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
         title, _preview, _prompt, photos_required = ideas[idx]
         await state.update_data(_ready_category=category, _ready_index=idx, _ready_photos=[], _ready_need=photos_required)
         await state.set_state(ImageGenState.ready_waiting_photos)
+        first_hint = _ready_photo_upload_hint(category=category, need=photos_required, received=0)
         await edit_or_send_nav_message(
             callback.message,
             text=(
                 f"<b>Выбрано:</b> {esc(title)}\n"
-                f"<blockquote><i>Отправь {esc('2 фото' if photos_required == 2 else '1 фото')}.\n"
+                f"<blockquote><i>{first_hint}\n"
                 "После загрузки появится кнопка подтверждения.</i></blockquote>"
             ),
             reply_markup=_ready_wait_photo_keyboard(),
@@ -1500,10 +1523,16 @@ async def ready_photo_back(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.message(ImageGenState.ready_waiting_photos, ~F.photo)
-async def ready_need_photo_hint(message: Message) -> None:
+async def ready_need_photo_hint(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    category = str(data.get("_ready_category") or "").strip().lower()
+    need = int(data.get("_ready_need") or 1)
+    photos = list(data.get("_ready_photos") or [])
+    hint = _ready_photo_upload_hint(category=category, need=need, received=len(photos))
     await message.answer(
-        "Пришли фото сообщением. Когда соберем нужное количество, появится подтверждение.",
+        f"{hint}\nКогда соберем нужное количество, появится подтверждение.",
         reply_markup=_ready_wait_photo_keyboard(),
+        parse_mode=HTML,
     )
 
 
@@ -1524,8 +1553,13 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
     photos.append(ph.file_id)
     await state.update_data(_ready_photos=photos)
     if len(photos) < need:
+        hint = _ready_photo_upload_hint(
+            category=str(data.get("_ready_category") or ""),
+            need=need,
+            received=len(photos),
+        )
         await message.answer(
-            f"Фото получено: <b>{esc(len(photos))}/{esc(need)}</b>. Пришли ещё.",
+            hint,
             reply_markup=_ready_wait_photo_keyboard(),
             parse_mode=HTML,
         )
@@ -1533,6 +1567,7 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
     await state.set_state(ImageGenState.ready_waiting_confirm)
     await message.answer(
         (
+            f"{_ready_photo_upload_hint(category=str(data.get('_ready_category') or ''), need=need, received=len(photos))}\n"
             f"<b>Фото зафиксированы:</b> <b>{esc(len(photos))}</b>\n"
             "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
         ),
