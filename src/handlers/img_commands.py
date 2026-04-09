@@ -4,7 +4,9 @@ from __future__ import annotations
 Генерация изображений по тексту: OpenRouter (FLUX, Gemini) и Polza.ai (GPT Image).
 """
 
+import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from io import BytesIO
 from pathlib import Path
 
@@ -60,6 +62,7 @@ from src.database import (
 )
 from src.formatting import HTML, esc
 from src.handlers.commands import edit_or_send_nav_message, restore_main_menu_message
+from src.keyboards.main_menu import start_menu_keyboard
 from src.keyboards.callback_data import (
     CB_BACK_IMAGE_MODELS,
     CB_CREATE_IMAGE,
@@ -77,14 +80,12 @@ from src.keyboards.callback_data import (
 from src.keyboards.styles import BTN_DANGER, BTN_PRIMARY, BTN_SUCCESS
 from src.openrouter_image import (
     OpenRouterApiError,
-    format_openrouter_image_user_error,
     is_openrouter_image_configured,
     openrouter_text_and_refs_to_image_bytes,
     openrouter_text_to_image_bytes,
 )
 from src.polza_image import (
     PolzaApiError,
-    format_polza_image_user_error,
     is_polza_configured,
     is_polza_image_model,
     polza_text_to_image_bytes,
@@ -132,12 +133,24 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             "Generate a smart casual fashion portrait. Keep facial identity, realistic body proportions, and clean editorial framing.",
             1,
         ),
+        (
+            "Костюм и букет в поле",
+            "Fashion editorial: бежевый костюм, букет полевых цветов, низкий ракурс, луг и небо.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve face structure, skin texture, age, hair — realistic and recognizable; no face swap, no plastic skin. If the reference is face-only or head-and-shoulders: infer full body proportions consistent with the face. If full body is visible: keep body type coherent. EXPRESSION: neutral, serious, direct eye contact with camera. OUTFIT: well-tailored slim-fit suit in stone beige, clean and minimal; fitted dress shirt underneath; no tie. Suit cut should match apparent gender from the reference. PROP: dense wildflower bouquet held at waist height — white peonies, blue delphiniums, baby's breath, dried grasses. POSE: standing upright, centered, full body in frame. CAMERA: low angle from knee height looking upward; subject reads tall against open sky; wildflower meadow at foot level filling lower frame. SETTING: vast open wildflower meadow on a flat arid plain, low mountain range in the distance. Bright midday sun, vivid cerulean sky with sparse white clouds; natural overhead sunlight, high ambient fill. STYLE: fashion editorial, natural light. TECH: Kodak Portra 400 aesthetic, 35mm wide lens, f/5.6, subject sharp, sky dominant in background, high resolution. NEGATIVE: oversaturated, HDR, heavy retouching, plastic skin, warped proportions, lens flare, vignette, digital artifacting, Telegram username text, watermark.",
+            1,
+        ),
+        (
+            "Gucci editorial",
+            "High-fashion: Gucci-эстетика, смелые принты, драматичный свет, кадр как обложка Vogue.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve facial structure, skin texture, age, hair — recognizable and natural; no face replacement, no plastic doll skin. INPUT CROP: If face-only or head-and-shoulders, infer full body with proportions matching the face; if full body is shown, keep silhouette coherent. High-fashion editorial portrait inspired by Gucci runway aesthetics (Alessandro Michele era: maximalist mixing, eclectic romance) — NOT an official brand advertisement; avoid reproducing exact logos or trademark patterns; use original bold geometric and floral-inspired prints in that spirit. Subject: fierce, intense expression; androgynous high-fashion beauty that still matches the reference person's face. Wearing avant-garde editorial outfit: bold patterns, layered textures, rich fabrics, statement accessories. SETTING: minimalist studio set — seamless backdrop or abstract sculptural props, Vogue-style composition, fashion magazine cover framing. LIGHTING: dramatic directional light, cinematic shadows, subtle rim, controlled highlights; glossy editorial skin with real pores (no waxy CGI). CAMERA: confident pose, ultra-sharp focus on eyes, shallow depth of field where appropriate, stylized cinematic color grading (rich but cohesive). TECH: ultra-detailed, very high resolution; avoid fake HDR halos. NEGATIVE: readable brand logos, watermark, Telegram username text, oversmoothed skin, warped limbs, extra fingers, cluttered background, cheap CGI.",
+            1,
+        ),
     ],
     "locations": [
         (
-            "Европейская улица",
-            "Перенос в атмосферную европейскую локацию с естественным освещением.",
-            "Place the subject in a picturesque European street scene at golden hour with realistic shadows and cohesive perspective.",
+            "Ростомер (booking)",
+            "Сверхреалистичный кадр как при полицейском оформлении: две панели, стена ростомера; лицо с твоего фото, серьёзное.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve exactly: facial structure, eyes, nose, lips, skin texture, age, hair. Do NOT replace or beautify the face; no face-swap artifacts. EXPRESSION: the subject must look serious, stern, and neutral — typical police booking photo (no smile, no relaxed or playful look). Only adjust expression toward stern while keeping the same person recognizable. INPUT CROP RULE: The reference may be face-only, head-and-shoulders, or full body. If the crop is tight (face or head-and-shoulders): realistically infer the full body needed for a standard booking layout — match apparent gender, age, and build suggested by the face; coherent proportions. If the reference is full body: preserve body type and integrate into the scene. SCENE: Hyperrealistic police booking / arrest documentation photography. Single image split into two panels: front view | back view of the same person; both standing straight, neutral posture, facing a height-measurement wall with black horizontal lines and height marks. Harsh overhead lighting, documentary crime-photography aesthetic, muted neutral color palette, high contrast, clear forensic sharpness. Realistic skin texture, visible pores, natural body hair where appropriate; no glam retouch. When the body is inferred or shown: lean athletic build may be used if consistent with the face; optional dense alphanumeric tattoos on chest, ribs, arms, and back as part of the booking-sheet visual trope — never obscure the face. TECHNICAL: 35mm lens character, high resolution, no motion blur, no depth-of-field softness, no artistic filters or beauty filters. NEGATIVE: European vacation street, yacht, golden-hour romance, soft glamour lighting, illustration, cartoon.",
             1,
         ),
         (
@@ -172,6 +185,12 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             "Для влюбленных: рыцарь и дама",
             "Романтическая сцена на закате: рыцарь (фото 1) и женщина (фото 2).",
             "IMPORTANT REFERENCE MAPPING: image #1 is the knight identity (male), image #2 is the woman identity (female). CRITICAL IDENTITY LOCK FOR BOTH: preserve both faces with high fidelity (facial structure, eyes, nose, lips, skin texture, age) and keep them clearly recognizable. Create a romantic portrait scene with a horse, a medieval knight, and sunset atmosphere. The knight must be based on image #1, without helmet, with visible face. The woman must be based on image #2, in a flowing dress and veil, with visible face. Knight armor should be highly detailed, richly decorated, realistic polished metal. Cinematic fantasy mood, warm golden lighting, volumetric fog, pastel haze. Photorealistic, highly detailed, sharp focus, realistic skin texture, shot on ARRI Alexa, 85mm lens, high resolution.",
+            2,
+        ),
+        (
+            "Love is…",
+            "Вкладыш жвачки Love is: пара по двум фото, классический стиль, русская подпись, стол и конфеты.",
+            "IMPORTANT REFERENCE MAPPING: image #1 is the man identity, image #2 is the woman identity. CRITICAL IDENTITY LOCK FOR BOTH: preserve both faces with high fidelity (facial structure, eyes, nose, lips, skin texture, age) and keep them clearly recognizable. Create a Love is gum wrapper insert: use the man's and woman's appearance from the uploaded photos. Classic hand-drawn Love is wrapper art style on the insert — soft warm colors, light blue background. Top left on the insert: logo text \"love is…\". Top right: two small red hearts. Bottom: a short touching funny Russian caption in authentic Love is tone. The insert lies on a wooden table; around it scattered small hearts and candies. Photorealistic photo of the physical scene (wrapper, table, props); the illustration ON the insert follows classic Love is strip aesthetics with the couple matching image #1 (man) and image #2 (woman).",
             2,
         ),
     ],
@@ -210,12 +229,24 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoon face, no plastic skin, no added beard or mustache. REFERENCE COMPOSITION RULE: Use the provided Clash Royale reference image as layout/composition anchor. Replace ONLY the FRONT (right-side, closest to camera) elite barbarian with the user. Keep the back barbarian as the second character in the scene. POSE RULE: user and the second barbarian should stand close in a friendly side-by-side hug pose, with each character placing one arm over the other's shoulders (mutual arm-over-shoulder). Keep full-body framing of both characters, same arena perspective from the reference, and same armor style (golden horned helmet, wristbands, barbarian belt/skirt, barefoot). Arena details: red carpet, bridge/towers, battle atmosphere, warm cinematic lighting, slight depth of field, clean textures, high detail, natural seamless face integration.",
             1,
         ),
+        (
+            "GTA Vice City",
+            "Низкополигональный Vice City 2002: если в кадре только голова — дорисуем тело и поставим в типичную локацию.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve face shape, hair, skin tone, and age; convert the person into a GTA Vice City (2002) RenderWare-era playable-character look while keeping likeness readable on the low-poly face. HEAD-ONLY OR TIGHT FACE CROP RULE: If the input shows only the head or a close portrait with no visible body, you MUST invent a full-body Vice City NPC: proportional PS2-era body, simple rig, tropical/1980s Miami casual outfit (shirt, shorts, or era-typical streetwear). Place the character in a clear outdoor Vice City inspired location — palm-lined boulevard, pastel Art Deco buildings, ocean or bay in the distance, Vice City color grading (warm sunset orange–purple haze OR soft neon pink/cyan night accents). Do NOT leave a floating head; the final frame must show the full character in environment. If the input already shows full body, convert the whole figure to the same Vice City mesh style and still set the scene in a classic Vice City street or beachfront. VICE CITY RENDER SPECS: authentic 2002 look — mid-to-low poly geometry, visible edges, flat shading, low-resolution textures, no ray tracing, no modern global illumination, no depth of field, no motion blur, no cinematic bloom. Lighting: match Vice City mood but keep readable PS2-era simplicity. STRICT: no HUD, minimap, health bars, subtitles, or on-screen UI. FORBIDDEN: GTA V realism, ultra HD skin, generic modern Miami stock photo, random unrelated cities. Negative: random Vice City street pasted from real photos, invented HUD, extra random NPCs as main subject, GTA 5 graphics, bokeh, cinematic grading.",
+            1,
+        ),
     ],
     "colors": [
         (
-            "Purple pulse",
-            "Фиолетово-розовая палитра, мягкий glow и чистая кожа.",
-            "Generate a portrait with purple-magenta color palette, soft glow effects, and natural skin details.",
+            "Оранжевый",
+            "Крупный портрет через плечо: оранжевая шапка, очки, пальто и фон; лицо строго по твоему фото.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY face reference — preserve 100% facial identity: same facial structure, skin texture, age, hairline; no face swap, no different person. Match apparent gender presentation from the reference. Create a stylish close-up over-the-shoulder portrait: subject glances back toward the camera with a cool, confident gaze. Wardrobe: orange beanie, orange-tinted rectangular sunglasses, crisp white turtleneck, bright orange overcoat; hair styled consistently with the reference (dark wavy hair if shown). Vivid saturated orange background; soft flattering light emphasizing fabric and skin texture; modern cinematic editorial look. NEGATIVE: Telegram username text, watermark, plastic skin, beauty blur, wrong face.",
+            1,
+        ),
+        (
+            "Чёрный студийный",
+            "Ч/б студия, свет Рембрандта, чёрный фон; детали лица и кожи как на фото, без глянца.",
+            "CRITICAL IDENTITY LOCK: Use the uploaded user photo as the only identity source. Preserve exact facial details and natural skin texture — no beauty retouching, no plastic skin, no face replacement. Black-and-white studio portrait. Single Rembrandt-style key light: strong directional contrast with a characteristic triangle of light on the cheek, deep shadows on one side of the face. Background fully black, isolating the subject with mystery and confidence. Dark shirt or jacket. Hyperdetailed skin texture, tack sharp eyes, shallow depth of field. Premium studio photography look inspired by Leica 90mm character (do not render camera body, logos, or UI). NEGATIVE: color, soft flat lighting, glam retouch, text overlay, Telegram nickname.",
             1,
         ),
     ],
@@ -281,6 +312,98 @@ _GEN_STATUS_DONE_TEXT = (
 )
 
 _BACK_MAIN = [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)]
+
+# Имитация прогресса: OpenRouter/Polza не отдают реальный %, только «пока ждём».
+_GEN_PROGRESS_INTERVAL_SEC = 2.0
+_GEN_PROGRESS_STEP = 10
+_GEN_PROGRESS_MAX_SIM = 90
+_GEN_PROGRESS_FINISH_STEP_SEC = 0.12
+
+_GEN_FAILURE_TEXT = (
+    "<b>Генерация не завершена</b>\n\n"
+    "<blockquote><i>Прости за сбой — картинку получить не удалось. "
+    "Попробуй позже или измени запрос. Если повторяется — напиши в поддержку.</i></blockquote>"
+)
+
+
+def _gen_progress_caption(pct: int) -> str:
+    pct = max(0, min(100, int(pct)))
+    n = 10
+    filled = n if pct >= 100 else min(n, (pct * n) // 100)
+    bar = "".join("🟩" if i < filled else "⬜" for i in range(n))
+    return f"<b>Идёт создание…</b>\n\n{bar}\n\n<i>{pct}%</i>"
+
+
+async def _rollback_generation_charge(
+    user_id: int,
+    meta: ImageChargeMeta,
+    *,
+    usage_kind: str,
+    cost: int,
+) -> None:
+    if meta.daily_reserved:
+        await release_daily_image_generation(user_id, usage_kind)
+    if meta.credit_charged:
+        await add_credits(user_id, cost)
+    if meta.nonsub_quota_reserved:
+        await release_nonsub_image_quota_slot(user_id)
+    if meta.nonsub_ready_reserved:
+        await release_nonsub_ready_idea_slot(user_id)
+    if meta.idea_token_consumed:
+        await add_idea_tokens(user_id, 1)
+
+
+async def _notify_image_generation_failure(
+    wait_msg: Message | None,
+    message: Message,
+    state: FSMContext | None,
+) -> None:
+    kb = start_menu_keyboard()
+    if state is not None:
+        try:
+            await state.clear()
+        except Exception:
+            logging.debug("state clear on gen failure", exc_info=True)
+    if wait_msg is not None:
+        try:
+            await wait_msg.edit_text(_GEN_FAILURE_TEXT, parse_mode=HTML, reply_markup=kb)
+            return
+        except Exception:
+            logging.debug("failure notify: edit failed, sending new message", exc_info=True)
+    await message.answer(_GEN_FAILURE_TEXT, parse_mode=HTML, reply_markup=kb)
+
+
+async def _await_generation_with_progress(
+    wait_msg: Message,
+    gen: Callable[[], Awaitable[tuple[bytes, bool]]],
+) -> tuple[bytes, bool]:
+    """Пока ждём API — полоска до 90%; после успеха — дожим до 100%, затем «готово» и фото."""
+    task = asyncio.create_task(gen())
+    p = 0
+    while not task.done():
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=_GEN_PROGRESS_INTERVAL_SEC)
+            break
+        except asyncio.TimeoutError:
+            p = min(p + _GEN_PROGRESS_STEP, _GEN_PROGRESS_MAX_SIM)
+            try:
+                await wait_msg.edit_text(_gen_progress_caption(p), parse_mode=HTML)
+            except Exception:
+                logging.debug("gen progress edit failed", exc_info=True)
+    result = await task
+    if not isinstance(result, tuple) or len(result) != 2:
+        raise RuntimeError("invalid generation result")
+    image_bytes, from_cache = result
+    cur = p
+    while cur < 100:
+        cur = min(cur + _GEN_PROGRESS_STEP, 100)
+        try:
+            await wait_msg.edit_text(_gen_progress_caption(cur), parse_mode=HTML)
+        except Exception:
+            logging.debug("gen progress finish edit failed", exc_info=True)
+        await asyncio.sleep(_GEN_PROGRESS_FINISH_STEP_SEC)
+    await asyncio.sleep(0.22)
+    return image_bytes, from_cache
 
 
 async def _finalize_generation_status_message(wait_msg: Message) -> None:
@@ -779,17 +902,20 @@ async def _execute_text_generation(
     ok, meta = prep
     if not ok or meta is None:
         return
-    wait_msg = await message.answer("Идет генерация картинки")
+    wait_msg = await message.answer(_gen_progress_caption(0), parse_mode=HTML)
     try:
-        if is_polza_image_model(model):
-            image_bytes = await polza_text_to_image_bytes(
-                prompt, model=model, user_id=user_id
-            )
-            from_cache = False
-        else:
-            image_bytes, from_cache = await openrouter_text_to_image_bytes(
+
+        async def _gen_text() -> tuple[bytes, bool]:
+            if is_polza_image_model(model):
+                b = await polza_text_to_image_bytes(
+                    prompt, model=model, user_id=user_id
+                )
+                return b, False
+            return await openrouter_text_to_image_bytes(
                 prompt, model=model, use_cache=use_image_cache
             )
+
+        image_bytes, from_cache = await _await_generation_with_progress(wait_msg, _gen_text)
     except Exception as exc:
         if isinstance(exc, OpenRouterApiError):
             logging.warning(
@@ -798,7 +924,6 @@ async def _execute_text_generation(
                 exc.http_status,
                 exc,
             )
-            err = format_openrouter_image_user_error(exc)
         elif isinstance(exc, PolzaApiError):
             logging.warning(
                 "Polza.ai отказ user_id=%s http=%s: %s",
@@ -806,25 +931,19 @@ async def _execute_text_generation(
                 exc.http_status,
                 exc,
             )
-            err = format_polza_image_user_error(exc)
         else:
             logging.exception("Image text generation failed user_id=%s", user_id)
-            err = (
-                format_polza_image_user_error(exc)
-                if is_polza_image_model(model)
-                else format_openrouter_image_user_error(exc)
-            )
-        if meta.daily_reserved:
-            await release_daily_image_generation(user_id, usage_kind)
-        if meta.credit_charged:
-            await add_credits(user_id, cost)
-        if meta.nonsub_quota_reserved:
-            await release_nonsub_image_quota_slot(user_id)
-        if meta.nonsub_ready_reserved:
-            await release_nonsub_ready_idea_slot(user_id)
-        if meta.idea_token_consumed:
-            await add_idea_tokens(user_id, 1)
-        await wait_msg.edit_text(err, parse_mode=HTML, disable_web_page_preview=True)
+        await _rollback_generation_charge(
+            user_id, meta, usage_kind=usage_kind, cost=cost
+        )
+        await _notify_image_generation_failure(wait_msg, message, state)
+        return
+    if not image_bytes or len(image_bytes) < 64:
+        logging.warning("empty or tiny image after text gen user_id=%s", user_id)
+        await _rollback_generation_charge(
+            user_id, meta, usage_kind=usage_kind, cost=cost
+        )
+        await _notify_image_generation_failure(wait_msg, message, state)
         return
     await _finalize_generation_status_message(wait_msg)
     await _send_result_photo_with_regen(
@@ -895,42 +1014,46 @@ async def _execute_ready_with_refs_generation(
         return
     wait_msg = await edit_or_send_nav_message(
         message,
-        text="Идет генерация картинки",
+        text=_gen_progress_caption(0),
         reply_markup=None,
-        parse_mode=None,
+        parse_mode=HTML,
     )
     if wait_msg is None:
-        wait_msg = await message.bot.send_message(chat_id, "Идет генерация картинки")
+        wait_msg = await message.bot.send_message(chat_id, _gen_progress_caption(0), parse_mode=HTML)
     try:
-        user_refs: list[bytes] = []
-        refs: list[bytes] = []
-        if extra_refs and extra_refs_first:
-            refs.extend(extra_refs)
-        for fid in refs_file_ids:
-            b = await _download_telegram_photo_bytes(message.bot, fid)
-            user_refs.append(b)
-            refs.append(b)
-        if extra_refs and not extra_refs_first:
-            refs.extend(extra_refs)
-        try:
-            image_bytes = await openrouter_text_and_refs_to_image_bytes(
-                prompt,
-                refs=refs,
-                model=model,
-            )
-        except Exception:
-            # Иногда модель/провайдер отказывает именно на сочетании "scene ref + user ref".
-            # Делаем безопасный повтор с фото пользователя, чтобы сценарий не ломался.
-            if (not strict_refs) and extra_refs and user_refs:
-                logging.warning("Ready refs primary call failed; retrying with user refs only", exc_info=True)
-                image_bytes = await openrouter_text_and_refs_to_image_bytes(
+
+        async def _gen_ready() -> tuple[bytes, bool]:
+            user_refs: list[bytes] = []
+            refs: list[bytes] = []
+            if extra_refs and extra_refs_first:
+                refs.extend(extra_refs)
+            for fid in refs_file_ids:
+                b = await _download_telegram_photo_bytes(message.bot, fid)
+                user_refs.append(b)
+                refs.append(b)
+            if extra_refs and not extra_refs_first:
+                refs.extend(extra_refs)
+            try:
+                img = await openrouter_text_and_refs_to_image_bytes(
                     prompt,
-                    refs=user_refs,
+                    refs=refs,
                     model=model,
                 )
-            else:
-                raise
-        from_cache = False
+            except Exception:
+                # Иногда модель/провайдер отказывает именно на сочетании "scene ref + user ref".
+                # Делаем безопасный повтор с фото пользователя, чтобы сценарий не ломался.
+                if (not strict_refs) and extra_refs and user_refs:
+                    logging.warning("Ready refs primary call failed; retrying with user refs only", exc_info=True)
+                    img = await openrouter_text_and_refs_to_image_bytes(
+                        prompt,
+                        refs=user_refs,
+                        model=model,
+                    )
+                else:
+                    raise
+            return img, False
+
+        image_bytes, from_cache = await _await_generation_with_progress(wait_msg, _gen_ready)
     except Exception as exc:
         if isinstance(exc, OpenRouterApiError):
             logging.warning(
@@ -939,21 +1062,19 @@ async def _execute_ready_with_refs_generation(
                 exc.http_status,
                 exc,
             )
-            err = format_openrouter_image_user_error(exc)
         else:
             logging.exception("Image refs generation failed user_id=%s", user_id)
-            err = format_openrouter_image_user_error(exc)
-        if meta.daily_reserved:
-            await release_daily_image_generation(user_id, "ready")
-        if meta.credit_charged:
-            await add_credits(user_id, cost)
-        if meta.nonsub_quota_reserved:
-            await release_nonsub_image_quota_slot(user_id)
-        if meta.nonsub_ready_reserved:
-            await release_nonsub_ready_idea_slot(user_id)
-        if meta.idea_token_consumed:
-            await add_idea_tokens(user_id, 1)
-        await wait_msg.edit_text(err, parse_mode=HTML, disable_web_page_preview=True)
+        await _rollback_generation_charge(
+            user_id, meta, usage_kind="ready", cost=cost
+        )
+        await _notify_image_generation_failure(wait_msg, message, state)
+        return
+    if not image_bytes or len(image_bytes) < 64:
+        logging.warning("empty or tiny image after ready refs user_id=%s", user_id)
+        await _rollback_generation_charge(
+            user_id, meta, usage_kind="ready", cost=cost
+        )
+        await _notify_image_generation_failure(wait_msg, message, state)
         return
     await _finalize_generation_status_message(wait_msg)
     await _send_result_photo_with_regen(
@@ -1424,7 +1545,7 @@ def _build_ready_prompt(
     base_prompt: str,
     telegram_username: str | None,
     *,
-    include_telegram_nick: bool = True,
+    include_telegram_nick: bool = False,
     refs_hint: str | None = None,
 ) -> str:
     nick = (telegram_username or "").strip()
@@ -1487,10 +1608,29 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
                 parse_mode=None,
             )
             return
+        # Telegram-ник в текст промпта — только «Фотка в эндер мире» (надпись над головой в Minecraft).
         include_nick = title == "Фотка в эндер мире"
         model_override = None
         if title == "На отдыхе в Италии":
             model_override = (OPENROUTER_IMAGE_MODEL_ALT or "").strip()
+        elif title in ("Оранжевый", "Чёрный студийный"):
+            model_override = (OPENROUTER_IMAGE_MODEL_ALT or "").strip() or (
+                "black-forest-labs/flux.2-pro"
+            )
+        elif title == "GTA Vice City":
+            # Nano Banana 2 (preview): сцена с референсом лица.
+            model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or (
+                "google/gemini-3.1-flash-image-preview"
+            )
+        elif title == "Ростомер (booking)":
+            # Nano Banana 2: лицо по фото + диптих/сцена; Flux Pro хуже с референсом лица.
+            model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or (
+                "google/gemini-3.1-flash-image-preview"
+            )
+        elif title in ("Костюм и букет в поле", "Gucci editorial"):
+            model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or (
+                "google/gemini-3.1-flash-image-preview"
+            )
         extra_refs: list[bytes] = []
         static_ref = _READY_IDEA_STATIC_REF_BY_TITLE.get(title)
         if title in ("Clash Royale элитные варвары", "На отдыхе в Италии", "Кто ты из Вестероса"):

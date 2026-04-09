@@ -416,10 +416,14 @@ def _referral_share_url(bot_username: str | None, user_id: int) -> str:
     if bot_username:
         ref_https = f"https://t.me/{bot_username}?start=ref_{user_id}"
         return "https://t.me/share/url?" + urllib.parse.urlencode(
-            {"url": ref_https, "text": text_share}
+            {"url": ref_https, "text": text_share},
+            quote_via=urllib.parse.quote,
         )
     ref_plain = f"/start ref_{user_id}"
-    return "https://t.me/share/url?" + urllib.parse.urlencode({"text": f"{text_share}\n{ref_plain}"})
+    return "https://t.me/share/url?" + urllib.parse.urlencode(
+        {"text": f"{text_share}\n{ref_plain}"},
+        quote_via=urllib.parse.quote,
+    )
 
 
 async def _build_referral_message(
