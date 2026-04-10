@@ -95,6 +95,13 @@ from src.subscription_catalog import (
     NONSUB_IMAGE_WINDOW_MAX,
 )
 
+try:
+    from PIL import Image, ImageDraw, ImageFont
+except Exception:  # pragma: no cover - pillow is optional at runtime
+    Image = None
+    ImageDraw = None
+    ImageFont = None
+
 router = Router(name="img_commands")
 
 READY_IDEA_CATEGORIES: list[tuple[str, str]] = [
@@ -997,6 +1004,52 @@ async def _download_telegram_photo_bytes(bot, file_id: str) -> bytes:
     return data
 
 
+def _overlay_minecraft_nick(image_bytes: bytes, username: str | None) -> bytes:
+    """Надпись ника поверх результата в пиксельном стиле Minecraft."""
+    nick = (username or "").strip().lstrip("@")
+    if not nick:
+        return image_bytes
+    if Image is None or ImageDraw is None or ImageFont is None:
+        logging.warning("Pillow is not available; skip minecraft nick overlay")
+        return image_bytes
+    try:
+        with Image.open(BytesIO(image_bytes)) as im:
+            rgba = im.convert("RGBA")
+            w, h = rgba.size
+            text = f"@{nick}"
+            base_font = ImageFont.load_default()
+            # Рисуем в маленьком слое и увеличиваем NEAREST для «пиксельного» вида.
+            temp = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+            temp_draw = ImageDraw.Draw(temp)
+            bbox = temp_draw.textbbox((0, 0), text, font=base_font)
+            tw = max(1, bbox[2] - bbox[0])
+            th = max(1, bbox[3] - bbox[1])
+            pad = 2
+            small = Image.new("RGBA", (tw + pad * 2, th + pad * 2), (0, 0, 0, 0))
+            small_draw = ImageDraw.Draw(small)
+            ox, oy = pad, pad
+            # Темная обводка + желтый текст.
+            for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, 1), (-1, 1), (1, -1)):
+                small_draw.text((ox + dx, oy + dy), text, font=base_font, fill=(26, 26, 26, 255))
+            small_draw.text((ox, oy), text, font=base_font, fill=(255, 228, 49, 255))
+
+            scale = max(3, min(7, w // 220))
+            resampling = Image.Resampling if hasattr(Image, "Resampling") else Image
+            pixel = small.resize(
+                (small.width * scale, small.height * scale),
+                resample=resampling.NEAREST,
+            )
+            x = max(8, (w - pixel.width) // 2)
+            y = max(8, int(h * 0.08))
+            rgba.alpha_composite(pixel, (x, y))
+            out = BytesIO()
+            rgba.convert("RGB").save(out, format="PNG")
+            return out.getvalue()
+    except Exception:
+        logging.warning("minecraft nick overlay failed", exc_info=True)
+        return image_bytes
+
+
 async def _execute_ready_with_refs_generation(
     message: Message,
     state: FSMContext | None,
@@ -1007,6 +1060,7 @@ async def _execute_ready_with_refs_generation(
     refs_file_ids: list[str],
     cost: int,
     model_override: str | None = None,
+    overlay_nick: str | None = None,
     extra_refs: list[bytes] | None = None,
     extra_refs_first: bool = False,
     strict_refs: bool = False,
@@ -1098,6 +1152,8 @@ async def _execute_ready_with_refs_generation(
         )
         await _notify_image_generation_failure(wait_msg, message, state)
         return
+    if overlay_nick:
+        image_bytes = _overlay_minecraft_nick(image_bytes, overlay_nick)
     await _finalize_generation_status_message(wait_msg)
     await _send_result_photo_with_regen(
         message,
@@ -1642,8 +1698,9 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
                 parse_mode=None,
             )
             return
-        # Telegram-ник в текст промпта — только «Фотка в эндер мире» (надпись над головой в Minecraft).
-        include_nick = title == "Фотка в эндер мире"
+        # Ник больше не отдаём в промпт: рисуем его поверх итогового изображения в коде.
+        include_nick = False
+        overlay_nick = callback.from_user.username if title == "Фотка в эндер мире" else None
         model_override = None
         if title == "На отдыхе в Италии":
             model_override = (OPENROUTER_IMAGE_MODEL_ALT or "").strip()
@@ -1703,6 +1760,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             cost=OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS,
             refs_file_ids=photos,
             model_override=model_override,
+            overlay_nick=overlay_nick,
             extra_refs=extra_refs,
             extra_refs_first=extra_first,
             strict_refs=strict_refs,
