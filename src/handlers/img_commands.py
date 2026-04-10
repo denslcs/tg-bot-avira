@@ -250,7 +250,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Оранжевый",
             "Оранжевая фотка с элементами одежды и аксессуаров оранжевого цвета.",
-            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY face reference — preserve 100% facial identity: same facial structure, skin texture, age, hairline; no face swap, no different person. Match apparent gender presentation from the reference. Create a stylish close-up over-the-shoulder portrait: subject glances back toward the camera with a cool, confident gaze. Wardrobe: orange beanie, orange-tinted rectangular sunglasses, crisp white turtleneck, bright orange overcoat; hair styled consistently with the reference (dark wavy hair if shown). Vivid saturated orange background; soft flattering light emphasizing fabric and skin texture; modern cinematic editorial look. NEGATIVE: Telegram username text, watermark, plastic skin, beauty blur, wrong face.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY face reference — preserve 100% facial identity: same facial structure, skin texture, age, hairline; no face swap, no different person. UNISEX / LOOK: bold monochromatic orange fashion portrait — same accessory recipe for any gender; infer fit and hair from the reference (natural beard/hair length respected). Framing: tight head-and-shoulders or upper chest, editorial fashion. Wardrobe: bright ribbed knit orange beanie; rectangular translucent orange-framed sunglasses with orange-tinted lenses; textured orange wool coat or blazer with visible lapel; crisp white ribbed turtleneck as contrast under the coat. Background: solid vivid saturated orange wall, seamless, matching the outfit palette. Lighting: soft, even, flattering; emphasize fabric texture and real skin. Mood: cool, direct gaze at camera; modern high-saturation editorial. NEGATIVE: Telegram username text, watermark, plastic skin, beauty blur, wrong face.",
             1,
         ),
         (
@@ -286,6 +286,7 @@ _HOMELANDER_BUTCHER_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas
 _ROSTOMER_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "rostomer_preview.png"
 _ITALY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "italy_preview.png"
 _BACKROOMS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "backrooms_preview.png"
+_ORANGE_COLOR_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "orange_color_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -322,6 +323,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _ITALY_READY_LISTING_IMAGE
     if t == "Бекрумс" and _BACKROOMS_READY_LISTING_IMAGE.is_file():
         return _BACKROOMS_READY_LISTING_IMAGE
+    if t == "Оранжевый" and _ORANGE_COLOR_READY_LISTING_IMAGE.is_file():
+        return _ORANGE_COLOR_READY_LISTING_IMAGE
     return _start_listing_banner_path()
 
 
