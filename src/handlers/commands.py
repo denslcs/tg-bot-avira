@@ -16,6 +16,7 @@ from aiogram.types import (
     FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    InputMediaPhoto,
     Message,
     MessageOriginChannel,
     MessageOriginChat,
@@ -237,6 +238,21 @@ async def restore_main_menu_message(message: Message, user_id: int, username: st
     banner = _start_banner_path()
 
     if message.photo and not _is_generated_image_result_message(message):
+        # После готовых идей на том же сообщении может быть превью Minecraft и т.д. —
+        # только edit_caption не меняет картинку; возвращаем стартовый баннер.
+        if banner and banner.is_file():
+            try:
+                await message.edit_media(
+                    media=InputMediaPhoto(
+                        media=FSInputFile(banner),
+                        caption=text,
+                        parse_mode=HTML,
+                    ),
+                    reply_markup=kb,
+                )
+                return
+            except Exception:
+                logging.debug("restore_main_menu_message: edit_media failed", exc_info=True)
         try:
             await message.edit_caption(caption=text, reply_markup=kb, parse_mode=HTML)
             return
