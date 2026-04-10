@@ -446,6 +446,7 @@ class ImageGenState(StatesGroup):
     ready_choosing_category = State()
     ready_browsing_idea = State()
     ready_waiting_photos = State()
+    ready_waiting_minecraft_nick = State()
     ready_waiting_confirm = State()
 
 
@@ -1539,7 +1540,13 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
         return
     if action == "pick":
         title, _preview, _prompt, photos_required = ideas[idx]
-        await state.update_data(_ready_category=category, _ready_index=idx, _ready_photos=[], _ready_need=photos_required)
+        await state.update_data(
+            _ready_category=category,
+            _ready_index=idx,
+            _ready_photos=[],
+            _ready_need=photos_required,
+            _ready_overlay_nick="",
+        )
         await state.set_state(ImageGenState.ready_waiting_photos)
         first_hint = _ready_photo_upload_hint(category=category, need=photos_required, received=0)
         await edit_or_send_nav_message(
@@ -1620,11 +1627,57 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
             parse_mode=HTML,
         )
         return
+    category = str(data.get("_ready_category") or "").strip().lower()
+    idx = int(data.get("_ready_index") or 0)
+    ideas = _ideas_for_category(category)
+    title = ideas[idx][0] if ideas and 0 <= idx < len(ideas) else ""
+    if title == "Фотка в эндер мире":
+        await state.set_state(ImageGenState.ready_waiting_minecraft_nick)
+        await message.answer(
+            (
+                f"{_ready_photo_upload_hint(category=category, need=need, received=len(photos))}\n"
+                "<b>Фото зафиксированы.</b>\n"
+                "<blockquote><i>Теперь пришли ник для надписи над головой (до 30 символов).</i></blockquote>"
+            ),
+            reply_markup=_ready_wait_photo_keyboard(),
+            parse_mode=HTML,
+        )
+        return
     await state.set_state(ImageGenState.ready_waiting_confirm)
     await message.answer(
         (
-            f"{_ready_photo_upload_hint(category=str(data.get('_ready_category') or ''), need=need, received=len(photos))}\n"
+            f"{_ready_photo_upload_hint(category=category, need=need, received=len(photos))}\n"
             f"<b>Фото зафиксированы:</b> <b>{esc(len(photos))}</b>\n"
+            "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
+        ),
+        reply_markup=_ready_confirm_keyboard(),
+        parse_mode=HTML,
+    )
+
+
+@router.message(ImageGenState.ready_waiting_minecraft_nick, ~F.text)
+async def ready_minecraft_nick_need_text(message: Message) -> None:
+    await message.answer(
+        "Пришли ник текстом (до 30 символов).",
+        reply_markup=_ready_wait_photo_keyboard(),
+    )
+
+
+@router.message(ImageGenState.ready_waiting_minecraft_nick)
+async def ready_collect_minecraft_nick(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").strip()
+    nick = raw.lstrip("@").strip()
+    if not nick:
+        await message.answer("Ник не должен быть пустым. Введи ник (до 30 символов).")
+        return
+    if len(nick) > 30:
+        await message.answer("Слишком длинный ник. Максимум 30 символов.")
+        return
+    await state.update_data(_ready_overlay_nick=nick)
+    await state.set_state(ImageGenState.ready_waiting_confirm)
+    await message.answer(
+        (
+            f"<b>Ник сохранён:</b> <code>@{esc(nick)}</code>\n"
             "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
         ),
         reply_markup=_ready_confirm_keyboard(),
@@ -1698,9 +1751,14 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
                 parse_mode=None,
             )
             return
-        # Ник больше не отдаём в промпт: рисуем его поверх итогового изображения в коде.
+        overlay_nick_saved = str(data.get("_ready_overlay_nick") or "").strip()
+        if title == "Фотка в эндер мире" and not overlay_nick_saved:
+            await callback.answer("Сначала введи ник (до 30 символов).", show_alert=True)
+            await state.set_state(ImageGenState.ready_waiting_minecraft_nick)
+            return
+        # Для Minecraft-идеи ник берём из шага ввода: рисуем его поверх и дублируем в refs_hint.
         include_nick = False
-        overlay_nick = callback.from_user.username if title == "Фотка в эндер мире" else None
+        overlay_nick = overlay_nick_saved if title == "Фотка в эндер мире" else None
         model_override = None
         if title == "На отдыхе в Италии":
             model_override = (OPENROUTER_IMAGE_MODEL_ALT or "").strip()
@@ -1740,6 +1798,10 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             refs_hint = "Reference mapping: image #1 is user identity photo. Image #2 is Muhammad Ali identity photo."
         if title == "Для влюбленных: рыцарь и дама":
             refs_hint = "Reference mapping: image #1 is knight identity photo. Image #2 is woman identity photo."
+        if title == "Фотка в эндер мире" and overlay_nick:
+            refs_hint = (
+                f"{refs_hint} Render nickname above the head exactly as: @{overlay_nick}."
+            )
         prompt = _build_ready_prompt(
             base_prompt,
             callback.from_user.username,
