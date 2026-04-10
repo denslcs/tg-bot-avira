@@ -325,60 +325,12 @@ _GEN_PROGRESS_INTERVAL_SEC = 2.0
 _GEN_PROGRESS_STEP = 10
 _GEN_PROGRESS_MAX_SIM = 90
 _GEN_PROGRESS_FINISH_STEP_SEC = 0.12
-_IMG_FLOW_IDLE_TIMEOUT_SEC = 300
 
 _GEN_FAILURE_TEXT = (
     "<b>Генерация не завершена</b>\n\n"
     "<blockquote><i>Прости за сбой — картинку получить не удалось. "
     "Попробуй позже или измени запрос. Если повторяется — напиши в поддержку.</i></blockquote>"
 )
-
-_IMG_FLOW_TIMEOUT_TASKS: dict[int, asyncio.Task] = {}
-
-
-def _gen_progress_caption(pct: int) -> str:
-    pct = max(0, min(100, int(pct)))
-    n = 10
-    filled = n if pct >= 100 else min(n, (pct * n) // 100)
-    bar = "".join("🟩" if i < filled else "⬜" for i in range(n))
-    return f"<b>Идёт создание…</b>\n\n{bar}\n\n<i>{pct}%</i>"
-
-
-def _cancel_img_flow_timeout(user_id: int) -> None:
-    t = _IMG_FLOW_TIMEOUT_TASKS.pop(user_id, None)
-    if t and not t.done():
-        t.cancel()
-
-
-def _arm_img_flow_timeout(
-    *,
-    state: FSMContext,
-    message: Message,
-    user_id: int,
-    username: str | None,
-) -> None:
-    _cancel_img_flow_timeout(user_id)
-
-    async def _job() -> None:
-        try:
-            await asyncio.sleep(_IMG_FLOW_IDLE_TIMEOUT_SEC)
-            cur = await state.get_state()
-            if not cur:
-                return
-            await state.clear()
-            await message.answer(
-                "<blockquote><i>Сеанс выбора генерации истёк (5 минут без действий). Открываю главное меню.</i></blockquote>",
-                parse_mode=HTML,
-            )
-            await restore_main_menu_message(message, user_id, username)
-        except asyncio.CancelledError:
-            return
-        except Exception:
-            logging.debug("image flow timeout job failed", exc_info=True)
-        finally:
-            _IMG_FLOW_TIMEOUT_TASKS.pop(user_id, None)
-
-    _IMG_FLOW_TIMEOUT_TASKS[user_id] = asyncio.create_task(_job())
 
 
 async def _set_img_flow_anchor(state: FSMContext, msg: Message | None) -> None:
@@ -388,6 +340,14 @@ async def _set_img_flow_anchor(state: FSMContext, msg: Message | None) -> None:
         _img_flow_anchor_chat_id=msg.chat.id,
         _img_flow_anchor_message_id=msg.message_id,
     )
+
+
+def _gen_progress_caption(pct: int) -> str:
+    pct = max(0, min(100, int(pct)))
+    n = 10
+    filled = n if pct >= 100 else min(n, (pct * n) // 100)
+    bar = "".join("🟩" if i < filled else "⬜" for i in range(n))
+    return f"<b>Идёт создание…</b>\n\n{bar}\n\n<i>{pct}%</i>"
 
 
 async def _rollback_generation_charge(
@@ -1254,19 +1214,21 @@ async def _send_waiting_prompt_step(
     if model_style_hint:
         body += f"\n<blockquote><i>{esc(model_style_hint)}</i></blockquote>"
     if replace_message is not None:
-        await edit_or_send_nav_message(
+        edited = await edit_or_send_nav_message(
             replace_message,
             text=body,
             reply_markup=_waiting_prompt_keyboard(),
             parse_mode=HTML,
         )
+        await _set_img_flow_anchor(state, edited or replace_message)
         return
-    await bot.send_message(
+    sent = await bot.send_message(
         chat_id,
         body,
         reply_markup=_waiting_prompt_keyboard(),
         parse_mode=HTML,
     )
+    await _set_img_flow_anchor(state, sent)
 
 
 async def _show_image_model_pick(
@@ -1432,7 +1394,6 @@ async def cancel_image_flow(callback: CallbackQuery, state: FSMContext) -> None:
     if not callback.from_user or not callback.message:
         await callback.answer()
         return
-    _cancel_img_flow_timeout(callback.from_user.id)
     await state.clear()
     user_id = callback.from_user.id
     await callback.answer()
@@ -1479,7 +1440,6 @@ async def _send_ready_ideas_screen(
         return
     await ensure_user(user_id, username)
     await state.set_state(ImageGenState.ready_choosing_category)
-    _arm_img_flow_timeout(state=state, message=message, user_id=user_id, username=username)
     cap = _ready_category_caption()
     kb = _ready_categories_keyboard()
     if edit:
@@ -1536,13 +1496,6 @@ async def _open_ready_card(
                 parse_mode=HTML,
             )
         await state.set_state(ImageGenState.ready_choosing_category)
-        if message.from_user:
-            _arm_img_flow_timeout(
-                state=state,
-                message=message,
-                user_id=message.from_user.id,
-                username=message.from_user.username,
-            )
         return
     total = len(ideas)
     idx = index % total
@@ -1558,13 +1511,6 @@ async def _open_ready_card(
     )
     await state.update_data(_ready_category=category, _ready_index=idx)
     await state.set_state(ImageGenState.ready_browsing_idea)
-    if message.from_user:
-        _arm_img_flow_timeout(
-            state=state,
-            message=message,
-            user_id=message.from_user.id,
-            username=message.from_user.username,
-        )
     kb = _ready_browser_keyboard(idx, total)
     if edit:
         edited = await edit_or_send_nav_message(message, text=cap, reply_markup=kb, parse_mode=HTML)
@@ -1592,12 +1538,6 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
     payload = callback.data.replace(CB_READY_NAV_PREFIX, "", 1)
     if payload == "back_cats":
         await state.set_state(ImageGenState.ready_choosing_category)
-        _arm_img_flow_timeout(
-            state=state,
-            message=callback.message,
-            user_id=callback.from_user.id,
-            username=callback.from_user.username,
-        )
         await edit_or_send_nav_message(
             callback.message,
             text=_ready_category_caption(),
@@ -1639,12 +1579,6 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
             _ready_overlay_nick="",
         )
         await state.set_state(ImageGenState.ready_waiting_photos)
-        _arm_img_flow_timeout(
-            state=state,
-            message=callback.message,
-            user_id=callback.from_user.id,
-            username=callback.from_user.username,
-        )
         first_hint = _ready_photo_upload_hint(category=category, need=photos_required, received=0)
         await edit_or_send_nav_message(
             callback.message,
@@ -1684,13 +1618,6 @@ async def ready_photo_back(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(ImageGenState.ready_waiting_photos, ~F.photo)
 async def ready_need_photo_hint(message: Message, state: FSMContext) -> None:
-    if message.from_user:
-        _arm_img_flow_timeout(
-            state=state,
-            message=message,
-            user_id=message.from_user.id,
-            username=message.from_user.username,
-        )
     data = await state.get_data()
     category = str(data.get("_ready_category") or "").strip().lower()
     need = int(data.get("_ready_need") or 1)
@@ -1707,12 +1634,6 @@ async def ready_need_photo_hint(message: Message, state: FSMContext) -> None:
 async def ready_collect_photos(message: Message, state: FSMContext) -> None:
     if not message.from_user:
         return
-    _arm_img_flow_timeout(
-        state=state,
-        message=message,
-        user_id=message.from_user.id,
-        username=message.from_user.username,
-    )
     data = await state.get_data()
     need = int(data.get("_ready_need") or 1)
     photos = list(data.get("_ready_photos") or [])
@@ -1743,12 +1664,6 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
     title = ideas[idx][0] if ideas and 0 <= idx < len(ideas) else ""
     if _is_minecraft_ready_idea(title, ideas[idx][2] if ideas and 0 <= idx < len(ideas) else ""):
         await state.set_state(ImageGenState.ready_waiting_minecraft_nick)
-        _arm_img_flow_timeout(
-            state=state,
-            message=message,
-            user_id=message.from_user.id,
-            username=message.from_user.username,
-        )
         await message.answer(
             (
                 f"{_ready_photo_upload_hint(category=category, need=need, received=len(photos))}\n"
@@ -1760,12 +1675,6 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
         )
         return
     await state.set_state(ImageGenState.ready_waiting_confirm)
-    _arm_img_flow_timeout(
-        state=state,
-        message=message,
-        user_id=message.from_user.id,
-        username=message.from_user.username,
-    )
     await message.answer(
         (
             f"{_ready_photo_upload_hint(category=category, need=need, received=len(photos))}\n"
@@ -1797,13 +1706,6 @@ async def ready_collect_minecraft_nick(message: Message, state: FSMContext) -> N
         return
     await state.update_data(_ready_overlay_nick=nick)
     await state.set_state(ImageGenState.ready_waiting_confirm)
-    if message.from_user:
-        _arm_img_flow_timeout(
-            state=state,
-            message=message,
-            user_id=message.from_user.id,
-            username=message.from_user.username,
-        )
     await message.answer(
         (
             f"<b>Ник сохранён:</b> <code>@{esc(nick)}</code>\n"
@@ -1843,7 +1745,6 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
         return
     # Сразу снимаем «часики» у кнопки, чтобы клик всегда ощущался.
     await callback.answer()
-    _cancel_img_flow_timeout(callback.from_user.id)
     try:
         if not is_openrouter_image_configured():
             await edit_or_send_nav_message(
