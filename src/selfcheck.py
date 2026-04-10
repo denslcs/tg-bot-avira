@@ -140,6 +140,11 @@ def _check_ready_ideas() -> tuple[list[str], list[str]]:
         errors.append("Orange color listing preview missing: assets/ready_ideas/orange_color_preview.png")
     checks.append("Orange color ready-idea listing preview file exists.")
 
+    bs_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "black_studio_preview.png"
+    if not bs_listing.is_file():
+        errors.append("Black studio listing preview missing: assets/ready_ideas/black_studio_preview.png")
+    checks.append("Black studio ready-idea listing preview file exists.")
+
     return checks, errors
 
 

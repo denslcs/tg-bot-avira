@@ -256,7 +256,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Чёрный студийный",
             "Черный фон черная фотка, ничего больше.",
-            "CRITICAL IDENTITY LOCK: Use the uploaded user photo as the only identity source. Preserve exact facial details and natural skin texture — no beauty retouching, no plastic skin, no face replacement. Black-and-white studio portrait. Single Rembrandt-style key light: strong directional contrast with a characteristic triangle of light on the cheek, deep shadows on one side of the face. Background fully black, isolating the subject with mystery and confidence. Dark shirt or jacket. Hyperdetailed skin texture, tack sharp eyes, shallow depth of field. Premium studio photography look inspired by Leica 90mm character (do not render camera body, logos, or UI). NEGATIVE: color, soft flat lighting, glam retouch, text overlay, Telegram nickname.",
+            "CRITICAL IDENTITY LOCK: Use the uploaded user photo as the only identity source. Preserve exact facial details and natural skin texture — no beauty retouching, no plastic skin, no face replacement. UNISEX: same lighting and wardrobe rules for any gender — dark minimal top (black crew-neck tee, ribbed collar, or equivalent dark simple shirt/jacket) matching apparent build from the reference. Black-and-white studio portrait, tight frontal head-and-shoulders, direct gaze at camera, calm confident mood. Single directional key light (Rembrandt / chiaroscuro): strong contrast, characteristic light triangle on cheek, deep shadows on the opposite side of the face, visible skin texture (pores, natural detail). Background: solid deep black, seamless. Hyperdetailed skin, tack-sharp eyes, shallow depth of field. Premium monochrome studio look, Leica 90mm character (do not render camera, logos, or UI). NEGATIVE: color, soft flat lighting, glam retouch, text overlay, Telegram nickname.",
             1,
         ),
     ],
@@ -287,6 +287,7 @@ _ROSTOMER_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "rosto
 _ITALY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "italy_preview.png"
 _BACKROOMS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "backrooms_preview.png"
 _ORANGE_COLOR_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "orange_color_preview.png"
+_BLACK_STUDIO_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "black_studio_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -325,6 +326,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _BACKROOMS_READY_LISTING_IMAGE
     if t == "Оранжевый" and _ORANGE_COLOR_READY_LISTING_IMAGE.is_file():
         return _ORANGE_COLOR_READY_LISTING_IMAGE
+    if t == "Чёрный студийный" and _BLACK_STUDIO_READY_LISTING_IMAGE.is_file():
+        return _BLACK_STUDIO_READY_LISTING_IMAGE
     return _start_listing_banner_path()
 
 
