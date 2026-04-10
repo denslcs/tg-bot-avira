@@ -99,6 +99,13 @@ def _check_ready_ideas() -> tuple[list[str], list[str]]:
         errors.append("Avatar listing preview image missing: assets/ready_ideas/avatar_preview.png")
     checks.append("Avatar ready-idea listing preview file exists.")
 
+    pn_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "putin_negotiations_preview.png"
+    if not pn_listing.is_file():
+        errors.append(
+            "Putin negotiations listing preview missing: assets/ready_ideas/putin_negotiations_preview.png"
+        )
+    checks.append("Putin negotiations ready-idea listing preview file exists.")
+
     return checks, errors
 
 
