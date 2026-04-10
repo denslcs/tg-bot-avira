@@ -279,6 +279,7 @@ _MINECRAFT_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "mine
 _CLASH_ROYALE_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "clash_royale_preview.png"
 _GTA_VICE_CITY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "gta_vice_city_preview.png"
 _GAME_OF_THRONES_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "game_of_thrones_preview.png"
+_AVATAR_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "avatar_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -301,6 +302,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _GTA_VICE_CITY_READY_LISTING_IMAGE
     if t == "Game of Thrones" and _GAME_OF_THRONES_READY_LISTING_IMAGE.is_file():
         return _GAME_OF_THRONES_READY_LISTING_IMAGE
+    if t == "Avatar" and _AVATAR_READY_LISTING_IMAGE.is_file():
+        return _AVATAR_READY_LISTING_IMAGE
     return _start_listing_banner_path()
 
 

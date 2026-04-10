@@ -94,6 +94,11 @@ def _check_ready_ideas() -> tuple[list[str], list[str]]:
         )
     checks.append("Game of Thrones ready-idea listing preview file exists.")
 
+    av_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "avatar_preview.png"
+    if not av_listing.is_file():
+        errors.append("Avatar listing preview image missing: assets/ready_ideas/avatar_preview.png")
+    checks.append("Avatar ready-idea listing preview file exists.")
+
     return checks, errors
 
 
