@@ -120,6 +120,11 @@ def _check_ready_ideas() -> tuple[list[str], list[str]]:
         )
     checks.append("Homelander and Butcher ready-idea listing preview file exists.")
 
+    rost_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "rostomer_preview.png"
+    if not rost_listing.is_file():
+        errors.append("Rostomer listing preview missing: assets/ready_ideas/rostomer_preview.png")
+    checks.append("Rostomer (height chart) ready-idea listing preview file exists.")
+
     return checks, errors
 
 

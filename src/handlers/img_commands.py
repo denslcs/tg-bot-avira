@@ -283,6 +283,7 @@ _AVATAR_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "avatar_
 _PUTIN_NEGOTIATIONS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "putin_negotiations_preview.png"
 _MUHAMMAD_ALI_VICTORY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "muhammad_ali_victory_preview.png"
 _HOMELANDER_BUTCHER_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "homelander_butcher_preview.png"
+_ROSTOMER_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "rostomer_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -313,6 +314,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _MUHAMMAD_ALI_VICTORY_READY_LISTING_IMAGE
     if t == "Хоумлендер и Бутч" and _HOMELANDER_BUTCHER_READY_LISTING_IMAGE.is_file():
         return _HOMELANDER_BUTCHER_READY_LISTING_IMAGE
+    if t == "Ростомер" and _ROSTOMER_READY_LISTING_IMAGE.is_file():
+        return _ROSTOMER_READY_LISTING_IMAGE
     return _start_listing_banner_path()
 
 
@@ -1924,7 +1927,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or (
                 "google/gemini-3.1-flash-image-preview"
             )
-        elif title == "Ростомер (booking)":
+        elif title == "Ростомер":
             # Nano Banana 2: лицо по фото + диптих/сцена; Flux Pro хуже с референсом лица.
             model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or (
                 "google/gemini-3.1-flash-image-preview"
