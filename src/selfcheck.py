@@ -106,6 +106,13 @@ def _check_ready_ideas() -> tuple[list[str], list[str]]:
         )
     checks.append("Putin negotiations ready-idea listing preview file exists.")
 
+    ali_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "muhammad_ali_victory_preview.png"
+    if not ali_listing.is_file():
+        errors.append(
+            "Muhammad Ali victory listing preview missing: assets/ready_ideas/muhammad_ali_victory_preview.png"
+        )
+    checks.append("Muhammad Ali victory ready-idea listing preview file exists.")
+
     return checks, errors
 
 

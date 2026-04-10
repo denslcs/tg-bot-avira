@@ -281,6 +281,7 @@ _GTA_VICE_CITY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "
 _GAME_OF_THRONES_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "game_of_thrones_preview.png"
 _AVATAR_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "avatar_preview.png"
 _PUTIN_NEGOTIATIONS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "putin_negotiations_preview.png"
+_MUHAMMAD_ALI_VICTORY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "muhammad_ali_victory_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -307,6 +308,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _AVATAR_READY_LISTING_IMAGE
     if t == "Переговоры с Путиным" and _PUTIN_NEGOTIATIONS_READY_LISTING_IMAGE.is_file():
         return _PUTIN_NEGOTIATIONS_READY_LISTING_IMAGE
+    if t == "Победа над Мухаммадом Али на ринге" and _MUHAMMAD_ALI_VICTORY_READY_LISTING_IMAGE.is_file():
+        return _MUHAMMAD_ALI_VICTORY_READY_LISTING_IMAGE
     return _start_listing_banner_path()
 
 
