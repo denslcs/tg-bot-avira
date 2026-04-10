@@ -200,7 +200,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Love is…",
             "Вкладыш жвачки Love is.",
-            "IMPORTANT REFERENCE MAPPING: image #1 is the man identity, image #2 is the woman identity. CRITICAL IDENTITY LOCK FOR BOTH: preserve both faces with high fidelity (facial structure, eyes, nose, lips, skin texture, age) and keep them clearly recognizable. Create a Love is gum wrapper insert: use the man's and woman's appearance from the uploaded photos. Classic hand-drawn Love is wrapper art style on the insert — soft warm colors, light blue background. Top left on the insert: logo text \"love is…\". Top right: two small red hearts. Bottom: a short touching funny Russian caption in authentic Love is tone. The insert lies on a wooden table; around it scattered small hearts and candies. Photorealistic photo of the physical scene (wrapper, table, props); the illustration ON the insert follows classic Love is strip aesthetics with the couple matching image #1 (man) and image #2 (woman).",
+            "IMPORTANT REFERENCE MAPPING: image #1 is the man identity, image #2 is the woman identity. CRITICAL IDENTITY LOCK FOR BOTH: preserve both faces with high fidelity (facial structure, eyes, nose, lips, skin texture, age) and keep them clearly recognizable. Create a Love is gum wrapper insert using both uploaded faces. On the illustrated card: classic hand-drawn Love is strip style — soft lines, soft warm pastel palette, light blue wash background behind the couple scene; thin black border around the artwork. Top left on the card: logo text \"love is…\" in the iconic bold style. Top right: two small red hearts. Bottom: a short touching funny Russian caption in handwritten cursive feel, authentic Love is tone. Flat lay: the card rests on a weathered light wooden table; scattered translucent red heart-shaped gummy candies; one or two sticks of pink bubble gum on white paper wrappers at corners. Photorealistic still-life of the table scene; the cartoon illustration ON the card shows the couple matching image #1 (man) and image #2 (woman) in a cozy everyday romantic moment.",
             2,
         ),
     ],
@@ -291,6 +291,7 @@ _BLACK_STUDIO_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "b
 _SUIT_BOUQUET_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "suit_bouquet_preview.png"
 _GUCCI_EDITORIAL_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "gucci_editorial_preview.png"
 _KNIGHT_LADY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "knight_lady_preview.png"
+_LOVE_IS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "love_is_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -337,6 +338,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _GUCCI_EDITORIAL_READY_LISTING_IMAGE
     if t == "Для влюбленных: рыцарь и дама" and _KNIGHT_LADY_READY_LISTING_IMAGE.is_file():
         return _KNIGHT_LADY_READY_LISTING_IMAGE
+    if t == "Love is…" and _LOVE_IS_READY_LISTING_IMAGE.is_file():
+        return _LOVE_IS_READY_LISTING_IMAGE
     return _start_listing_banner_path()
 
 

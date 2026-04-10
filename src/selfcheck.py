@@ -160,6 +160,11 @@ def _check_ready_ideas() -> tuple[list[str], list[str]]:
         errors.append("Knight and lady listing preview missing: assets/ready_ideas/knight_lady_preview.png")
     checks.append("Knight and lady ready-idea listing preview file exists.")
 
+    li_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "love_is_preview.png"
+    if not li_listing.is_file():
+        errors.append("Love is listing preview missing: assets/ready_ideas/love_is_preview.png")
+    checks.append("Love is ready-idea listing preview file exists.")
+
     return checks, errors
 
 
