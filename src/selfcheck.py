@@ -150,6 +150,11 @@ def _check_ready_ideas() -> tuple[list[str], list[str]]:
         errors.append("Suit and bouquet listing preview missing: assets/ready_ideas/suit_bouquet_preview.png")
     checks.append("Suit and bouquet ready-idea listing preview file exists.")
 
+    gu_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "gucci_editorial_preview.png"
+    if not gu_listing.is_file():
+        errors.append("Gucci editorial listing preview missing: assets/ready_ideas/gucci_editorial_preview.png")
+    checks.append("Gucci editorial ready-idea listing preview file exists.")
+
     return checks, errors
 
 

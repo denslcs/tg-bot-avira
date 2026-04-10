@@ -146,7 +146,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Gucci editorial",
             "High-fashion: Gucci-эстетика, смелые принты, драматичный свет, кадр как обложка Vogue.",
-            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve facial structure, skin texture, age, hair — recognizable and natural; no face replacement, no plastic doll skin. INPUT CROP: If face-only or head-and-shoulders, infer full body with proportions matching the face; if full body is shown, keep silhouette coherent. High-fashion editorial portrait inspired by Gucci runway aesthetics (Alessandro Michele era: maximalist mixing, eclectic romance) — NOT an official brand advertisement; avoid reproducing exact logos or trademark patterns; use original bold geometric and floral-inspired prints in that spirit. Subject: fierce, intense expression; androgynous high-fashion beauty that still matches the reference person's face. Wearing avant-garde editorial outfit: bold patterns, layered textures, rich fabrics, statement accessories. SETTING: minimalist studio set — seamless backdrop or abstract sculptural props, Vogue-style composition, fashion magazine cover framing. LIGHTING: dramatic directional light, cinematic shadows, subtle rim, controlled highlights; glossy editorial skin with real pores (no waxy CGI). CAMERA: confident pose, ultra-sharp focus on eyes, shallow depth of field where appropriate, stylized cinematic color grading (rich but cohesive). TECH: ultra-detailed, very high resolution; avoid fake HDR halos. NEGATIVE: readable brand logos, watermark, Telegram username text, oversmoothed skin, warped limbs, extra fingers, cluttered background, cheap CGI.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve facial structure, skin texture, age, hair — recognizable and natural; no face replacement, no plastic doll skin. INPUT CROP: If face-only or head-and-shoulders, infer full body with proportions matching the face; if full body is shown, keep silhouette coherent. High-fashion editorial inspired by Alessandro Michele–era maximal Gucci runway mood — NOT an official ad; do not reproduce exact logos, GG monograms, or trademark prints; use original dense floral, geometric, and jewel-tone prints in that spirit. UNISEX: adapt layering and silhouette to apparent gender from the reference while keeping the same maximalist eclectic mix. LOOK: fierce, intense gaze; optional oversized square gradient-tint sunglasses; silk headscarf tied under chin; cream shirt with bold original floral print; dark velvet waistcoat; structured jacket with bold geometric diamond/grid pattern draped on shoulders; chunky pearl statement necklace. SETTING: minimalist grey studio, soft directional light and clean shadows; optional velvet armchair, white plinth with open large-format book or magazine (generic artwork, no readable logos). Vogue-style composition, cover framing. LIGHTING: dramatic directional light, cinematic shadows, subtle rim; glossy editorial skin with real pores (no waxy CGI). CAMERA: confident pose, ultra-sharp eyes, shallow depth of field, rich cohesive color grading. TECH: ultra-detailed, very high resolution; avoid fake HDR halos. NEGATIVE: readable brand logos, watermark, Telegram username text, oversmoothed skin, warped limbs, extra fingers, cluttered background, cheap CGI.",
             1,
         ),
     ],
@@ -289,6 +289,7 @@ _BACKROOMS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "back
 _ORANGE_COLOR_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "orange_color_preview.png"
 _BLACK_STUDIO_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "black_studio_preview.png"
 _SUIT_BOUQUET_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "suit_bouquet_preview.png"
+_GUCCI_EDITORIAL_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "gucci_editorial_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -331,6 +332,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _BLACK_STUDIO_READY_LISTING_IMAGE
     if t == "Красивый костюм с букетом" and _SUIT_BOUQUET_READY_LISTING_IMAGE.is_file():
         return _SUIT_BOUQUET_READY_LISTING_IMAGE
+    if t == "Gucci editorial" and _GUCCI_EDITORIAL_READY_LISTING_IMAGE.is_file():
+        return _GUCCI_EDITORIAL_READY_LISTING_IMAGE
     return _start_listing_banner_path()
 
 
@@ -1957,7 +1960,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or (
                 "google/gemini-3.1-flash-image-preview"
             )
-        elif title in ("Костюм и букет в поле", "Gucci editorial"):
+        elif title in ("Красивый костюм с букетом", "Gucci editorial"):
             model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or (
                 "google/gemini-3.1-flash-image-preview"
             )
