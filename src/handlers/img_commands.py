@@ -296,6 +296,50 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _GTA_VICE_CITY_READY_LISTING_IMAGE
     return _start_listing_banner_path()
 
+
+async def _edit_message_progress_text(
+    msg: Message,
+    text: str,
+    *,
+    reply_markup: InlineKeyboardMarkup | None = None,
+) -> None:
+    """Текст прогресса/статуса: у фото-сообщений правим подпись, не edit_text."""
+    if msg.photo:
+        await msg.edit_caption(caption=text, parse_mode=HTML, reply_markup=reply_markup)
+    else:
+        await msg.edit_text(text, parse_mode=HTML, reply_markup=reply_markup)
+
+
+async def _edit_ready_nav_message(
+    message: Message,
+    *,
+    caption: str,
+    reply_markup: InlineKeyboardMarkup | None,
+    listing_photo: Path | None,
+) -> Message | None:
+    """
+    Для сообщений с фото меняем и изображение, и подпись — иначе при смене экрана
+    «залипает» превью чужой игры (остаётся только edit_caption).
+    """
+    if message.photo and listing_photo is not None and listing_photo.is_file():
+        try:
+            return await message.edit_media(
+                media=InputMediaPhoto(
+                    media=FSInputFile(listing_photo),
+                    caption=caption,
+                    parse_mode=HTML,
+                ),
+                reply_markup=reply_markup,
+            )
+        except Exception:
+            logging.warning("_edit_ready_nav_message: edit_media failed", exc_info=True)
+    return await edit_or_send_nav_message(message, text=caption, reply_markup=reply_markup, parse_mode=HTML)
+
+
+def _ready_categories_listing_photo() -> Path | None:
+    """Картинка для списка категорий готовых идей — всегда общий баннер, не превью игр."""
+    return _start_listing_banner_path()
+
 # Подпись для внутреннего контекста «Ещё раз» (пользователю не показываем).
 _IMAGE_CONTEXT_LABEL = "text2img"
 
@@ -407,7 +451,7 @@ async def _notify_image_generation_failure(
             logging.debug("state clear on gen failure", exc_info=True)
     if wait_msg is not None:
         try:
-            await wait_msg.edit_text(_GEN_FAILURE_TEXT, parse_mode=HTML, reply_markup=kb)
+            await _edit_message_progress_text(wait_msg, _GEN_FAILURE_TEXT, reply_markup=kb)
             return
         except Exception:
             logging.debug("failure notify: edit failed, sending new message", exc_info=True)
@@ -428,7 +472,7 @@ async def _await_generation_with_progress(
         except asyncio.TimeoutError:
             p = min(p + _GEN_PROGRESS_STEP, _GEN_PROGRESS_MAX_SIM)
             try:
-                await wait_msg.edit_text(_gen_progress_caption(p), parse_mode=HTML)
+                await _edit_message_progress_text(wait_msg, _gen_progress_caption(p))
             except Exception:
                 logging.debug("gen progress edit failed", exc_info=True)
     result = await task
@@ -439,7 +483,7 @@ async def _await_generation_with_progress(
     while cur < 100:
         cur = min(cur + _GEN_PROGRESS_STEP, 100)
         try:
-            await wait_msg.edit_text(_gen_progress_caption(cur), parse_mode=HTML)
+            await _edit_message_progress_text(wait_msg, _gen_progress_caption(cur))
         except Exception:
             logging.debug("gen progress finish edit failed", exc_info=True)
         await asyncio.sleep(_GEN_PROGRESS_FINISH_STEP_SEC)
@@ -449,11 +493,7 @@ async def _await_generation_with_progress(
 
 async def _finalize_generation_status_message(wait_msg: Message) -> None:
     try:
-        await wait_msg.edit_text(
-            _GEN_STATUS_DONE_TEXT,
-            parse_mode=HTML,
-            reply_markup=None,
-        )
+        await _edit_message_progress_text(wait_msg, _GEN_STATUS_DONE_TEXT, reply_markup=None)
     except Exception:
         logging.debug("finalize generation status message failed", exc_info=True)
 
@@ -1139,11 +1179,11 @@ async def _execute_ready_with_refs_generation(
     ok, meta = prep
     if not ok or meta is None:
         return
-    wait_msg = await edit_or_send_nav_message(
+    wait_msg = await _edit_ready_nav_message(
         message,
-        text=_gen_progress_caption(0),
+        caption=_gen_progress_caption(0),
         reply_markup=None,
-        parse_mode=HTML,
+        listing_photo=_ready_categories_listing_photo(),
     )
     if wait_msg is None:
         wait_msg = await message.bot.send_message(chat_id, _gen_progress_caption(0), parse_mode=HTML)
@@ -1454,11 +1494,11 @@ async def _send_ready_ideas_screen(
     await state.clear()
     if not is_openrouter_image_configured():
         if edit:
-            await edit_or_send_nav_message(
+            await _edit_ready_nav_message(
                 message,
-                text=_IMAGE_GEN_MISSING_TEXT,
+                caption=_IMAGE_GEN_MISSING_TEXT,
                 reply_markup=_missing_config_kb(),
-                parse_mode=HTML,
+                listing_photo=_ready_categories_listing_photo(),
             )
         else:
             await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
@@ -1468,7 +1508,12 @@ async def _send_ready_ideas_screen(
     cap = _ready_category_caption()
     kb = _ready_categories_keyboard()
     if edit:
-        edited = await edit_or_send_nav_message(message, text=cap, reply_markup=kb, parse_mode=HTML)
+        edited = await _edit_ready_nav_message(
+            message,
+            caption=cap,
+            reply_markup=kb,
+            listing_photo=_ready_categories_listing_photo(),
+        )
         await _set_img_flow_anchor(state, edited or message)
     else:
         sent = await message.answer(cap, reply_markup=kb, parse_mode=HTML)
@@ -1508,11 +1553,11 @@ async def _open_ready_card(
     ideas = _ideas_for_category(category)
     if not ideas:
         if edit:
-            await edit_or_send_nav_message(
+            await _edit_ready_nav_message(
                 message,
-                text="<b>В этой категории пока пусто.</b>\n<blockquote><i>Выбери другое направление.</i></blockquote>",
+                caption="<b>В этой категории пока пусто.</b>\n<blockquote><i>Выбери другое направление.</i></blockquote>",
                 reply_markup=_ready_categories_keyboard(),
-                parse_mode=HTML,
+                listing_photo=_ready_categories_listing_photo(),
             )
         else:
             await message.answer(
@@ -1539,19 +1584,6 @@ async def _open_ready_card(
     kb = _ready_browser_keyboard(idx, total)
     photo_path = _ready_idea_listing_photo_path(title)
 
-    if edit and photo_path is not None and message.photo:
-        try:
-            media = InputMediaPhoto(
-                media=FSInputFile(photo_path),
-                caption=cap,
-                parse_mode=HTML,
-            )
-            edited = await message.edit_media(media=media, reply_markup=kb)
-            await _set_img_flow_anchor(state, edited or message)
-            return
-        except Exception:
-            logging.warning("ready card edit_media failed, fallback to caption edit", exc_info=True)
-
     if edit and photo_path is not None and not message.photo:
         try:
             sent = await message.bot.send_photo(
@@ -1571,7 +1603,7 @@ async def _open_ready_card(
             logging.warning("ready card send_photo failed, fallback", exc_info=True)
 
     if edit:
-        edited = await edit_or_send_nav_message(message, text=cap, reply_markup=kb, parse_mode=HTML)
+        edited = await _edit_ready_nav_message(message, caption=cap, reply_markup=kb, listing_photo=photo_path)
         await _set_img_flow_anchor(state, edited or message)
     else:
         if photo_path is not None:
@@ -1608,11 +1640,11 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
     payload = callback.data.replace(CB_READY_NAV_PREFIX, "", 1)
     if payload == "back_cats":
         await state.set_state(ImageGenState.ready_choosing_category)
-        await edit_or_send_nav_message(
+        await _edit_ready_nav_message(
             callback.message,
-            text=_ready_category_caption(),
+            caption=_ready_category_caption(),
             reply_markup=_ready_categories_keyboard(),
-            parse_mode=HTML,
+            listing_photo=_ready_categories_listing_photo(),
         )
         await callback.answer()
         return
@@ -1650,15 +1682,15 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
         )
         await state.set_state(ImageGenState.ready_waiting_photos)
         first_hint = _ready_photo_upload_hint(category=category, need=photos_required, received=0)
-        await edit_or_send_nav_message(
+        await _edit_ready_nav_message(
             callback.message,
-            text=(
+            caption=(
                 f"<b>Выбрано:</b> {esc(title)}\n"
                 f"<blockquote><i>{first_hint}\n"
                 "После загрузки появится кнопка подтверждения.</i></blockquote>"
             ),
             reply_markup=_ready_wait_photo_keyboard(),
-            parse_mode=HTML,
+            listing_photo=_ready_categories_listing_photo(),
         )
         await callback.answer()
         return
@@ -1817,11 +1849,11 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
     await callback.answer()
     try:
         if not is_openrouter_image_configured():
-            await edit_or_send_nav_message(
+            await _edit_ready_nav_message(
                 callback.message,
-                text=_IMAGE_GEN_MISSING_TEXT,
+                caption=_IMAGE_GEN_MISSING_TEXT,
                 reply_markup=_missing_config_kb(),
-                parse_mode=HTML,
+                listing_photo=_ready_categories_listing_photo(),
             )
             return
         data = await state.get_data()
@@ -1845,11 +1877,11 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             return
         title, _preview, base_prompt, need = ideas[idx]
         if len(photos) < need:
-            await edit_or_send_nav_message(
+            await _edit_ready_nav_message(
                 callback.message,
-                text="Сначала загрузи нужное число фото.",
+                caption="Сначала загрузи нужное число фото.",
                 reply_markup=_ready_confirm_keyboard(),
-                parse_mode=None,
+                listing_photo=_ready_categories_listing_photo(),
             )
             return
         overlay_nick_saved = str(data.get("_ready_overlay_nick") or "").strip()
@@ -1933,11 +1965,11 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
         )
     except Exception:
         logging.exception("ready_confirm_and_generate failed")
-        await edit_or_send_nav_message(
+        await _edit_ready_nav_message(
             callback.message,
-            text="Ошибка запуска. Попробуй снова — открыл раздел «Готовые идеи».",
+            caption="Ошибка запуска. Попробуй снова — открыл раздел «Готовые идеи».",
             reply_markup=None,
-            parse_mode=None,
+            listing_photo=_ready_categories_listing_photo(),
         )
         await _send_ready_ideas_screen(
             callback.message,
