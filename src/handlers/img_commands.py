@@ -140,7 +140,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Красивый костюм с букетом",
             "Букет полевых цветов, луг и небо, и ты в красивом костюме.",
-            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve face structure, skin texture, age, hair — realistic and recognizable; no face swap, no plastic skin. If the reference is face-only or head-and-shoulders: infer full body proportions consistent with the face. If full body is visible: keep body type coherent. EXPRESSION: neutral, serious, direct eye contact with camera. OUTFIT: well-tailored slim-fit suit in stone beige, clean and minimal; fitted dress shirt underneath; no tie. Suit cut should match apparent gender from the reference. PROP: dense wildflower bouquet held at waist height — white peonies, blue delphiniums, baby's breath, dried grasses. POSE: standing upright, centered, full body in frame. CAMERA: low angle from knee height looking upward; subject reads tall against open sky; wildflower meadow at foot level filling lower frame. SETTING: vast open wildflower meadow on a flat arid plain, low mountain range in the distance. Bright midday sun, vivid cerulean sky with sparse white clouds; natural overhead sunlight, high ambient fill. STYLE: fashion editorial, natural light. TECH: Kodak Portra 400 aesthetic, 35mm wide lens, f/5.6, subject sharp, sky dominant in background, high resolution. NEGATIVE: oversaturated, HDR, heavy retouching, plastic skin, warped proportions, lens flare, vignette, digital artifacting, Telegram username text, watermark.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve face structure, skin texture, age, hair — realistic and recognizable; no face swap, no plastic skin. If the reference is face-only or head-and-shoulders: infer full body proportions consistent with the face. If full body is visible: keep body type coherent. EXPRESSION: neutral, serious, direct eye contact with camera. OUTFIT (unisex): refined stone-beige linen summer tailoring — male-presenting: slim-fit blazer and trousers, crisp white shirt, top button open, no tie; female-presenting: same palette — tailored beige blazer with trousers or skirt, or an elegant minimal dress in stone beige / cream, equally editorial. Relaxed textured linen look. PROP: large dense wildflower bouquet held with both hands at waist height — white peonies or roses, tall blue delphinium stalks, baby's breath, dried grasses, long green stems visible. POSE: standing upright, centered, full body in frame. CAMERA: low angle from knee height looking upward; subject reads tall against open sky; meadow fills lower frame. SETTING: vast wildflower field (white, yellow, purple blooms), flat arid plain, distant brown rolling hills, bright blue sky with wispy clouds. Bright natural daylight, soft shadows. STYLE: fashion editorial, serene mood. TECH: Kodak Portra 400 feel, slight natural grain optional, 35mm wide lens, f/5.6, subject sharp, high resolution. NEGATIVE: oversaturated, HDR, heavy retouching, plastic skin, warped proportions, lens flare, vignette, digital artifacting, Telegram username text, watermark.",
             1,
         ),
         (
@@ -288,6 +288,7 @@ _ITALY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "italy_pr
 _BACKROOMS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "backrooms_preview.png"
 _ORANGE_COLOR_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "orange_color_preview.png"
 _BLACK_STUDIO_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "black_studio_preview.png"
+_SUIT_BOUQUET_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "suit_bouquet_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -328,6 +329,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _ORANGE_COLOR_READY_LISTING_IMAGE
     if t == "Чёрный студийный" and _BLACK_STUDIO_READY_LISTING_IMAGE.is_file():
         return _BLACK_STUDIO_READY_LISTING_IMAGE
+    if t == "Красивый костюм с букетом" and _SUIT_BOUQUET_READY_LISTING_IMAGE.is_file():
+        return _SUIT_BOUQUET_READY_LISTING_IMAGE
     return _start_listing_banner_path()
 
 
