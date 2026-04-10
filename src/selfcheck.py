@@ -130,6 +130,11 @@ def _check_ready_ideas() -> tuple[list[str], list[str]]:
         errors.append("Italy listing preview missing: assets/ready_ideas/italy_preview.png")
     checks.append("Italy (Amalfi yacht) ready-idea listing preview file exists.")
 
+    br_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "backrooms_preview.png"
+    if not br_listing.is_file():
+        errors.append("Backrooms listing preview missing: assets/ready_ideas/backrooms_preview.png")
+    checks.append("Backrooms ready-idea listing preview file exists.")
+
     return checks, errors
 
 

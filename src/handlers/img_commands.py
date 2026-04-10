@@ -166,7 +166,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Бекрумс",
             "VHS-кадр в Backrooms.",
-            "CRITICAL IDENTITY LOCK: keep the user face realistic and recognizable. Create a found-footage VHS style frame in Backrooms atmosphere: long yellow empty corridors, fluorescent ceiling lights, liminal uncanny mood, low-fi analog noise and tape artifacts. The user looks directly into the camera and is caught in dynamic playful movement (slight goofy pose / expressive motion), not static. Wardrobe rule: if input shows only head/portrait, dress the user in a yellow utility jumpsuit; if input is full-body, keep the user's original outfit. Camera rule: slight fisheye look (about 120-degree field of view), camera tilted and positioned a little lower than the user angle. Add on-screen VHS timestamp/date overlay in the lower-left corner (recording-like style). Keep the result photorealistic while preserving authentic VHS degradation.",
+            "CRITICAL IDENTITY LOCK: keep the user face realistic and recognizable. Create a found-footage VHS style frame in Backrooms Level-0 atmosphere: endless yellow-beige wallpaper with subtle repeating pattern, low-pile tan carpet, long empty corridors, sickly fluorescent ceiling panels, liminal uncanny mood, low-fi analog noise, scan lines, mild chromatic aberration, tape artifacts. The user looks toward the camera, dynamic mid-motion (found-footage), slight playful energy — not a stiff studio pose. WARDROBE (unisex): if input is head-only or tight portrait, dress the body in a bright yellow industrial coveralls / boiler suit (same garment for any gender); if full-body reference is visible, keep the user's original outfit. Camera: slight fisheye (~120° FOV), tilted, camera slightly below eye level. Add white VHS date/time stamp overlay in the lower-left corner (1990s camcorder style). Keep photorealistic subject integration with authentic VHS degradation.",
             1,
         ),
     ],
@@ -285,6 +285,7 @@ _MUHAMMAD_ALI_VICTORY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ide
 _HOMELANDER_BUTCHER_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "homelander_butcher_preview.png"
 _ROSTOMER_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "rostomer_preview.png"
 _ITALY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "italy_preview.png"
+_BACKROOMS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "backrooms_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -319,6 +320,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _ROSTOMER_READY_LISTING_IMAGE
     if t == "На отдыхе в Италии" and _ITALY_READY_LISTING_IMAGE.is_file():
         return _ITALY_READY_LISTING_IMAGE
+    if t == "Бекрумс" and _BACKROOMS_READY_LISTING_IMAGE.is_file():
+        return _BACKROOMS_READY_LISTING_IMAGE
     return _start_listing_banner_path()
 
 
