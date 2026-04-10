@@ -160,7 +160,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "На отдыхе в Италии",
             "Кинематографичный кадр на белой яхте у побережья Амальфи, мягкий закатный свет.",
-            "CRITICAL IDENTITY LOCK: Use the uploaded user photo as the only source of facial identity. Keep face and hair unchanged and realistic: same facial structure, skin texture, age, and expression. No face swap artifacts, no beautification, no plastic skin. GENDER / OUTFIT RULE (unisex): infer apparent gender presentation from the reference. If female-presenting — elegant Mediterranean summer yacht outfit for her (e.g. light flowing dress, or linen blouse with tailored shorts/skirt, or refined resort co-ord); colors harmonious with golden-hour light (cream, white, soft blue). If male-presenting — elegant unbuttoned blue shirt and white shorts. If ambiguous — neutral refined resort wear that matches the face and build. Create a cinematic medium-wide portrait (not close-up): the subject sits relaxed on a white luxury yacht near the Italian Amalfi coastline at sunset. Scene details: stainless steel railing, cream seat cushion, refined leather details, visible coastal city in background. Lighting: warm natural sunset with strong realistic reflections and contrast, detailed shadows, and a natural aesthetic afternoon tone. Final image should feel realistic, clean, high-detail, and polished.",
+            "CRITICAL IDENTITY LOCK: Use the uploaded user photo as the only source of facial identity. Keep face and hair unchanged and realistic: same facial structure, skin texture, age, and expression. No face swap artifacts, no beautification, no plastic skin. GENDER / OUTFIT RULE (unisex): infer apparent gender presentation from the reference. If female-presenting — elegant Mediterranean summer yacht look (e.g. light linen dress, blouse with tailored shorts/skirt, or refined resort co-ord); palette: cream, white, soft blue, citrus accents. If male-presenting — navy or slate linen shirt worn partly unbuttoned with rolled sleeves, white linen shorts, Riviera style. If ambiguous — neutral refined resort wear matching face and build. SCENE AESTHETIC (target look): cinematic medium-wide shot (not close-up); subject sits relaxed on cream leather yacht seating with piping, polished chrome railings; calm sea with a bright golden sun-path reflection on the water; steep Amalfi-style hillside behind with pastel Mediterranean buildings; golden-hour sky (warm orange-gold) with soft rim light on the subject. Composition: subject centered, horizon in upper third. Lighting: warm sunset, natural specular highlights on water, realistic contrast. Final: luxurious peaceful summer vibe, photorealistic, high detail, polished.",
             1,
         ),
         (
@@ -284,6 +284,7 @@ _PUTIN_NEGOTIATIONS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas
 _MUHAMMAD_ALI_VICTORY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "muhammad_ali_victory_preview.png"
 _HOMELANDER_BUTCHER_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "homelander_butcher_preview.png"
 _ROSTOMER_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "rostomer_preview.png"
+_ITALY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "italy_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -316,6 +317,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _HOMELANDER_BUTCHER_READY_LISTING_IMAGE
     if t == "Ростомер" and _ROSTOMER_READY_LISTING_IMAGE.is_file():
         return _ROSTOMER_READY_LISTING_IMAGE
+    if t == "На отдыхе в Италии" and _ITALY_READY_LISTING_IMAGE.is_file():
+        return _ITALY_READY_LISTING_IMAGE
     return _start_listing_banner_path()
 
 
