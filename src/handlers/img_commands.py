@@ -1840,6 +1840,15 @@ async def ready_collect_minecraft_nick(message: Message, state: FSMContext) -> N
     )
 
 
+# Ко всем готовым идеям с референсом лица (добавляется в _build_ready_prompt).
+_READY_IDEA_UNISEX_GLOBAL = (
+    "GLOBAL UNISEX / PRESENTATION: From the reference photo(s), infer apparent gender presentation for each "
+    "mapped identity. Match wardrobe, hairstyle, body silhouette, and any gendered styling to that presentation "
+    "(avoid defaulting to a male or female look when the face suggests otherwise). In multi-subject scenes, apply "
+    "per mapped person. If ambiguous, use neutral refined styling consistent with the face and build."
+)
+
+
 def _build_ready_prompt(
     base_prompt: str,
     telegram_username: str | None,
@@ -1858,6 +1867,7 @@ def _build_ready_prompt(
         f"{(base_prompt or '').strip()}\n\n"
         f"{nick_part}"
         f"{hint_part}"
+        f"{_READY_IDEA_UNISEX_GLOBAL}\n\n"
         "Use all reference images from input. Preserve facial identity and natural skin texture."
     )
 
