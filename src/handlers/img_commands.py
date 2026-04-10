@@ -381,6 +381,15 @@ def _arm_img_flow_timeout(
     _IMG_FLOW_TIMEOUT_TASKS[user_id] = asyncio.create_task(_job())
 
 
+async def _set_img_flow_anchor(state: FSMContext, msg: Message | None) -> None:
+    if msg is None:
+        return
+    await state.update_data(
+        _img_flow_anchor_chat_id=msg.chat.id,
+        _img_flow_anchor_message_id=msg.message_id,
+    )
+
+
 async def _rollback_generation_charge(
     user_id: int,
     meta: ImageChargeMeta,
@@ -1052,7 +1061,7 @@ async def _download_telegram_photo_bytes(bot, file_id: str) -> bytes:
 
 
 def _overlay_minecraft_nick(image_bytes: bytes, username: str | None) -> bytes:
-    """Надпись ника поверх результата в пиксельном стиле Minecraft."""
+    """Надпись ника в стиле Minecraft nametag (in-game)."""
     nick = (username or "").strip().lstrip("@")
     if not nick:
         return image_bytes
@@ -1063,32 +1072,42 @@ def _overlay_minecraft_nick(image_bytes: bytes, username: str | None) -> bytes:
         with Image.open(BytesIO(image_bytes)) as im:
             rgba = im.convert("RGBA")
             w, h = rgba.size
-            text = f"@{nick}"
-            base_font = ImageFont.load_default()
-            # Рисуем в маленьком слое и увеличиваем NEAREST для «пиксельного» вида.
-            temp = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
-            temp_draw = ImageDraw.Draw(temp)
-            bbox = temp_draw.textbbox((0, 0), text, font=base_font)
+            text = nick
+            # Пытаемся взять аккуратный моноширинный шрифт; если нет — fallback.
+            size = max(14, min(32, w // 28))
+            font = ImageFont.load_default()
+            for p in (
+                "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                "C:/Windows/Fonts/consolab.ttf",
+                "C:/Windows/Fonts/arialbd.ttf",
+            ):
+                try:
+                    font = ImageFont.truetype(p, size=size)
+                    break
+                except Exception:
+                    continue
+
+            draw = ImageDraw.Draw(rgba)
+            bbox = draw.textbbox((0, 0), text, font=font)
             tw = max(1, bbox[2] - bbox[0])
             th = max(1, bbox[3] - bbox[1])
-            pad = 2
-            small = Image.new("RGBA", (tw + pad * 2, th + pad * 2), (0, 0, 0, 0))
-            small_draw = ImageDraw.Draw(small)
-            ox, oy = pad, pad
-            # Темная обводка + желтый текст.
-            for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, 1), (-1, 1), (1, -1)):
-                small_draw.text((ox + dx, oy + dy), text, font=base_font, fill=(26, 26, 26, 255))
-            small_draw.text((ox, oy), text, font=base_font, fill=(255, 228, 49, 255))
-
-            scale = max(3, min(7, w // 220))
-            resampling = Image.Resampling if hasattr(Image, "Resampling") else Image
-            pixel = small.resize(
-                (small.width * scale, small.height * scale),
-                resample=resampling.NEAREST,
-            )
-            x = max(8, (w - pixel.width) // 2)
+            pad_x = max(6, w // 180)
+            pad_y = max(3, h // 320)
+            box_w = tw + pad_x * 2
+            box_h = th + pad_y * 2
+            x = max(8, (w - box_w) // 2)
             y = max(8, int(h * 0.08))
-            rgba.alpha_composite(pixel, (x, y))
+
+            # Полупрозрачная черная плашка как у nametag.
+            plate = Image.new("RGBA", (box_w, box_h), (0, 0, 0, 140))
+            rgba.alpha_composite(plate, (x, y))
+
+            tx = x + pad_x
+            ty = y + pad_y - 1
+            # Тень + белый текст.
+            draw.text((tx + 1, ty + 1), text, font=font, fill=(25, 25, 25, 255))
+            draw.text((tx, ty), text, font=font, fill=(255, 255, 255, 255))
             out = BytesIO()
             rgba.convert("RGB").save(out, format="PNG")
             return out.getvalue()
@@ -1464,9 +1483,11 @@ async def _send_ready_ideas_screen(
     cap = _ready_category_caption()
     kb = _ready_categories_keyboard()
     if edit:
-        await edit_or_send_nav_message(message, text=cap, reply_markup=kb, parse_mode=HTML)
+        edited = await edit_or_send_nav_message(message, text=cap, reply_markup=kb, parse_mode=HTML)
+        await _set_img_flow_anchor(state, edited or message)
     else:
-        await message.answer(cap, reply_markup=kb, parse_mode=HTML)
+        sent = await message.answer(cap, reply_markup=kb, parse_mode=HTML)
+        await _set_img_flow_anchor(state, sent)
 
 
 @router.callback_query(F.data == CB_READY_IDEAS)
@@ -1546,9 +1567,11 @@ async def _open_ready_card(
         )
     kb = _ready_browser_keyboard(idx, total)
     if edit:
-        await edit_or_send_nav_message(message, text=cap, reply_markup=kb, parse_mode=HTML)
+        edited = await edit_or_send_nav_message(message, text=cap, reply_markup=kb, parse_mode=HTML)
+        await _set_img_flow_anchor(state, edited or message)
     else:
-        await message.answer(cap, reply_markup=kb, parse_mode=HTML)
+        sent = await message.answer(cap, reply_markup=kb, parse_mode=HTML)
+        await _set_img_flow_anchor(state, sent)
 
 
 @router.callback_query(F.data.startswith(CB_READY_CAT_PREFIX))
@@ -1906,10 +1929,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             refs_hint = "Reference mapping: image #1 is user identity photo. Image #2 is Muhammad Ali identity photo."
         if title == "Для влюбленных: рыцарь и дама":
             refs_hint = "Reference mapping: image #1 is knight identity photo. Image #2 is woman identity photo."
-        if is_minecraft_ready and overlay_nick:
-            refs_hint = (
-                f"{refs_hint} Render nickname above the head exactly as: @{overlay_nick}."
-            )
+        # Ник в Minecraft наносим пост-обработкой, чтобы не было дублей/рандома от модели.
         prompt = _build_ready_prompt(
             base_prompt,
             callback.from_user.username,

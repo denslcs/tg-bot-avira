@@ -248,10 +248,10 @@ async def restore_main_menu_message(message: Message, user_id: int, username: st
         return
 
     if banner and not message.photo:
-        try:
-            await message.delete()
-        except Exception:
-            logging.debug("restore_main_menu_message: delete submenu message failed", exc_info=True)
+        # Не удаляем UI-сообщения: только заменяем/переотправляем при необходимости.
+        edited = await edit_or_send_nav_message(message, text=text, reply_markup=kb, parse_mode=HTML)
+        if edited is not None:
+            return
         await send_main_menu_screen(message.bot, message.chat.id, user_id, username)
         return
 
@@ -287,6 +287,33 @@ def _parse_ref_payload(raw_text: str) -> int | None:
 async def cmd_start(message: Message, state: FSMContext, command: CommandObject) -> None:
     if not message.from_user:
         return
+    # Если пользователь запускает /start в середине image-flow, гасим старую карточку,
+    # чтобы она не оставалась «активной» с кнопками.
+    try:
+        st = await state.get_state()
+        data = await state.get_data()
+        anchor_chat = data.get("_img_flow_anchor_chat_id")
+        anchor_msg = data.get("_img_flow_anchor_message_id")
+        if st and anchor_chat and anchor_msg:
+            try:
+                await message.bot.edit_message_text(
+                    "<i>Сеанс генерации закрыт. Открыто новое главное меню.</i>",
+                    chat_id=int(anchor_chat),
+                    message_id=int(anchor_msg),
+                    parse_mode=HTML,
+                    reply_markup=None,
+                )
+            except Exception:
+                try:
+                    await message.bot.edit_message_reply_markup(
+                        chat_id=int(anchor_chat),
+                        message_id=int(anchor_msg),
+                        reply_markup=None,
+                    )
+                except Exception:
+                    logging.debug("cmd_start: could not neutralize previous image-flow card", exc_info=True)
+    except Exception:
+        logging.debug("cmd_start: flow anchor pre-check failed", exc_info=True)
 
     await state.clear()
     user_id = message.from_user.id
