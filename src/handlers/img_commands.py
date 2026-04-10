@@ -1931,7 +1931,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             refs_hint = "Reference mapping: image #1 is knight identity photo. Image #2 is woman identity photo."
         if is_minecraft_ready and overlay_nick_saved:
             refs_hint = (
-                f"{refs_hint} Render nickname above the head exactly once as: @{overlay_nick_saved}. "
+                f"{refs_hint} Render nickname above the head exactly once as: {overlay_nick_saved}. "
                 "Use Minecraft nametag style (white text with dark shadow/background), centered above the head. "
                 "Do not add any other text, usernames, HUD, subtitles, or UI."
             )
