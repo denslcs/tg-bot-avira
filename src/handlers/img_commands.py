@@ -227,7 +227,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Minecraft",
             "Последняя фотка перед битвой с драконом в Эндер мире.",
-            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoonization, no pixelated face, no extra facial hair. PROPORTION RULE: Keep natural human head-to-body proportions. Head must not look oversized; keep it slightly stylized but close to realistic proportions, with shoulders/torso visibly dominant in volume. Create a high-quality Minecraft End dimension scene: the user is sitting on top of an obsidian block at the edge of a cliff, looking directly at the camera. Camera angle: top-down, slightly tilted perspective from above. Outfit requirement: the user must wear Minecraft-inspired diamond armor on torso and legs (diamond chestplate + diamond leggings), integrated naturally with the scene. Add the user's Telegram nickname above the head in Minecraft-style yellow text with a dark outline. In the background, an Ender Dragon is flying in the sky. Keep the End-world atmosphere (obsidian, void-like depth, dramatic ambient light), with cinematic composition, sharp details, clean textures, and natural lighting integration on the user. Apply End-themed lighting on the user as well: purple-black ambient glow and subtle violet shadows on skin, armor, and clothing, so the user color grading matches the End environment naturally. Final output must look coherent, polished, and artifact-free.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoonization, no pixelated face, no extra facial hair. PROPORTION RULE: Keep natural human head-to-body proportions. Head must not look oversized; keep it slightly stylized but close to realistic proportions, with shoulders/torso visibly dominant in volume. Create a high-quality Minecraft End dimension scene: the user is sitting on top of an obsidian block at the edge of a cliff, looking directly at the camera. Camera angle: top-down, slightly tilted perspective from above. Outfit requirement: the user must wear Minecraft-inspired diamond armor on torso and legs (diamond chestplate + diamond leggings), integrated naturally with the scene. In the background, an Ender Dragon is flying in the sky. Keep the End-world atmosphere (obsidian, void-like depth, dramatic ambient light), with cinematic composition, sharp details, clean textures, and natural lighting integration on the user. Apply End-themed lighting on the user as well: purple-black ambient glow and subtle violet shadows on skin, armor, and clothing, so the user color grading matches the End environment naturally. Final output must look coherent, polished, and artifact-free.",
             1,
         ),
         (
@@ -1887,9 +1887,9 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             await callback.answer("Сначала введи ник (до 30 символов).", show_alert=True)
             await state.set_state(ImageGenState.ready_waiting_minecraft_nick)
             return
-        # Для Minecraft-идеи ник берём из шага ввода: рисуем его поверх и дублируем в refs_hint.
+        # Для Minecraft-идеи ник берём из шага ввода и передаём в prompt как точный текст над головой.
         include_nick = False
-        overlay_nick = overlay_nick_saved if is_minecraft_ready else None
+        overlay_nick = None
         model_override = None
         if title == "На отдыхе в Италии":
             model_override = (OPENROUTER_IMAGE_MODEL_ALT or "").strip()
@@ -1929,7 +1929,12 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             refs_hint = "Reference mapping: image #1 is user identity photo. Image #2 is Muhammad Ali identity photo."
         if title == "Для влюбленных: рыцарь и дама":
             refs_hint = "Reference mapping: image #1 is knight identity photo. Image #2 is woman identity photo."
-        # Ник в Minecraft наносим пост-обработкой, чтобы не было дублей/рандома от модели.
+        if is_minecraft_ready and overlay_nick_saved:
+            refs_hint = (
+                f"{refs_hint} Render nickname above the head exactly once as: @{overlay_nick_saved}. "
+                "Use Minecraft nametag style (white text with dark shadow/background), centered above the head. "
+                "Do not add any other text, usernames, HUD, subtitles, or UI."
+            )
         prompt = _build_ready_prompt(
             base_prompt,
             callback.from_user.username,
