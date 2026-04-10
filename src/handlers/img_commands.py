@@ -1972,7 +1972,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             )
         extra_refs: list[bytes] = []
         static_ref = _READY_IDEA_STATIC_REF_BY_TITLE.get(title)
-        if title in ("Clash Royale элитные варвары", "На отдыхе в Италии", "Кто ты из Вестероса"):
+        if title in ("Clash Royale", "На отдыхе в Италии", "Game of Thrones"):
             static_ref = None
         if static_ref:
             p = Path(static_ref)
@@ -1988,6 +1988,8 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             refs_hint = "Reference mapping: image #1 is user identity photo. Image #2 is Muhammad Ali identity photo."
         if title == "Для влюбленных: рыцарь и дама":
             refs_hint = "Reference mapping: image #1 is knight identity photo. Image #2 is woman identity photo."
+        if title == "Love is…":
+            refs_hint = "Reference mapping: image #1 is the man identity photo. Image #2 is the woman identity photo."
         if is_minecraft_ready and overlay_nick_saved:
             refs_hint = (
                 f"{refs_hint} Render nickname above the head exactly once as: {overlay_nick_saved}. "
