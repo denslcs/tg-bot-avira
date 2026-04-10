@@ -194,7 +194,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Для влюбленных: рыцарь и дама",
             "Романтическая сцена на закате.",
-            "IMPORTANT REFERENCE MAPPING: image #1 is the knight identity (male), image #2 is the woman identity (female). CRITICAL IDENTITY LOCK FOR BOTH: preserve both faces with high fidelity (facial structure, eyes, nose, lips, skin texture, age) and keep them clearly recognizable. HAIR LOCK FOR BOTH: if hair is visible in the reference photos, preserve each person's hairstyle, hairline, hair length, and natural hair color (do not replace with generic fantasy hair). Create a romantic portrait scene with a horse, a medieval knight, and sunset atmosphere. The knight must be based on image #1, without helmet, with visible face. The woman must be based on image #2, in a flowing dress and veil, with visible face. Knight armor should be highly detailed, richly decorated, realistic polished metal. Cinematic fantasy mood, warm golden lighting, volumetric fog, pastel haze. Photorealistic, highly detailed, sharp focus, realistic skin texture, shot on ARRI Alexa, 85mm lens, high resolution.",
+            "IMPORTANT REFERENCE MAPPING: image #1 is the knight identity (male), image #2 is the woman identity (female). CRITICAL IDENTITY LOCK FOR BOTH: preserve both faces with high fidelity (facial structure, eyes, nose, lips, skin texture, age) and keep them clearly recognizable. HAIR LOCK FOR BOTH: if hair is visible in the reference photos, preserve each person's hairstyle, hairline, hair length, and natural hair color (do not replace with generic fantasy hair). Create a romantic cinematic portrait: open grassy field at golden hour, tall dry grass, warm golden mist and soft tree line in the distance. A brown horse with a white blaze stands between and slightly behind the couple, dark leather saddle and bridle. The knight (image #1) wears polished steel plate armor with breastplate, pauldrons, gauntlets, chainmail visible at edges — no helmet, face clearly visible. The lady (image #2) wears a long flowing cream medieval dress with embroidered trim and a sheer veil catching the light. The couple holds hands at center frame (his armored hand and her bare hand). Knight armor: highly detailed, realistic polished metal, leather straps. Mood: warm directional sunlight, soft glow on veil and armor reflections, shallow depth of field, background softly blurred. Cinematic fantasy romance, photorealistic, sharp focus on subjects, ARRI Alexa look, 85mm lens, high resolution.",
             2,
         ),
         (
@@ -290,6 +290,7 @@ _ORANGE_COLOR_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "o
 _BLACK_STUDIO_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "black_studio_preview.png"
 _SUIT_BOUQUET_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "suit_bouquet_preview.png"
 _GUCCI_EDITORIAL_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "gucci_editorial_preview.png"
+_KNIGHT_LADY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "knight_lady_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -334,6 +335,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _SUIT_BOUQUET_READY_LISTING_IMAGE
     if t == "Gucci editorial" and _GUCCI_EDITORIAL_READY_LISTING_IMAGE.is_file():
         return _GUCCI_EDITORIAL_READY_LISTING_IMAGE
+    if t == "Для влюбленных: рыцарь и дама" and _KNIGHT_LADY_READY_LISTING_IMAGE.is_file():
+        return _KNIGHT_LADY_READY_LISTING_IMAGE
     return _start_listing_banner_path()
 
 
