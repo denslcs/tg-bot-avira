@@ -274,8 +274,9 @@ _READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str] = {
     "Победа над Мухаммадом Али на ринге": r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_114b8c4714b8b9b1196d51ad8d72a-1b94cd0d-73ba-44de-b3da-08a08fade423.png",
 }
 
-# Пример итоговой генерации для карточки «Minecraft» (показ вместо общего баннера меню).
+# Примеры итоговой генерации для карточек (вместо общего баннера меню).
 _MINECRAFT_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "minecraft_preview.png"
+_CLASH_ROYALE_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "clash_royale_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -285,8 +286,11 @@ def _start_listing_banner_path() -> Path | None:
 
 def _ready_idea_listing_photo_path(title: str) -> Path | None:
     """Файл картинки для карточки просмотра готовой идеи (caption — текст карточки)."""
-    if title.strip() == "Minecraft" and _MINECRAFT_READY_LISTING_IMAGE.is_file():
+    t = title.strip()
+    if t == "Minecraft" and _MINECRAFT_READY_LISTING_IMAGE.is_file():
         return _MINECRAFT_READY_LISTING_IMAGE
+    if t == "Clash Royale" and _CLASH_ROYALE_READY_LISTING_IMAGE.is_file():
+        return _CLASH_ROYALE_READY_LISTING_IMAGE
     return _start_listing_banner_path()
 
 # Подпись для внутреннего контекста «Ещё раз» (пользователю не показываем).

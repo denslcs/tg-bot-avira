@@ -73,6 +73,13 @@ def _check_ready_ideas() -> tuple[list[str], list[str]]:
         )
     checks.append("Minecraft ready-idea listing preview file exists.")
 
+    cr_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "clash_royale_preview.png"
+    if not cr_listing.is_file():
+        errors.append(
+            "Clash Royale listing preview image missing: assets/ready_ideas/clash_royale_preview.png"
+        )
+    checks.append("Clash Royale ready-idea listing preview file exists.")
+
     return checks, errors
 
 
