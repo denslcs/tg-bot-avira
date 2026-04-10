@@ -277,6 +277,7 @@ _READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str] = {
 # Примеры итоговой генерации для карточек (вместо общего баннера меню).
 _MINECRAFT_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "minecraft_preview.png"
 _CLASH_ROYALE_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "clash_royale_preview.png"
+_GTA_VICE_CITY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "gta_vice_city_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -291,6 +292,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _MINECRAFT_READY_LISTING_IMAGE
     if t == "Clash Royale" and _CLASH_ROYALE_READY_LISTING_IMAGE.is_file():
         return _CLASH_ROYALE_READY_LISTING_IMAGE
+    if t == "GTA Vice City" and _GTA_VICE_CITY_READY_LISTING_IMAGE.is_file():
+        return _GTA_VICE_CITY_READY_LISTING_IMAGE
     return _start_listing_banner_path()
 
 # Подпись для внутреннего контекста «Ещё раз» (пользователю не показываем).

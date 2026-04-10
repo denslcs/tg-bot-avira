@@ -80,6 +80,13 @@ def _check_ready_ideas() -> tuple[list[str], list[str]]:
         )
     checks.append("Clash Royale ready-idea listing preview file exists.")
 
+    gta_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "gta_vice_city_preview.png"
+    if not gta_listing.is_file():
+        errors.append(
+            "GTA Vice City listing preview image missing: assets/ready_ideas/gta_vice_city_preview.png"
+        )
+    checks.append("GTA Vice City ready-idea listing preview file exists.")
+
     return checks, errors
 
 
