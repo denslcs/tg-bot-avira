@@ -278,6 +278,7 @@ _READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str] = {
 _MINECRAFT_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "minecraft_preview.png"
 _CLASH_ROYALE_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "clash_royale_preview.png"
 _GTA_VICE_CITY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "gta_vice_city_preview.png"
+_GAME_OF_THRONES_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "game_of_thrones_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -286,7 +287,11 @@ def _start_listing_banner_path() -> Path | None:
 
 
 def _ready_idea_listing_photo_path(title: str) -> Path | None:
-    """Файл картинки для карточки просмотра готовой идеи (caption — текст карточки)."""
+    """Файл картинки для карточки просмотра готовой идеи (caption — текст карточки).
+
+    Только для листания этой идеи; при выходе в категории/загрузку фото подставляется start_banner
+    через _edit_ready_nav_message + _ready_categories_listing_photo().
+    """
     t = title.strip()
     if t == "Minecraft" and _MINECRAFT_READY_LISTING_IMAGE.is_file():
         return _MINECRAFT_READY_LISTING_IMAGE
@@ -294,6 +299,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _CLASH_ROYALE_READY_LISTING_IMAGE
     if t == "GTA Vice City" and _GTA_VICE_CITY_READY_LISTING_IMAGE.is_file():
         return _GTA_VICE_CITY_READY_LISTING_IMAGE
+    if t == "Game of Thrones" and _GAME_OF_THRONES_READY_LISTING_IMAGE.is_file():
+        return _GAME_OF_THRONES_READY_LISTING_IMAGE
     return _start_listing_banner_path()
 
 
