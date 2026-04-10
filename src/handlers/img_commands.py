@@ -17,13 +17,16 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     BufferedInputFile,
     CallbackQuery,
+    FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    InputMediaPhoto,
     Message,
 )
 
 from src.config import (
     ADMIN_IDS,
+    PROJECT_ROOT,
     OPENROUTER_IMAGE_ALT_COST_CREDITS,
     OPENROUTER_IMAGE_COST_CREDITS,
     OPENROUTER_IMAGE_GEMINI_COST_CREDITS,
@@ -270,6 +273,21 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
 _READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str] = {
     "Победа над Мухаммадом Али на ринге": r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_114b8c4714b8b9b1196d51ad8d72a-1b94cd0d-73ba-44de-b3da-08a08fade423.png",
 }
+
+# Пример итоговой генерации для карточки «Minecraft» (показ вместо общего баннера меню).
+_MINECRAFT_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "minecraft_preview.png"
+
+
+def _start_listing_banner_path() -> Path | None:
+    p = PROJECT_ROOT / "assets" / "start" / "start_banner.png"
+    return p if p.is_file() else None
+
+
+def _ready_idea_listing_photo_path(title: str) -> Path | None:
+    """Файл картинки для карточки просмотра готовой идеи (caption — текст карточки)."""
+    if title.strip() == "Minecraft" and _MINECRAFT_READY_LISTING_IMAGE.is_file():
+        return _MINECRAFT_READY_LISTING_IMAGE
+    return _start_listing_banner_path()
 
 # Подпись для внутреннего контекста «Ещё раз» (пользователю не показываем).
 _IMAGE_CONTEXT_LABEL = "text2img"
@@ -1512,10 +1530,55 @@ async def _open_ready_card(
     await state.update_data(_ready_category=category, _ready_index=idx)
     await state.set_state(ImageGenState.ready_browsing_idea)
     kb = _ready_browser_keyboard(idx, total)
+    photo_path = _ready_idea_listing_photo_path(title)
+
+    if edit and photo_path is not None and message.photo:
+        try:
+            media = InputMediaPhoto(
+                media=FSInputFile(photo_path),
+                caption=cap,
+                parse_mode=HTML,
+            )
+            edited = await message.edit_media(media=media, reply_markup=kb)
+            await _set_img_flow_anchor(state, edited or message)
+            return
+        except Exception:
+            logging.warning("ready card edit_media failed, fallback to caption edit", exc_info=True)
+
+    if edit and photo_path is not None and not message.photo:
+        try:
+            sent = await message.bot.send_photo(
+                message.chat.id,
+                photo=FSInputFile(photo_path),
+                caption=cap,
+                reply_markup=kb,
+                parse_mode=HTML,
+            )
+            try:
+                await message.edit_reply_markup(reply_markup=None)
+            except Exception:
+                logging.debug("ready card: strip keyboard from prior text msg", exc_info=True)
+            await _set_img_flow_anchor(state, sent)
+            return
+        except Exception:
+            logging.warning("ready card send_photo failed, fallback", exc_info=True)
+
     if edit:
         edited = await edit_or_send_nav_message(message, text=cap, reply_markup=kb, parse_mode=HTML)
         await _set_img_flow_anchor(state, edited or message)
     else:
+        if photo_path is not None:
+            try:
+                sent = await message.answer_photo(
+                    photo=FSInputFile(photo_path),
+                    caption=cap,
+                    reply_markup=kb,
+                    parse_mode=HTML,
+                )
+                await _set_img_flow_anchor(state, sent)
+                return
+            except Exception:
+                logging.warning("ready card answer_photo failed, fallback text", exc_info=True)
         sent = await message.answer(cap, reply_markup=kb, parse_mode=HTML)
         await _set_img_flow_anchor(state, sent)
 

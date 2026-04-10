@@ -7,6 +7,7 @@ from pathlib import Path
 from aiogram import Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
+from src.config import PROJECT_ROOT
 from src.database import init_db
 from src.handlers.global_errors import global_error_handler
 from src.handlers.img_commands import (
@@ -64,6 +65,13 @@ def _check_ready_ideas() -> tuple[list[str], list[str]]:
         if not p.is_file():
             errors.append(f"Static reference for '{title}' does not exist: {path}")
     checks.append("Static reference files exist.")
+
+    mc_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "minecraft_preview.png"
+    if not mc_listing.is_file():
+        errors.append(
+            "Minecraft listing preview image missing: assets/ready_ideas/minecraft_preview.png"
+        )
+    checks.append("Minecraft ready-idea listing preview file exists.")
 
     return checks, errors
 
