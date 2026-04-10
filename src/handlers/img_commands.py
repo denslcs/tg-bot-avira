@@ -1584,10 +1584,9 @@ def _build_ready_prompt(
     refs_hint: str | None = None,
 ) -> str:
     nick = (telegram_username or "").strip()
-    nick_line = f"@{nick}" if nick else "user_without_username"
     nick_part = (
-        f"Telegram nickname to render above the head: {nick_line}\n"
-        if include_telegram_nick
+        f"Telegram nickname to render above the head: @{nick}\n"
+        if include_telegram_nick and nick
         else ""
     )
     hint_part = f"{refs_hint.strip()}\n" if refs_hint and refs_hint.strip() else ""
