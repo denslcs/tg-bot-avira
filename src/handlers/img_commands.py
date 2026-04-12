@@ -5,6 +5,7 @@ from __future__ import annotations
 """
 
 import asyncio
+import json
 import logging
 from collections.abc import Awaitable, Callable
 from io import BytesIO
@@ -120,6 +121,9 @@ READY_IDEA_CATEGORIES: list[tuple[str, str]] = [
     ("add_photo", "📥 Добавить фото"),
 ]
 
+_POSTER_TEXT_READY_TITLE = "Постер с текстом"
+_FLUFFY_LETTERS_TITLE = "Пушистые буквы 3D"
+
 # title, preview, prompt, photos_required
 READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     "trends": [
@@ -206,9 +210,15 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     ],
     "texts": [
         (
-            "Постер с текстом",
-            "Вертикальный постер: главный герой + крупный читаемый заголовок.",
-            "Create a vertical poster with the subject as the hero. Add readable headline text 'YOUR TEXT HERE' in modern typography and keep composition balanced.",
+            _POSTER_TEXT_READY_TITLE,
+            "Вертикальный постер: ты в кадре + надпись в твоём стиле. После фото введи текст заголовка — подстроим цвет и фактуру под картинку.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity for the main subject. Preserve face structure, skin texture, age, eyes, and expression — integrate the person naturally into a stylized high-end 3D/CG poster (NOT a flat template). ART DIRECTION: vertical poster composition, hero subject from reference, cinematic lighting, smooth detailed shading, atmospheric depth, designer splash-screen quality. Environment: rich moody palette with strong accent lights (e.g. emissive glow blobs, rim light, neon-tinged highlights) that can inform the headline treatment. The exact headline string and typography integration rules are specified in the reference hint below — follow them exactly. NEGATIVE: flat clipart, cheap social-media template, tiny illegible text, random watermark, wrong face, beauty-plastic skin.",
+            1,
+        ),
+        (
+            _FLUFFY_LETTERS_TITLE,
+            "Гигантские пушистые 3D-буквы с мордочками и ты впереди в таком же костюме. Сначала фото, потом слово или короткая фраза для букв.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of the person's facial identity. Preserve the face 100% photorealistic: same facial structure, skin texture, eyes, age, and expression — no stylized skin, no replacement face, no fur mask covering the face. The fuzzy costume must leave the real human face fully visible (open face / face opening in the hood), only the body is in plush fur. SCENE QUALITY: premium 3D CGI, soft cinematic studio lighting, tactile high-detail fur strands, Pixar/DreamWorks-style polish. FOREGROUND: the same person from the reference, full body in frame, wearing a full-body fluffy mascot suit whose color and fur texture visually match the giant letters behind (one cohesive whimsical palette). POSE (mandatory): star pose / jumping-jack — arms raised high and spread wide, legs spread wide, feet on the ground, playful energy, centered, camera at full-body height. BACKGROUND: a large horizontal row of volumetric 3D letterforms. Exact spelling and letter styling are specified in the reference hint below — follow them exactly. NEGATIVE: 2D flat text, human face covered by fur, wrong identity, extra random people, watermark, readable UI.",
             1,
         ),
     ],
@@ -235,8 +245,8 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         ),
         (
             "Clash Royale",
-            "Выпала возможность прочувствовать себя в в шкуре элитного варвара.",
-            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoon face, no plastic skin, no added beard or mustache. REFERENCE COMPOSITION RULE: Use the provided Clash Royale reference image as layout/composition anchor. Replace ONLY the FRONT (right-side, closest to camera) elite barbarian with the user. Keep the back barbarian as the second character in the scene. POSE RULE: user and the second barbarian should stand close in a friendly side-by-side hug pose, with each character placing one arm over the other's shoulders (mutual arm-over-shoulder). Keep full-body framing of both characters, same arena perspective from the reference, and same armor style (golden horned helmet, wristbands, barbarian belt/skirt, barefoot). Arena details: red carpet, bridge/towers, battle atmosphere, warm cinematic lighting, slight depth of field, clean textures, high detail, natural seamless face integration.",
+            "Выпала возможность прочувствовать себя в шкуре элитного варвара.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Keep the face 100% unchanged and realistic: same facial structure, eyes, nose, lips, skin texture, age, and expression. No face swap artifacts, no beautification, no cartoon face, no plastic skin, no added beard or mustache. COMPOSITION: side-by-side full-body shot on a red carpet stone bridge toward a castle arena; warm sunset sky, banners, Clash Royale battle atmosphere. LEFT character: keep the official in-game Clash Royale Barbarian (stylized 3D game look) unchanged. RIGHT character: the user in photorealistic elite barbarian gear — golden horned helmet, spiked wristbands, brown kilt with red belt, barefoot — matching the pose and lighting. POSE: friendly mutual arm-over-shoulder hug with the game barbarian. Same perspective, full-body framing, warm cinematic lighting, slight depth of field, clean textures, natural seamless face integration on the user only.",
             1,
         ),
         (
@@ -567,6 +577,7 @@ class ImageGenState(StatesGroup):
     ready_browsing_idea = State()
     ready_waiting_photos = State()
     ready_waiting_minecraft_nick = State()
+    ready_waiting_poster_text = State()
     ready_waiting_confirm = State()
 
 
@@ -929,6 +940,29 @@ def _is_minecraft_ready_idea(title: str, base_prompt: str = "") -> bool:
     t = (title or "").strip().lower()
     p = (base_prompt or "").strip().lower()
     return ("minecraft" in t) or ("эндер" in t) or ("minecraft" in p and "ender" in p)
+
+
+_POSTER_TEXT_MAX_LEN = 48
+_FLUFFY_TEXT_MAX_LEN = 40
+
+
+def _ready_title_from_state_data(data: dict) -> str:
+    category = str(data.get("_ready_category") or "").strip().lower()
+    idx = int(data.get("_ready_index") or 0)
+    ideas = _ideas_for_category(category)
+    if ideas and 0 <= idx < len(ideas):
+        return str(ideas[idx][0] or "").strip()
+    return ""
+
+
+def _headline_max_len_for_title(title: str) -> int:
+    if (title or "").strip() == _FLUFFY_LETTERS_TITLE:
+        return _FLUFFY_TEXT_MAX_LEN
+    return _POSTER_TEXT_MAX_LEN
+
+
+def _ready_idea_needs_headline_input(title: str) -> bool:
+    return (title or "").strip() in (_POSTER_TEXT_READY_TITLE, _FLUFFY_LETTERS_TITLE)
 
 
 def _regen_keyboard() -> InlineKeyboardMarkup:
@@ -1725,6 +1759,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
             _ready_photos=[],
             _ready_need=photos_required,
             _ready_overlay_nick="",
+            _ready_poster_text="",
         )
         await state.set_state(ImageGenState.ready_waiting_photos)
         first_hint = _ready_photo_upload_hint(category=category, need=photos_required, received=0)
@@ -1822,6 +1857,28 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
             parse_mode=HTML,
         )
         return
+    if _ready_idea_needs_headline_input(title):
+        await state.set_state(ImageGenState.ready_waiting_poster_text)
+        if (title or "").strip() == _FLUFFY_LETTERS_TITLE:
+            head_hint = (
+                f"<blockquote><i>Теперь введи слово или короткую фразу (до {_FLUFFY_TEXT_MAX_LEN} символов, пробелы считаются) — "
+                "из неё соберут пушистые 3D-буквы с мордочками. Лицо берётся только с фото выше.</i></blockquote>"
+            )
+        else:
+            head_hint = (
+                f"<blockquote><i>Теперь пришли текст для заголовка на постере (до {_POSTER_TEXT_MAX_LEN} символов). "
+                "Он будет встроен в картинку и по цвету/настроению подстроен под сцену.</i></blockquote>"
+            )
+        await message.answer(
+            (
+                f"{_ready_photo_upload_hint(category=category, need=need, received=len(photos))}\n"
+                "<b>Фото зафиксированы.</b>\n"
+                f"{head_hint}"
+            ),
+            reply_markup=_ready_wait_photo_keyboard(),
+            parse_mode=HTML,
+        )
+        return
     await state.set_state(ImageGenState.ready_waiting_confirm)
     await message.answer(
         (
@@ -1839,6 +1896,44 @@ async def ready_minecraft_nick_need_text(message: Message) -> None:
     await message.answer(
         "Пришли ник текстом (до 30 символов).",
         reply_markup=_ready_wait_photo_keyboard(),
+    )
+
+
+@router.message(ImageGenState.ready_waiting_poster_text, ~F.text)
+async def ready_poster_text_need_text(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    t = _ready_title_from_state_data(data)
+    mx = _headline_max_len_for_title(t)
+    await message.answer(
+        f"Пришли текст одним сообщением (до {mx} символов).",
+        reply_markup=_ready_wait_photo_keyboard(),
+    )
+
+
+@router.message(ImageGenState.ready_waiting_poster_text)
+async def ready_collect_poster_text(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    title = _ready_title_from_state_data(data)
+    max_len = _headline_max_len_for_title(title)
+    raw = message.text or ""
+    if not raw.strip():
+        await message.answer("Текст не должен быть пустым. Введи ещё раз.")
+        return
+    if len(raw) > max_len:
+        await message.answer(
+            f"Слишком длинно. Максимум {max_len} символов (с пробелами). Сократи и отправь снова."
+        )
+        return
+    await state.update_data(_ready_poster_text=raw)
+    await state.set_state(ImageGenState.ready_waiting_confirm)
+    label = "Текст для букв" if title == _FLUFFY_LETTERS_TITLE else "Текст заголовка"
+    await message.answer(
+        (
+            f"<b>{esc(label)}:</b> <code>{esc(raw)}</code>\n"
+            "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
+        ),
+        reply_markup=_ready_confirm_keyboard(),
+        parse_mode=HTML,
     )
 
 
@@ -1941,10 +2036,16 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             )
             return
         overlay_nick_saved = str(data.get("_ready_overlay_nick") or "").strip()
+        poster_text_raw = str(data.get("_ready_poster_text") or "")
         is_minecraft_ready = _is_minecraft_ready_idea(title, base_prompt)
+        needs_headline = _ready_idea_needs_headline_input(title)
         if is_minecraft_ready and not overlay_nick_saved:
             await callback.answer("Сначала введи ник (до 30 символов).", show_alert=True)
             await state.set_state(ImageGenState.ready_waiting_minecraft_nick)
+            return
+        if needs_headline and not poster_text_raw.strip():
+            await callback.answer("Сначала введи текст.", show_alert=True)
+            await state.set_state(ImageGenState.ready_waiting_poster_text)
             return
         # Для Minecraft-идеи ник берём из шага ввода и передаём в prompt как точный текст над головой.
         include_nick = False
@@ -1967,6 +2068,10 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
                 "google/gemini-3.1-flash-image-preview"
             )
         elif title in ("Красивый костюм с букетом", "Gucci editorial"):
+            model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or (
+                "google/gemini-3.1-flash-image-preview"
+            )
+        elif title in (_POSTER_TEXT_READY_TITLE, _FLUFFY_LETTERS_TITLE):
             model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or (
                 "google/gemini-3.1-flash-image-preview"
             )
@@ -1996,6 +2101,24 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
                 "Use Minecraft nametag style (white text with dark shadow/background), centered above the head. "
                 "Do not add any other text, usernames, HUD, subtitles, or UI."
             )
+        if (title or "").strip() == _POSTER_TEXT_READY_TITLE and poster_text_raw.strip():
+            quoted = json.dumps(poster_text_raw, ensure_ascii=False)
+            refs_hint = (
+                f"{refs_hint} TYPOGRAPHY / HEADLINE (mandatory). Render this headline EXACTLY once, same spelling and language: {quoted}. "
+                "Color harmony: derive glyph fill, inner glow, outer halo, and thin highlight strokes from the strongest accent colors already present in the scene (emissive accents, rim lights, neon edges, fireflies) so the lettering matches the palette, temperature, and energy of the image. "
+                "Style: heavy bold geometric sans-serif with slightly softened corners; optional mild translucency so background and VFX read faintly through letter bodies; micro-detail: hairline flowing energy trails, sparse sparkle or dust motes hugging the letter contours. "
+                "Spatial integration: respect 3D depth — hair strands, glowing blobs, smoke, or foreground effects may partially occlude the text; the headline must feel embedded in the world, not pasted as a flat sticker. "
+                "No extra copy, no watermark, no subtitle, no UI beyond this headline."
+            )
+        elif (title or "").strip() == _FLUFFY_LETTERS_TITLE and poster_text_raw.strip():
+            quoted = json.dumps(poster_text_raw, ensure_ascii=False)
+            refs_hint = (
+                f"{refs_hint} FLUFFY 3D LETTER WORD (mandatory spelling): Spell EXACTLY this sequence of characters, same order and language, as separate giant 3D letterforms in a row: {quoted}. "
+                "Each letter is a thick volumetric glyph fully covered in long soft fur/fuzz — individual strands visible, plush tactile toy/CG monster look; optional slight hue shift per letter for variety. "
+                "Each letter integrates a cute goofy monster face: big cartoon eyes, thick expressive brows, mouth or grin — designer alphabet-mascot style (not gory). Soft studio lighting, subtle ground contact shadow, clean pastel or muted solid background that complements the fur colors. "
+                "The person from image #1 stands IN FRONT of the letter row, closer to camera, full-body star pose as in base prompt; their fluffy suit matches the letters' fur color story. Face remains photoreal human from reference only. "
+                "No extra words, no watermark, no subtitle beyond the specified letters."
+            )
         prompt = _build_ready_prompt(
             base_prompt,
             callback.from_user.username,
@@ -2005,7 +2128,6 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
         await state.clear()
         user_id = callback.from_user.id
         await ensure_user(user_id, callback.from_user.username)
-        extra_first = False
         strict_refs = False
         await _execute_ready_with_refs_generation(
             callback.message,
@@ -2018,7 +2140,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             model_override=model_override,
             overlay_nick=overlay_nick,
             extra_refs=extra_refs,
-            extra_refs_first=extra_first,
+            extra_refs_first=False,
             strict_refs=strict_refs,
         )
     except Exception:
