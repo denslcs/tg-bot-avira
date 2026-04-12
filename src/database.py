@@ -1429,6 +1429,14 @@ async def count_users_total() -> int:
     return int(row[0]) if row else 0
 
 
+async def list_all_user_ids() -> list[int]:
+    """Все user_id из таблицы users (кто хоть раз попал в бота через ensure_user)."""
+    async with open_db() as db:
+        async with db.execute("SELECT user_id FROM users ORDER BY user_id") as cur:
+            rows = await cur.fetchall()
+    return [int(r[0]) for r in rows]
+
+
 async def count_users_active_subscription() -> int:
     async with open_db() as db:
         async with db.execute(

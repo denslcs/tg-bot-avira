@@ -165,6 +165,20 @@ def _check_ready_ideas() -> tuple[list[str], list[str]]:
         errors.append("Love is listing preview missing: assets/ready_ideas/love_is_preview.png")
     checks.append("Love is ready-idea listing preview file exists.")
 
+    pt_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "poster_with_text_preview.png"
+    if not pt_listing.is_file():
+        errors.append(
+            "Poster with text listing preview missing: assets/ready_ideas/poster_with_text_preview.png"
+        )
+    checks.append("Poster with text ready-idea listing preview file exists.")
+
+    fl_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "fluffy_letters_preview.png"
+    if not fl_listing.is_file():
+        errors.append(
+            "Fluffy 3D letters listing preview missing: assets/ready_ideas/fluffy_letters_preview.png"
+        )
+    checks.append("Fluffy 3D letters ready-idea listing preview file exists.")
+
     return checks, errors
 
 

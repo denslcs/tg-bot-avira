@@ -123,6 +123,8 @@ READY_IDEA_CATEGORIES: list[tuple[str, str]] = [
 
 _POSTER_TEXT_READY_TITLE = "Постер с текстом"
 _FLUFFY_LETTERS_TITLE = "Пушистые буквы 3D"
+# Название идеи в боте: категория «📥 Добавить фото» → карточка с этим заголовком.
+_OBJECT_IN_SCENE_TITLE = "Перемещение объекта"
 
 # title, preview, prompt, photos_required
 READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
@@ -272,9 +274,17 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     ],
     "add_photo": [
         (
-            "Коллаж из двух фото",
-            "Объединить 2 фото: лицо с первого, стиль/ракурс со второго.",
-            "Create one final portrait. Keep face identity from photo #1. Use style, color, and atmosphere inspired by photo #2. Result should be coherent and photorealistic.",
+            _OBJECT_IN_SCENE_TITLE,
+            "Сначала фото объекта, потом фото места — бот вставит первое во второе.",
+            "COMPOSITE TASK — SINGLE OUTPUT PHOTO. Photorealistic integration, not a side-by-side collage. "
+            "Identify the main subject in image #1 (object, vehicle, furniture, product, animal, or other prop — not necessarily a person). "
+            "Image #2 is the destination: full scene / room / street / interior where that subject must appear. "
+            "Cut out the subject from #1 conceptually: do not paste the entire frame of #1; place only the subject into #2. "
+            "Match perspective, scale, and floor/contact plane; add contact shadows, ambient occlusion, and light direction consistent with #2. "
+            "Color-grade the subject to match white balance and illumination of the destination. "
+            "Edges must be clean without halos; no sticker look. "
+            "If image #1 contains a person, keep their face recognizable; if it is purely an object, preserve its materials and shape. "
+            "FORBIDDEN: split screen, before/after panels, visible rectangular crop from #1, duplicate UI, watermark, text overlays.",
             2,
         ),
     ],
@@ -302,6 +312,8 @@ _SUIT_BOUQUET_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "s
 _GUCCI_EDITORIAL_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "gucci_editorial_preview.png"
 _KNIGHT_LADY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "knight_lady_preview.png"
 _LOVE_IS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "love_is_preview.png"
+_POSTER_TEXT_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "poster_with_text_preview.png"
+_FLUFFY_LETTERS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "fluffy_letters_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -350,6 +362,10 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _KNIGHT_LADY_READY_LISTING_IMAGE
     if t == "Love is…" and _LOVE_IS_READY_LISTING_IMAGE.is_file():
         return _LOVE_IS_READY_LISTING_IMAGE
+    if t == _POSTER_TEXT_READY_TITLE and _POSTER_TEXT_READY_LISTING_IMAGE.is_file():
+        return _POSTER_TEXT_READY_LISTING_IMAGE
+    if t == _FLUFFY_LETTERS_TITLE and _FLUFFY_LETTERS_READY_LISTING_IMAGE.is_file():
+        return _FLUFFY_LETTERS_READY_LISTING_IMAGE
     return _start_listing_banner_path()
 
 
@@ -914,9 +930,29 @@ def _ready_idea_caption(*, category_title: str, title: str, preview: str, index:
     )
 
 
-def _ready_photo_upload_hint(*, category: str, need: int, received: int) -> str:
+def _ready_photo_upload_hint(
+    *, category: str, need: int, received: int, idea_title: str | None = None
+) -> str:
     """Подсказка шага загрузки фото: для парочек фиксируем порядок мужчина -> женщина."""
-    is_for_two = (category or "").strip().lower() == "for_two" and need == 2
+    cat = (category or "").strip().lower()
+    t = (idea_title or "").strip()
+    is_object_in_scene = t == _OBJECT_IN_SCENE_TITLE and need == 2
+    if is_object_in_scene:
+        if received <= 0:
+            return (
+                "<b>Шаг 1 из 2 — объект</b>\n"
+                "Пришли фото <b>того, что нужно перенести</b> (машина, вещь, предмет — что угодно, главное чтобы объект был понятен).\n"
+                "<blockquote><i>Это не фон — только объект или объект на простом фоне.</i></blockquote>"
+            )
+        if received == 1:
+            return (
+                "<b>Фото получено: 1/2</b>\n"
+                "<b>Шаг 2 из 2 — место</b>\n"
+                "Пришли фото <b>куда вставить</b> — целая сцена, интерьер, улица (куда объект должен попасть).\n"
+                "<blockquote><i>ИИ вставит предмет с первого фото в эту сцену.</i></blockquote>"
+            )
+        return "<b>Фото получено: 2/2</b>"
+    is_for_two = cat == "for_two" and need == 2
     if is_for_two:
         if received <= 0:
             return (
@@ -1762,7 +1798,9 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
             _ready_poster_text="",
         )
         await state.set_state(ImageGenState.ready_waiting_photos)
-        first_hint = _ready_photo_upload_hint(category=category, need=photos_required, received=0)
+        first_hint = _ready_photo_upload_hint(
+            category=category, need=photos_required, received=0, idea_title=title
+        )
         await _edit_ready_nav_message(
             callback.message,
             caption=(
@@ -1805,7 +1843,12 @@ async def ready_need_photo_hint(message: Message, state: FSMContext) -> None:
     category = str(data.get("_ready_category") or "").strip().lower()
     need = int(data.get("_ready_need") or 1)
     photos = list(data.get("_ready_photos") or [])
-    hint = _ready_photo_upload_hint(category=category, need=need, received=len(photos))
+    hint = _ready_photo_upload_hint(
+        category=category,
+        need=need,
+        received=len(photos),
+        idea_title=_ready_title_from_state_data(data),
+    )
     await message.answer(
         f"{hint}\nКогда соберем нужное количество, появится подтверждение.",
         reply_markup=_ready_wait_photo_keyboard(),
@@ -1834,6 +1877,7 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
             category=str(data.get("_ready_category") or ""),
             need=need,
             received=len(photos),
+            idea_title=_ready_title_from_state_data(data),
         )
         await message.answer(
             hint,
@@ -1849,7 +1893,7 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
         await state.set_state(ImageGenState.ready_waiting_minecraft_nick)
         await message.answer(
             (
-                f"{_ready_photo_upload_hint(category=category, need=need, received=len(photos))}\n"
+                f"{_ready_photo_upload_hint(category=category, need=need, received=len(photos), idea_title=title)}\n"
                 "<b>Фото зафиксированы.</b>\n"
                 "<blockquote><i>Теперь пришли ник для надписи над головой (до 30 символов).</i></blockquote>"
             ),
@@ -1871,7 +1915,7 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
             )
         await message.answer(
             (
-                f"{_ready_photo_upload_hint(category=category, need=need, received=len(photos))}\n"
+                f"{_ready_photo_upload_hint(category=category, need=need, received=len(photos), idea_title=title)}\n"
                 "<b>Фото зафиксированы.</b>\n"
                 f"{head_hint}"
             ),
@@ -1882,7 +1926,7 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
     await state.set_state(ImageGenState.ready_waiting_confirm)
     await message.answer(
         (
-            f"{_ready_photo_upload_hint(category=category, need=need, received=len(photos))}\n"
+            f"{_ready_photo_upload_hint(category=category, need=need, received=len(photos), idea_title=title)}\n"
             f"<b>Фото зафиксированы:</b> <b>{esc(len(photos))}</b>\n"
             "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
         ),
@@ -1974,6 +2018,7 @@ def _build_ready_prompt(
     *,
     include_telegram_nick: bool = False,
     refs_hint: str | None = None,
+    skip_identity_lock_footer: bool = False,
 ) -> str:
     nick = (telegram_username or "").strip()
     nick_part = (
@@ -1982,12 +2027,22 @@ def _build_ready_prompt(
         else ""
     )
     hint_part = f"{refs_hint.strip()}\n" if refs_hint and refs_hint.strip() else ""
+    if skip_identity_lock_footer:
+        footer = (
+            "Use both reference images as described above. "
+            "If image #1 shows a person, keep face recognizable; if it shows only an object, preserve its materials and silhouette. "
+            "Deliver one seamless final photograph."
+        )
+    else:
+        footer = (
+            f"{_READY_IDEA_UNISEX_GLOBAL}\n\n"
+            "Use all reference images from input. Preserve facial identity and natural skin texture."
+        )
     return (
         f"{(base_prompt or '').strip()}\n\n"
         f"{nick_part}"
         f"{hint_part}"
-        f"{_READY_IDEA_UNISEX_GLOBAL}\n\n"
-        "Use all reference images from input. Preserve facial identity and natural skin texture."
+        f"{footer}"
     )
 
 
@@ -2072,6 +2127,11 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
                 "google/gemini-3.1-flash-image-preview"
             )
         elif title in (_POSTER_TEXT_READY_TITLE, _FLUFFY_LETTERS_TITLE):
+            # Nano Banana 2 (preview): текст на картинке + референс лица; см. OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL в .env
+            model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or (
+                "google/gemini-3.1-flash-image-preview"
+            )
+        elif title == _OBJECT_IN_SCENE_TITLE:
             model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or (
                 "google/gemini-3.1-flash-image-preview"
             )
@@ -2095,6 +2155,13 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             refs_hint = "Reference mapping: image #1 is knight identity photo. Image #2 is woman identity photo."
         if title == "Love is…":
             refs_hint = "Reference mapping: image #1 is the man identity photo. Image #2 is the woman identity photo."
+        if title == _OBJECT_IN_SCENE_TITLE:
+            refs_hint = (
+                "Reference mapping: image #1 is the OBJECT or prop to place — main subject from photo #1 only, "
+                "ignore its original surroundings when building the final shot. "
+                "Image #2 is the DESTINATION environment — use this image as the base scene; "
+                "the subject from #1 must appear physically inside this scene with correct scale, lighting, and shadows."
+            )
         if is_minecraft_ready and overlay_nick_saved:
             refs_hint = (
                 f"{refs_hint} Render nickname above the head exactly once as: {overlay_nick_saved}. "
@@ -2124,6 +2191,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             callback.from_user.username,
             include_telegram_nick=include_nick,
             refs_hint=refs_hint,
+            skip_identity_lock_footer=(title.strip() == _OBJECT_IN_SCENE_TITLE),
         )
         await state.clear()
         user_id = callback.from_user.id

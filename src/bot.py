@@ -37,6 +37,7 @@ _ADMIN_COMMANDS = [
     BotCommand(command="setplan", description="📅 Тариф без продления"),
     BotCommand(command="clearsub", description="📅 Снять подписку"),
     BotCommand(command="wipechat", description="🧹 Очистить диалог пользователя"),
+    BotCommand(command="broadcast", description="📢 Рассылка в ЛС всем из базы"),
 ]
 
 

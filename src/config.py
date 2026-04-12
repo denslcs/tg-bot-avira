@@ -43,6 +43,19 @@ SUPPORT_BOT_TOKEN: str = os.getenv("SUPPORT_BOT_TOKEN", "").strip()
 SUPPORT_BOT_USERNAME: str = os.getenv("SUPPORT_BOT_USERNAME", "").strip()
 DB_PATH: str = os.getenv("DB_PATH", "data/bot.sqlite3").strip() or "data/bot.sqlite3"
 START_CREDITS: int = int(os.getenv("START_CREDITS", "20"))
+# Второе сообщение в ЛС сразу после главного экрана /start (новости, новый промпт). Пусто = не слать.
+# В .env можно писать в одну строку; для переноса строк подставьте \n в тексте.
+_start_ann_raw = os.getenv("START_ANNOUNCEMENT", "").strip()
+START_ANNOUNCEMENT: str = _start_ann_raw.replace("\\n", "\n") if _start_ann_raw else ""
+# Опционально: картинка к этому объявлению (путь от корня репозитория или абсолютный). Файл должен существовать.
+_start_ann_img = os.getenv("START_ANNOUNCEMENT_IMAGE", "").strip()
+START_ANNOUNCEMENT_IMAGE: Path | None = None
+if _start_ann_img:
+    _ann_p = Path(_start_ann_img)
+    if not _ann_p.is_absolute():
+        _ann_p = PROJECT_ROOT / _ann_p
+    if _ann_p.is_file():
+        START_ANNOUNCEMENT_IMAGE = _ann_p
 ADMIN_IDS: set[int] = _parse_admin_ids(os.getenv("ADMIN_IDS", ""))
 SUPPORT_USERNAME: str = os.getenv("SUPPORT_USERNAME", "").strip()
 SUPPORT_CHAT_ID: int = _parse_int(os.getenv("SUPPORT_CHAT_ID", "0"))

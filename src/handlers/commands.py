@@ -22,7 +22,13 @@ from aiogram.types import (
     MessageOriginChat,
 )
 
-from src.config import ADMIN_IDS, PROJECT_ROOT, SUPPORT_BOT_USERNAME
+from src.config import (
+    ADMIN_IDS,
+    PROJECT_ROOT,
+    START_ANNOUNCEMENT,
+    START_ANNOUNCEMENT_IMAGE,
+    SUPPORT_BOT_USERNAME,
+)
 from src.antispam_state import reset_user_spam
 from src.private_rate_limit import reset_private_rate
 from src.database import (
@@ -366,6 +372,13 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         )
     else:
         await message.answer(text, reply_markup=kb, parse_mode=HTML)
+
+    ann_text = START_ANNOUNCEMENT.strip() if START_ANNOUNCEMENT else ""
+    if START_ANNOUNCEMENT_IMAGE:
+        cap = ann_text[:1024] if ann_text else None
+        await message.answer_photo(FSInputFile(START_ANNOUNCEMENT_IMAGE), caption=cap)
+    elif ann_text:
+        await message.answer(ann_text[:4096])
 
 
 @router.callback_query(F.data == CB_MENU_BACK_START)

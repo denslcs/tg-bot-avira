@@ -1,6 +1,8 @@
+import asyncio
 import logging
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
@@ -16,8 +18,8 @@ from src.database import (
     count_open_tickets,
     count_users_active_subscription,
     count_users_total,
-    ensure_user,
     get_open_ticket_by_user,
+    list_all_user_ids,
     get_support_rating_rollups,
     get_user_admin_profile,
     list_open_tickets_preview,
@@ -77,7 +79,8 @@ async def cmd_admin_panel(message: Message) -> None:
         f"• /setplan ID [{_plans_hint()}] — сменить тариф в БД <b>без</b> продления срока\n"
         "• /clearsub ID — снять подписку (срок и тариф)\n"
         "• /wipechat ID — очистить историю диалога у пользователя\n"
-        "• /stats — сводка по пользователям, подпискам и кредитам",
+        "• /stats — сводка по пользователям, подпискам и кредитам\n"
+        "• /broadcast текст — разослать сообщение всем из базы (ЛС)",
         reply_markup=_main_kb(),
         parse_mode=HTML,
     )
@@ -99,6 +102,7 @@ async def adm_help(callback: CallbackQuery) -> None:
         "/setplan 123 nova — только тариф, дата окончания без изменений\n"
         "/clearsub 123 — обнулить подписку\n"
         "/wipechat 123 — очистить dialog_messages\n"
+        "/broadcast текст — рассылка в ЛС всем из базы\n"
         "/faq — шаблоны ответов для пользователей\n"
         "/chatid — id чата (в группе)"
     )
@@ -175,6 +179,54 @@ async def cmd_stats(message: Message) -> None:
         await message.answer("Только для администраторов.")
         return
     await message.answer((await _main_bot_stats_text())[:4000])
+
+
+_BROADCAST_DELAY_SEC = 0.035
+
+
+@router.message(Command("broadcast"))
+async def cmd_broadcast(message: Message, bot: Bot) -> None:
+    if not message.from_user or message.from_user.id not in ADMIN_IDS:
+        await message.answer("Только для администраторов.")
+        return
+    raw = (message.text or "").strip()
+    parts = raw.split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip():
+        await message.answer(
+            "Формат:\n"
+            "/broadcast Текст одним сообщением (до 4096 символов).\n\n"
+            "Уйдёт всем user_id из базы — тем, кто хоть раз писал боту или нажал /start. "
+            "Кто заблокировал бота, попадёт в счётчик «не доставлено»."
+        )
+        return
+    text = parts[1].strip()
+    if len(text) > 4096:
+        await message.answer("Слишком длинно: максимум 4096 символов.")
+        return
+    user_ids = await list_all_user_ids()
+    status_msg = await message.answer(
+        f"Рассылка… получателей в базе: {len(user_ids)}. Это может занять время."
+    )
+    ok = 0
+    failed = 0
+    for uid in user_ids:
+        try:
+            await bot.send_message(chat_id=uid, text=text)
+            ok += 1
+        except (TelegramBadRequest, TelegramForbiddenError):
+            failed += 1
+        except Exception:
+            failed += 1
+            logging.exception("broadcast uid=%s", uid)
+        await asyncio.sleep(_BROADCAST_DELAY_SEC)
+    try:
+        await status_msg.edit_text(
+            f"Готово.\n• Доставлено: {ok}\n• Не удалось: {failed}\n• Всего в базе: {len(user_ids)}"
+        )
+    except Exception:
+        await message.answer(
+            f"Готово.\n• Доставлено: {ok}\n• Не удалось: {failed}\n• Всего в базе: {len(user_ids)}"
+        )
 
 
 @router.callback_query(F.data == "adm:ratings")
