@@ -136,6 +136,38 @@ _FANTASY_COLOR_MAX_LEN = 32
 # Название идеи в боте: категория «📥 Добавить фото» → карточка с этим заголовком.
 _OBJECT_IN_SCENE_TITLE = "Перемещение объекта"
 
+
+def _ready_idea_needs_headline_input(title: str) -> bool:
+    return (title or "").strip() in (
+        _POSTER_TEXT_READY_TITLE,
+        _FLUFFY_LETTERS_TITLE,
+        _PLASTER_FASHION_STUDIO_TITLE,
+        _CHALK_ON_ASPHALT_TITLE,
+    )
+
+
+def _ready_idea_needs_photo_then_text(title: str) -> bool:
+    """После фото бот запрашивает текст (заголовок, ник Minecraft и т.д.)."""
+    t = (title or "").strip()
+    if _ready_idea_needs_headline_input(t):
+        return True
+    return t == "Minecraft"
+
+
+def _ready_idea_requirement_line(*, title: str, photos_required: int) -> str:
+    """Одна строка под описанием идеи: что нужно для запуска."""
+    pr = int(photos_required)
+    if pr == 0:
+        return "Требуется только текст"
+    if _ready_idea_needs_photo_then_text(title):
+        if pr == 2:
+            return "Требуется 2 фото и текст"
+        return "Требуется 1 фото и текст"
+    if pr == 2:
+        return "Требуется 2 фото"
+    return "Требуется 1 фото"
+
+
 # title, preview, prompt, photos_required
 READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     "trends": [
@@ -241,7 +273,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         ),
         (
             _PLASTER_FASHION_STUDIO_TITLE,
-            "Премиум fashion и гипсовые объёмные буквы: сначала фото, потом текст — что именно вылепить из гипса рядом с тобой.",
+            "Премиум fashion и гипсовые объёмные буквы. Нужно: 1 фото и текст для надписи из гипса (до 48 символов; можно две строки через Enter).",
             "CRITICAL — FACIAL IDENTITY: The uploaded photo is the ONLY source for the model's appearance. Transfer face without alteration: preserve sex, age, bone structure, skin texture, hair, and all individual traits; no face replacement, no beautification drift. UNISEX WARDROBE: elegant tailored trouser suit (pantsuit) — if male-presenting, classic slim-fit suit with trousers; if female-presenting, refined women's pantsuit or equivalent elegant tailored suit; if ambiguous, neutral premium tailoring that matches the face. MAIN COMPOSITION: stylish subject in relaxed pose, shoulder casually leaning against massive freestanding 3D letter sculptures; thoughtful, slightly mysterious expression; body organically integrated into the scene, subtle sense of pressing into the textured plaster surface of the letterforms. TYPOGRAPHY (mandatory): volumetric words built from matte gray plaster — exact spelling, language, line breaks, and capitalization are specified ONLY in the runtime reference hint below from the user's typed text (not fixed placeholder words). Letters are separate physical objects standing in space (NOT wall-mounted), massive block constructions; if two lines are requested, use two stacked tiers overlapping as a layered installation; soft natural cast shadows. TECH: ultra-detailed photorealistic photography, masterpiece image quality, tack-sharp eye focus on the model's face, professional color grading, top-tier studio lighting, 8K feel. DEPTH: shallow depth of field — face in sharp focus; plaster word sculpture slightly softer but text must remain fully legible. AESTHETIC: premium fashion-editorial minimalism, clean background, luxury modern magazine cover mood, contemporary fashion photography. NEGATIVE: wrong face, different age or gender than reference, flat 2D text stickers, letters fused into a flat wall, illegible text, watermark, cluttered background, website URLs or brand watermarks on the letters.",
             1,
         ),
@@ -363,29 +395,9 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     ],
 }
 
-# Доп. изображения для API (extra_refs): стиль/сцена/лицо знаменитости и т.п. — не путать с *_preview ниже.
+# Доп. изображения для API (extra_refs): только лицо Мухаммада Али для соответствующей идеи — не путать с *_preview ниже.
 _READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str] = {
     "Победа над Мухаммадом Али на ринге": r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_114b8c4714b8b9b1196d51ad8d72a-1b94cd0d-73ba-44de-b3da-08a08fade423.png",
-    # Только идея «UFC: … Макгрегором» — референс лица/костюма Конора (не смешивать с другими промптами).
-    "UFC: лицом к лицу с Макгрегором": str(
-        PROJECT_ROOT / "assets" / "ready_ideas" / "ufc_mcgregor_static_ref.png"
-    ),
-    # Только «Бордовый кино-портрет» — референс фона/света/реализма (лицо только с фото пользователя).
-    "Бордовый кино-портрет": str(
-        PROJECT_ROOT / "assets" / "ready_ideas" / "burgundy_cinema_portrait_static_ref.png"
-    ),
-    # Только «Ступени у огня» — референс сцены (лестница, огонь, ночь); лицо только с фото пользователя.
-    "Ступени у огня": str(
-        PROJECT_ROOT / "assets" / "ready_ideas" / "stupeni_u_ognya_static_ref.png"
-    ),
-    # Только «MMORPG: герой фэнтези» — референс уровня детализации брони/сцены/киношного реализма (лицо — с фото пользователя).
-    _MMORPG_HERO_TITLE: str(
-        PROJECT_ROOT / "assets" / "ready_ideas" / "mmorpg_hero_fantasy_static_ref.png"
-    ),
-    # Только «3D заголовок фэнтези-игры» — референс рун/кристаллов/VFX (текст заголовка — только из ввода пользователя).
-    _FANTASY_3D_GAME_TITLE: str(
-        PROJECT_ROOT / "assets" / "ready_ideas" / "fantasy_title_runic_static_ref.png"
-    ),
 }
 
 # Превью для листания идей в Telegram (_ready_idea_listing_photo_path → подпись к сообщению).
@@ -411,6 +423,13 @@ _POSTER_TEXT_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "po
 _FLUFFY_LETTERS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "fluffy_letters_preview.png"
 _SONY_ERICSSON_T100_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "sony_ericsson_t100_preview.png"
 _CHALK_ASPHALT_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "chalk_asphalt_preview.png"
+_STUPENI_U_OGNYA_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "stupeni_u_ognya_preview.png"
+_UFC_MCGREGOR_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "ufc_mcgregor_preview.png"
+_FANTASY_GAME_TITLE_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "fantasy_game_title_preview.png"
+_POLAROID_CURTAIN_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "polaroid_curtain_preview.png"
+_BURGUNDY_CINEMA_PORTRAIT_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "burgundy_cinema_portrait_preview.png"
+_MMORPG_HERO_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "mmorpg_hero_fantasy_preview.png"
+_PLASTER_FASHION_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "plaster_fashion_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -440,6 +459,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _PUTIN_NEGOTIATIONS_READY_LISTING_IMAGE
     if t == "Победа над Мухаммадом Али на ринге" and _MUHAMMAD_ALI_VICTORY_READY_LISTING_IMAGE.is_file():
         return _MUHAMMAD_ALI_VICTORY_READY_LISTING_IMAGE
+    if t == "UFC: лицом к лицу с Макгрегором" and _UFC_MCGREGOR_LISTING_IMAGE.is_file():
+        return _UFC_MCGREGOR_LISTING_IMAGE
     if t == "Хоумлендер и Бутч" and _HOMELANDER_BUTCHER_READY_LISTING_IMAGE.is_file():
         return _HOMELANDER_BUTCHER_READY_LISTING_IMAGE
     if t == "Ростомер" and _ROSTOMER_READY_LISTING_IMAGE.is_file():
@@ -452,6 +473,10 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _ORANGE_COLOR_READY_LISTING_IMAGE
     if t == "Чёрный студийный" and _BLACK_STUDIO_READY_LISTING_IMAGE.is_file():
         return _BLACK_STUDIO_READY_LISTING_IMAGE
+    if t == "Бордовый кино-портрет" and _BURGUNDY_CINEMA_PORTRAIT_LISTING_IMAGE.is_file():
+        return _BURGUNDY_CINEMA_PORTRAIT_LISTING_IMAGE
+    if t == _MMORPG_HERO_TITLE and _MMORPG_HERO_LISTING_IMAGE.is_file():
+        return _MMORPG_HERO_LISTING_IMAGE
     if t == "Красивый костюм с букетом" and _SUIT_BOUQUET_READY_LISTING_IMAGE.is_file():
         return _SUIT_BOUQUET_READY_LISTING_IMAGE
     if t == "Gucci editorial" and _GUCCI_EDITORIAL_READY_LISTING_IMAGE.is_file():
@@ -460,14 +485,22 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _KNIGHT_LADY_READY_LISTING_IMAGE
     if t == "Love is…" and _LOVE_IS_READY_LISTING_IMAGE.is_file():
         return _LOVE_IS_READY_LISTING_IMAGE
+    if t == _POLAROID_CURTAIN_TITLE and _POLAROID_CURTAIN_LISTING_IMAGE.is_file():
+        return _POLAROID_CURTAIN_LISTING_IMAGE
+    if t == _FANTASY_3D_GAME_TITLE and _FANTASY_GAME_TITLE_LISTING_IMAGE.is_file():
+        return _FANTASY_GAME_TITLE_LISTING_IMAGE
     if t == _POSTER_TEXT_READY_TITLE and _POSTER_TEXT_READY_LISTING_IMAGE.is_file():
         return _POSTER_TEXT_READY_LISTING_IMAGE
     if t == _FLUFFY_LETTERS_TITLE and _FLUFFY_LETTERS_READY_LISTING_IMAGE.is_file():
         return _FLUFFY_LETTERS_READY_LISTING_IMAGE
+    if t == _PLASTER_FASHION_STUDIO_TITLE and _PLASTER_FASHION_LISTING_IMAGE.is_file():
+        return _PLASTER_FASHION_LISTING_IMAGE
     if t == _SONY_ERICSSON_T100_TITLE and _SONY_ERICSSON_T100_LISTING_IMAGE.is_file():
         return _SONY_ERICSSON_T100_LISTING_IMAGE
     if t == _CHALK_ON_ASPHALT_TITLE and _CHALK_ASPHALT_LISTING_IMAGE.is_file():
         return _CHALK_ASPHALT_LISTING_IMAGE
+    if t == "Ступени у огня" and _STUPENI_U_OGNYA_LISTING_IMAGE.is_file():
+        return _STUPENI_U_OGNYA_LISTING_IMAGE
     return _start_listing_banner_path()
 
 
@@ -1018,24 +1051,19 @@ def _ready_confirm_keyboard() -> InlineKeyboardMarkup:
 def _ready_category_caption() -> str:
     return (
         "<b>💡 Готовые идеи</b>\n"
-        "<blockquote><i>Выбери направление. Затем листай варианты, нажми «Выбрать», "
-        "загрузи фото и подтверди запуск.</i></blockquote>"
+        "<blockquote><i>Выбери направление и вариант. Под описанием каждой идеи указано, что нужно: "
+        "одно или два фото, только текст, или фото и текст. Дальше — «Выбрать», загрузка и подтверждение.</i></blockquote>"
     )
 
 
 def _ready_idea_caption(*, category_title: str, title: str, preview: str, index: int, total: int, photos_required: int) -> str:
-    if photos_required == 0:
-        p_line = "сначала текст заголовка, затем базовый цвет по-русски"
-    elif photos_required == 2:
-        p_line = "2 фото"
-    else:
-        p_line = "1 фото"
+    req = _ready_idea_requirement_line(title=title, photos_required=photos_required)
     return (
         f"<b>{esc(category_title)}</b>\n"
         f"<blockquote><i>{esc(index + 1)}/{esc(total)}</i></blockquote>\n"
         f"<b>{esc(title)}</b>\n"
         f"<blockquote><i>{esc(preview)}</i></blockquote>\n"
-        f"<i>Нужно для запуска:</i> <b>{esc(p_line)}</b>"
+        f"<b>{esc(req)}</b>"
     )
 
 
@@ -1045,10 +1073,12 @@ def _ready_photo_upload_hint(
     """Подсказка шага загрузки фото; для части идей «для двоих» — порядок мужчина → женщина."""
     cat = (category or "").strip().lower()
     t = (idea_title or "").strip()
+    req = _ready_idea_requirement_line(title=t, photos_required=need)
     is_object_in_scene = t == _OBJECT_IN_SCENE_TITLE and need == 2
     if is_object_in_scene:
         if received <= 0:
             return (
+                f"<b>{esc(req)}</b>\n"
                 "<b>Шаг 1 из 2 — объект</b>\n"
                 "Пришли фото <b>того, что нужно перенести</b> (машина, вещь, предмет — что угодно, главное чтобы объект был понятен).\n"
                 "<blockquote><i>Это не фон — только объект или объект на простом фоне.</i></blockquote>"
@@ -1065,6 +1095,7 @@ def _ready_photo_upload_hint(
     if is_for_two and t == _POLAROID_CURTAIN_TITLE:
         if received <= 0:
             return (
+                f"<b>{esc(req)}</b>\n"
                 "Пришли <b>первое</b> из двух фото.\n"
                 "<blockquote><i>Порядок не важен: нужны два снимка любых «участников» — два человека или, например, питомцы; "
                 "главное, чтобы по фото было понятно, кого совместить в кадре Polaroid.</i></blockquote>"
@@ -1078,6 +1109,7 @@ def _ready_photo_upload_hint(
     if is_for_two:
         if received <= 0:
             return (
+                f"<b>{esc(req)}</b>\n"
                 "Скинь фото мужчины.\n"
                 "<blockquote><i>Порядок важен: сначала мужчина, потом женщина.</i></blockquote>"
             )
@@ -1088,7 +1120,17 @@ def _ready_photo_upload_hint(
             )
         return "<b>Фото получено: 2/2</b>"
     if received <= 0:
-        return f"Отправь {esc('2 фото' if need == 2 else '1 фото')}."
+        if t == "Minecraft":
+            return (
+                f"<b>{esc(req)}</b>\n"
+                "<blockquote><i>Сначала отправь фото; затем бот попросит <b>ник</b> для надписи над головой.</i></blockquote>"
+            )
+        if _ready_idea_needs_headline_input(t):
+            return (
+                f"<b>{esc(req)}</b>\n"
+                "<blockquote><i>Сначала отправь фото; затем бот попросит <b>текст</b> для надписи в кадре.</i></blockquote>"
+            )
+        return f"<b>{esc(req)}</b>"
     if received < need:
         return f"Фото получено: <b>{esc(received)}/{esc(need)}</b>. Пришли ещё."
     return f"Фото получено: <b>{esc(received)}/{esc(need)}</b>."
@@ -1129,15 +1171,6 @@ def _headline_max_len_for_title(title: str) -> int:
 
 def _has_cyrillic(s: str) -> bool:
     return any("\u0400" <= c <= "\u04ff" for c in (s or ""))
-
-
-def _ready_idea_needs_headline_input(title: str) -> bool:
-    return (title or "").strip() in (
-        _POSTER_TEXT_READY_TITLE,
-        _FLUFFY_LETTERS_TITLE,
-        _PLASTER_FASHION_STUDIO_TITLE,
-        _CHALK_ON_ASPHALT_TITLE,
-    )
 
 
 def _regen_keyboard() -> InlineKeyboardMarkup:
@@ -1948,10 +1981,12 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
         if photos_required == 0 and (title or "").strip() == _FANTASY_3D_GAME_TITLE:
             await state.set_state(ImageGenState.ready_waiting_fantasy_headline)
             list_ph = _ready_idea_listing_photo_path(title)
+            req0 = _ready_idea_requirement_line(title=title, photos_required=0)
             await _edit_ready_nav_message(
                 callback.message,
                 caption=(
                     f"<b>Выбрано:</b> {esc(title)}\n"
+                    f"<b>{esc(req0)}</b>\n"
                     "<blockquote><i>Пришли <b>текст заголовка</b> для игрового логотипа — "
                     f"латиница или кириллица, до {_FANTASY_HEADLINE_MAX_LEN} символов "
                     "(учитываются пробелы, регистр и CAPS — как напишешь).</i></blockquote>"
@@ -1972,8 +2007,8 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
             callback.message,
             caption=(
                 f"<b>Выбрано:</b> {esc(title)}\n"
-                f"<blockquote><i>{first_hint}\n"
-                "После загрузки появится кнопка подтверждения.</i></blockquote>"
+                f"{first_hint}\n"
+                "<blockquote><i>После загрузки появится кнопка подтверждения.</i></blockquote>"
             ),
             reply_markup=_ready_wait_photo_keyboard(),
             listing_photo=_ready_categories_listing_photo(),
@@ -2453,8 +2488,8 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             hq = json.dumps(poster_text_raw, ensure_ascii=False)
             cq = json.dumps(fantasy_color_raw, ensure_ascii=False)
             refs_hint = (
-                "IMAGE #1 (attached) is STYLE reference — crystalline/stone 3D lettering energy, floating runes, magical particles, dark-fantasy atmosphere; "
-                "it is NOT user identity. Render the headline from TEXT below, not arbitrary text from the reference image. "
+                "FANTASY KEY-ART (no attached style image): create crystalline/stone 3D lettering energy, floating runes, magical particles, "
+                "dark-fantasy atmosphere matching the headline tone — purely from instructions below, not from any reference photo. "
                 f"3D game TITLE logotype: reproduce EXACT characters, spaces, and capitalization: {hq}. "
                 f"BASE_COLOR_RUSSIAN — one user-chosen base hue word (broad color family; exact user string): {cq}. "
                 "Infer MOOD and WORLD_STYLE from headline tone + that base color. "
@@ -2465,29 +2500,20 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             if title == "UFC: лицом к лицу с Макгрегором":
                 refs_hint = (
                     "Reference mapping: image #1 is the USER identity only (left profile in the final frame — face from this upload). "
-                    "Image #2 is Conor McGregor LIKENESS reference — use for the RIGHT profile subject (beard, hair, purple check suit, expression); "
-                    "do not take the left person from image #2 as the user. Recreate the stare-down, Dana White, and UFC banner per base prompt."
+                    "No second reference image: synthesize Conor McGregor likeness on the right (profile, beard, purple check suit), Dana White behind/between, "
+                    "and UFC promo backdrop per base prompt text only — do not rely on an attached Conor photo."
                 )
             if title == "Бордовый кино-портрет":
                 refs_hint = (
-                    "Reference mapping: image #1 is the USER identity — face, skin, age, hair only from this upload. "
-                    "Image #2 is STYLE reference ONLY — match deep burgundy/maroon background, studio lighting quality, "
-                    "and photoreal cinematic mood from image #2; do NOT copy identity, face, or body from image #2. "
-                    "Follow base prompt: vertical cinema portrait, low angle, dark wardrobe on the user."
-                )
-            if title == "Ступени у огня":
-                refs_hint = (
-                    "Reference mapping: image #1 is the USER identity — preserve face, age, and likeness only from this upload. "
-                    "Image #2 is SCENE/MOOD reference ONLY — wide stone steps, burning building behind, night, fire glow, "
-                    "dirty torn white formal outfit styling, cigarette smoke, gritty horror atmosphere; "
-                    "do NOT copy the person from image #2. Apply the base prompt pose and wardrobe rules for the user's presentation."
+                    "Reference mapping: image #1 is the USER identity only — face, skin, age, hair from this upload. "
+                    "No second reference image: match deep burgundy/maroon background, studio lighting quality, and cinematic mood "
+                    "purely from the base prompt text — do not rely on an attached style reference photo."
                 )
             if (title or "").strip() == _MMORPG_HERO_TITLE:
                 refs_hint = (
-                    "Reference mapping: image #1 is the USER identity — face and likeness only from this upload (adapt to chosen race per base prompt). "
-                    "Image #2 is LOOK/QUALITY reference ONLY — photoreal dark-fantasy MMORPG hero: leather armor craft, dungeon ruins atmosphere, "
-                    "cinematic lighting, weapon detail tier; do NOT copy identity, face, or body from image #2. "
-                    "Random race/class/equipment still follow the base prompt; image #2 sets visual bar and mood, not a second character."
+                    "Reference mapping: image #1 is the USER identity — face, body-type cues, and likeness from this upload (adapt to chosen race per base prompt). "
+                    "No second reference image: derive photoreal dark-fantasy armor, dungeon atmosphere, cinematic lighting, and gear detail "
+                    "purely from the base prompt text — do not rely on an attached style or quality reference photo."
                 )
             if title == "Победа над Мухаммадом Али на ринге":
                 refs_hint = "Reference mapping: image #1 is user identity photo. Image #2 is Muhammad Ali identity photo."

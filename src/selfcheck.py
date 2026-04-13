@@ -193,6 +193,55 @@ def _check_ready_ideas() -> tuple[list[str], list[str]]:
         )
     checks.append("Chalk on asphalt ready-idea listing preview file exists.")
 
+    stupeni_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "stupeni_u_ognya_preview.png"
+    if not stupeni_listing.is_file():
+        errors.append(
+            "Stupeni u ognya listing preview missing: assets/ready_ideas/stupeni_u_ognya_preview.png"
+        )
+    checks.append("Stupeni u ognya (horror) ready-idea listing preview file exists.")
+
+    ufc_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "ufc_mcgregor_preview.png"
+    if not ufc_listing.is_file():
+        errors.append(
+            "UFC McGregor listing preview missing: assets/ready_ideas/ufc_mcgregor_preview.png"
+        )
+    checks.append("UFC McGregor ready-idea listing preview file exists.")
+
+    fantasy_title_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "fantasy_game_title_preview.png"
+    if not fantasy_title_listing.is_file():
+        errors.append(
+            "Fantasy 3D game title listing preview missing: assets/ready_ideas/fantasy_game_title_preview.png"
+        )
+    checks.append("Fantasy 3D game title ready-idea listing preview file exists.")
+
+    polaroid_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "polaroid_curtain_preview.png"
+    if not polaroid_listing.is_file():
+        errors.append(
+            "Polaroid and curtain listing preview missing: assets/ready_ideas/polaroid_curtain_preview.png"
+        )
+    checks.append("Polaroid and curtain ready-idea listing preview file exists.")
+
+    burgundy_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "burgundy_cinema_portrait_preview.png"
+    if not burgundy_listing.is_file():
+        errors.append(
+            "Burgundy cinema portrait listing preview missing: assets/ready_ideas/burgundy_cinema_portrait_preview.png"
+        )
+    checks.append("Burgundy cinema portrait ready-idea listing preview file exists.")
+
+    mmorpg_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "mmorpg_hero_fantasy_preview.png"
+    if not mmorpg_listing.is_file():
+        errors.append(
+            "MMORPG hero fantasy listing preview missing: assets/ready_ideas/mmorpg_hero_fantasy_preview.png"
+        )
+    checks.append("MMORPG hero fantasy ready-idea listing preview file exists.")
+
+    plaster_fashion_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "plaster_fashion_preview.png"
+    if not plaster_fashion_listing.is_file():
+        errors.append(
+            "Fashion plaster letters listing preview missing: assets/ready_ideas/plaster_fashion_preview.png"
+        )
+    checks.append("Fashion plaster letters ready-idea listing preview file exists.")
+
     return checks, errors
 
 
