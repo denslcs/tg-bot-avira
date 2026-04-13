@@ -126,6 +126,9 @@ READY_IDEA_CATEGORIES: list[tuple[str, str]] = [
 _POSTER_TEXT_READY_TITLE = "Постер с текстом"
 _FLUFFY_LETTERS_TITLE = "Пушистые буквы 3D"
 _PLASTER_FASHION_STUDIO_TITLE = "Fashion и гипсовые буквы"
+_SONY_ERICSSON_T100_TITLE = "Sony Ericsson T100"
+_CHALK_ON_ASPHALT_TITLE = "Мел на асфальте"
+_POLAROID_CURTAIN_TITLE = "Polaroid и занавеска"
 _FANTASY_3D_GAME_TITLE = "3D заголовок фэнтези-игры"
 _MMORPG_HERO_TITLE = "MMORPG: герой фэнтези"
 _FANTASY_HEADLINE_MAX_LEN = 80
@@ -217,9 +220,9 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             2,
         ),
         (
-            "Polaroid и занавеска",
-            "Два фото — вы вдвоём как на старом Polaroid: мягкая вспышка в темноте, лёгкая размытость, а за спинами только белая занавеска.",
-            "IMPORTANT REFERENCE MAPPING: image #1 is the first person identity, image #2 is the second person identity (any gender pairing). CRITICAL IDENTITY LOCK FOR BOTH: do not alter either face — preserve facial structure, skin texture, age, hair, and expression from each reference; both must remain clearly recognizable. OUTPUT STYLE: authentic Polaroid instant-film snapshot look — casual ordinary photo, no sharp dominant prop or staged object as the hero of the frame; natural two-person composition. LIGHTING: soft even illumination across the entire frame, like a compact camera flash in a dark room — flash falloff spreading gently over the whole image, not a harsh spotlight; subtle overall softness / mild blur consistent with small-format instant film and slight motion or vintage lens character. BACKGROUND: replace everything behind both subjects with a plain white curtain / white drape — seamless, neutral, no busy details; subjects separated from curtain by natural distance. MOOD: intimate simple portrait of two people together. NEGATIVE: swapped faces, beauty-face replacement, crisp HDR studio backdrop, extra people, readable text overlays, heavy vignette that hides faces.",
+            _POLAROID_CURTAIN_TITLE,
+            "Два фото любых «вдвоём» — как на старом Polaroid: мягкая вспышка в темноте, лёгкая размытость, за спинами белая занавеска. Порядок снимков не важен.",
+            "IMPORTANT REFERENCE MAPPING: image #1 is the first subject reference, image #2 is the second subject reference — two people, two animals, or a mixed pair; upload order is arbitrary (first vs second photo does not assign roles beyond #1/#2 mapping). CRITICAL IDENTITY LOCK FOR BOTH: preserve each subject faithfully — for humans: facial structure, skin texture, age, hair, expression; for animals: species, markings, fur pattern, pose cues — both must stay clearly recognizable. OUTPUT STYLE: authentic Polaroid instant-film snapshot look — casual ordinary photo, no sharp dominant prop or staged object as the hero of the frame; natural two-subject composition. LIGHTING: soft even illumination across the entire frame, like a compact camera flash in a dark room — flash falloff spreading gently over the whole image, not a harsh spotlight; subtle overall softness / mild blur consistent with small-format instant film and slight motion or vintage lens character. BACKGROUND: replace everything behind both subjects with a plain white curtain / white drape — seamless, neutral, no busy details; subjects separated from curtain by natural distance. MOOD: intimate simple snapshot of two subjects together. NEGATIVE: swapped identities, beauty-face replacement on humans, crisp HDR studio backdrop, extra subjects, readable text overlays, heavy vignette that hides faces.",
             2,
         ),
     ],
@@ -238,8 +241,8 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         ),
         (
             _PLASTER_FASHION_STUDIO_TITLE,
-            "Премиум fashion: брючный костюм, ты небрежно опираешься плечом на объёмные гипсовые слова — два яруса, студийный минимализм.",
-            "CRITICAL — FACIAL IDENTITY: The uploaded photo is the ONLY source for the model's appearance. Transfer face without alteration: preserve sex, age, bone structure, skin texture, hair, and all individual traits; no face replacement, no beautification drift. UNISEX WARDROBE: elegant tailored trouser suit (pantsuit) — if male-presenting, classic slim-fit suit with trousers; if female-presenting, refined women's pantsuit or equivalent elegant tailored suit; if ambiguous, neutral premium tailoring that matches the face. MAIN COMPOSITION: stylish subject in relaxed pose, shoulder casually leaning against massive freestanding 3D letter sculptures; thoughtful, slightly mysterious expression; body organically integrated into the scene, subtle sense of pressing into the textured plaster surface of the letterforms. TYPOGRAPHY (fixed, mandatory): volumetric words built from matte gray plaster — exact two-line stack: first line \"МОДА\", second line \"СТУДИЯ\" (Cyrillic, no URLs or domains). Letters are separate physical objects standing in space (NOT wall-mounted), massive block constructions, two stacked tiers overlapping as a layered installation; soft natural cast shadows. TECH: ultra-detailed photorealistic photography, masterpiece image quality, tack-sharp eye focus on the model's face, professional color grading, top-tier studio lighting, 8K feel. DEPTH: shallow depth of field — face in sharp focus; plaster word sculpture slightly softer but text must remain fully legible. AESTHETIC: premium fashion-editorial minimalism, clean background, luxury modern magazine cover mood, contemporary fashion photography. NEGATIVE: wrong face, different age or gender than reference, flat 2D text stickers, letters fused into a flat wall, illegible text, watermark, cluttered background, website URLs or brand watermarks on the letters.",
+            "Премиум fashion и гипсовые объёмные буквы: сначала фото, потом текст — что именно вылепить из гипса рядом с тобой.",
+            "CRITICAL — FACIAL IDENTITY: The uploaded photo is the ONLY source for the model's appearance. Transfer face without alteration: preserve sex, age, bone structure, skin texture, hair, and all individual traits; no face replacement, no beautification drift. UNISEX WARDROBE: elegant tailored trouser suit (pantsuit) — if male-presenting, classic slim-fit suit with trousers; if female-presenting, refined women's pantsuit or equivalent elegant tailored suit; if ambiguous, neutral premium tailoring that matches the face. MAIN COMPOSITION: stylish subject in relaxed pose, shoulder casually leaning against massive freestanding 3D letter sculptures; thoughtful, slightly mysterious expression; body organically integrated into the scene, subtle sense of pressing into the textured plaster surface of the letterforms. TYPOGRAPHY (mandatory): volumetric words built from matte gray plaster — exact spelling, language, line breaks, and capitalization are specified ONLY in the runtime reference hint below from the user's typed text (not fixed placeholder words). Letters are separate physical objects standing in space (NOT wall-mounted), massive block constructions; if two lines are requested, use two stacked tiers overlapping as a layered installation; soft natural cast shadows. TECH: ultra-detailed photorealistic photography, masterpiece image quality, tack-sharp eye focus on the model's face, professional color grading, top-tier studio lighting, 8K feel. DEPTH: shallow depth of field — face in sharp focus; plaster word sculpture slightly softer but text must remain fully legible. AESTHETIC: premium fashion-editorial minimalism, clean background, luxury modern magazine cover mood, contemporary fashion photography. NEGATIVE: wrong face, different age or gender than reference, flat 2D text stickers, letters fused into a flat wall, illegible text, watermark, cluttered background, website URLs or brand watermarks on the letters.",
             1,
         ),
         (
@@ -322,15 +325,15 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     ],
     "art_styles": [
         (
-            "Sony Ericsson T100",
-            "2003 на линии: крошечный зелёный ЖК, твоё лицо в 1-битном пикселе и «добро пожаловать» — как обои на легендарной кнопочной трубке.",
-            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Face shape, features, expression, and distinctive traits must match the reference with maximum fidelity while being converted into retro 1-bit pixel-art on the phone screen — same person, readable likeness at ultra-low resolution. SCENE: Classic candybar mobile phone Sony Ericsson T100 (early-2000s design), photorealistic plastic body and keypad partially visible; main focus on the small LCD screen. SCREEN SPECS (visual simulation): monochrome green LCD palette typical of that era; logical content as if 84×48 pixels — black-and-white / 1-bit style pixel illustration of the character on the display, clearly visible square pixel grid, sharp contrast, no smooth gradients inside the portrait (dithering allowed). On-screen portrait: pixel-art head/face centered like classic phone wallpapers. TOP OF SCREEN TEXT: classic Sony Ericsson UI style banner with Cyrillic greeting exactly: «добро пожаловать» (legible, bitmap/pixel font feel, fits the narrow display). OVERALL IMAGE: 9:16 vertical composition, nostalgic early-2000s mobile aesthetic, medium framing on the handset, shallow depth of field acceptable on the phone edges. STYLE: ultra-low-res look on the LCD area only; the phone casing may be rendered with realistic detail. MOOD: nostalgic \"old school\" mobile phone wallpaper. NEGATIVE: wrong face, different person, high-res face inside the LCD, modern smartphone, color photo inside the LCD, illegible gibberish instead of the greeting, watermark, UI clutter beyond the one greeting line.",
+            _SONY_ERICSSON_T100_TITLE,
+            "Легендарная T100: одно фото — твоё лицо в 1-бит на зелёном ЖК, сверху строка «добро пожаловать», как на старой кнопочной трубке.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Face shape, features, expression, and distinctive traits must match the reference with maximum fidelity while being converted into retro 1-bit pixel-art on the phone screen — same person, readable likeness at ultra-low resolution. SCENE: Classic candybar mobile phone Sony Ericsson T100 (early-2000s design), photorealistic plastic body and keypad partially visible; main focus on the small LCD screen. SCREEN SPECS (visual simulation): monochrome green LCD palette typical of that era; logical content as if 84×48 pixels — black-and-white / 1-bit style pixel illustration of the character on the display, clearly visible square pixel grid, sharp contrast, no smooth gradients inside the portrait (dithering allowed). On-screen portrait: pixel-art head/face centered like classic phone wallpapers. TOP OF SCREEN TEXT: classic Sony Ericsson UI style banner — narrow black band at top of LCD with bitmap/pixel font; Cyrillic greeting exactly: «добро пожаловать» (legible, fits the narrow display). OVERALL IMAGE: 9:16 vertical composition, nostalgic early-2000s mobile aesthetic, medium framing on the handset, shallow depth of field acceptable on the phone edges. STYLE: ultra-low-res look on the LCD area only; the phone casing may be rendered with realistic detail. MOOD: nostalgic \"old school\" mobile phone wallpaper. NEGATIVE: wrong face, different person, high-res face inside the LCD, modern smartphone, color photo inside the LCD, illegible gibberish instead of the greeting, watermark, UI clutter beyond the one greeting line and the portrait.",
             1,
         ),
         (
-            "Мел на асфальте",
-            "Твоё фото — огромным дворовым рисунком: крошки мела, лужицы у края, пасмурный день и фраза про любовь разноцветными буквами — как сняли сверху в телефон.",
-            "Photorealistic scene. CRITICAL IDENTITY LOCK: The chalk artwork on the ground must faithfully reproduce the people and the full composition from the uploaded reference photo — same faces, poses, body language, and framing; every person must stay clearly recognizable; translate the entire scene into colored street-chalk technique only (no photorealistic humans standing on the asphalt — only the drawing). LARGE chalk illustration on old cracked asphalt: soft slightly smudged lines like real sidewalk chalk; dusty matte chalk colors with authentic chalky texture; light smudge marks and chalk dust around the figures. SURFACE: weathered rough asphalt with visible cracks, small stones, grit; puddles of water, mud, and remnants of wet snow along the frame edges. PROPS: real pieces of colored chalk lying next to the drawing — red, yellow, blue, pink, and white; scattered chalk dust and finger smudges on the pavement. HANDWRITTEN QUOTE on the asphalt directly above the drawing, drawn in multicolor chalk by hand (childlike uneven street lettering), exact Cyrillic text: «Настоящая любовь начинается там, где ничего не ждут взамен». CAMERA: from above at a slight angle, as if someone photographs the ground with a phone; natural daylight, soft overcast sky, slightly cool color temperature. ATMOSPHERE: ordinary urban courtyard; high detail on asphalt and chalk; authentic street-art feeling. NEGATIVE: wrong faces, different people than reference, missing quote or wrong text, photoreal people instead of chalk drawing, watermark, clean studio floor.",
+            _CHALK_ON_ASPHALT_TITLE,
+            "Сначала фото — из него портрет мелом; потом своя надпись разноцветными буквами над рисунком. Лужицы, снег у края, вид сверху как с телефона.",
+            "Photorealistic scene. CRITICAL IDENTITY LOCK: The chalk artwork on the ground must faithfully reproduce the people and the full composition from the uploaded reference photo — same faces, poses, body language, and framing; every person must stay clearly recognizable; translate the entire scene into colored street-chalk technique only (no photorealistic humans standing on the asphalt — only the drawing). LARGE chalk illustration on old cracked asphalt: soft slightly smudged lines like real sidewalk chalk; dusty matte chalk colors with authentic chalky texture; light smudge marks and chalk dust around the figures. SURFACE: weathered rough asphalt with visible cracks, small stones, grit; puddles of water, mud, and remnants of wet snow along the frame edges. PROPS: real pieces of colored chalk lying next to the drawing — red, yellow, blue, pink, and white; scattered chalk dust and finger smudges on the pavement. HANDWRITTEN QUOTE on the asphalt directly above the drawing: multicolor chalk by hand (childlike uneven street lettering). The exact characters, line breaks, language, and wording are specified ONLY in the runtime reference hint from the user's typed text — no fixed placeholder quote. CAMERA: from above at a slight angle, as if someone photographs the ground with a phone; natural daylight, soft overcast sky, slightly cool color temperature. ATMOSPHERE: ordinary urban courtyard; high detail on asphalt and chalk; authentic street-art feeling. NEGATIVE: wrong faces, different people than reference, illegible or substituted quote text, photoreal people instead of chalk drawing, watermark, clean studio floor.",
             1,
         ),
     ],
@@ -360,11 +363,33 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     ],
 }
 
+# Доп. изображения для API (extra_refs): стиль/сцена/лицо знаменитости и т.п. — не путать с *_preview ниже.
 _READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str] = {
     "Победа над Мухаммадом Али на ринге": r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_114b8c4714b8b9b1196d51ad8d72a-1b94cd0d-73ba-44de-b3da-08a08fade423.png",
+    # Только идея «UFC: … Макгрегором» — референс лица/костюма Конора (не смешивать с другими промптами).
+    "UFC: лицом к лицу с Макгрегором": str(
+        PROJECT_ROOT / "assets" / "ready_ideas" / "ufc_mcgregor_static_ref.png"
+    ),
+    # Только «Бордовый кино-портрет» — референс фона/света/реализма (лицо только с фото пользователя).
+    "Бордовый кино-портрет": str(
+        PROJECT_ROOT / "assets" / "ready_ideas" / "burgundy_cinema_portrait_static_ref.png"
+    ),
+    # Только «Ступени у огня» — референс сцены (лестница, огонь, ночь); лицо только с фото пользователя.
+    "Ступени у огня": str(
+        PROJECT_ROOT / "assets" / "ready_ideas" / "stupeni_u_ognya_static_ref.png"
+    ),
+    # Только «MMORPG: герой фэнтези» — референс уровня детализации брони/сцены/киношного реализма (лицо — с фото пользователя).
+    _MMORPG_HERO_TITLE: str(
+        PROJECT_ROOT / "assets" / "ready_ideas" / "mmorpg_hero_fantasy_static_ref.png"
+    ),
+    # Только «3D заголовок фэнтези-игры» — референс рун/кристаллов/VFX (текст заголовка — только из ввода пользователя).
+    _FANTASY_3D_GAME_TITLE: str(
+        PROJECT_ROOT / "assets" / "ready_ideas" / "fantasy_title_runic_static_ref.png"
+    ),
 }
 
-# Примеры итоговой генерации для карточек (вместо общего баннера меню).
+# Превью для листания идей в Telegram (_ready_idea_listing_photo_path → подпись к сообщению).
+# Не передаются в openrouter_text_and_refs_to_image_bytes и не попадают в промпт как референс.
 _MINECRAFT_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "minecraft_preview.png"
 _CLASH_ROYALE_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "clash_royale_preview.png"
 _GTA_VICE_CITY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "gta_vice_city_preview.png"
@@ -384,6 +409,8 @@ _KNIGHT_LADY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "kn
 _LOVE_IS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "love_is_preview.png"
 _POSTER_TEXT_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "poster_with_text_preview.png"
 _FLUFFY_LETTERS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "fluffy_letters_preview.png"
+_SONY_ERICSSON_T100_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "sony_ericsson_t100_preview.png"
+_CHALK_ASPHALT_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "chalk_asphalt_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -392,10 +419,11 @@ def _start_listing_banner_path() -> Path | None:
 
 
 def _ready_idea_listing_photo_path(title: str) -> Path | None:
-    """Файл картинки для карточки просмотра готовой идеи (caption — текст карточки).
+    """Файл картинки для карточки просмотра готовой идеи в чате (иллюстрация «как может выглядеть результат»).
 
-    Только для листания этой идеи; при выходе в категории/загрузку фото подставляется start_banner
-    через _edit_ready_nav_message + _ready_categories_listing_photo().
+    Используется только в UI (_edit_ready_nav_message). Не является референсом для генерации:
+    в API уходят фото пользователя и, для части идей, байты из _READY_IDEA_STATIC_REF_BY_TITLE.
+    При выходе в категории/загрузку фото подставляется start_banner через _ready_categories_listing_photo().
     """
     t = title.strip()
     if t == "Minecraft" and _MINECRAFT_READY_LISTING_IMAGE.is_file():
@@ -436,6 +464,10 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _POSTER_TEXT_READY_LISTING_IMAGE
     if t == _FLUFFY_LETTERS_TITLE and _FLUFFY_LETTERS_READY_LISTING_IMAGE.is_file():
         return _FLUFFY_LETTERS_READY_LISTING_IMAGE
+    if t == _SONY_ERICSSON_T100_TITLE and _SONY_ERICSSON_T100_LISTING_IMAGE.is_file():
+        return _SONY_ERICSSON_T100_LISTING_IMAGE
+    if t == _CHALK_ON_ASPHALT_TITLE and _CHALK_ASPHALT_LISTING_IMAGE.is_file():
+        return _CHALK_ASPHALT_LISTING_IMAGE
     return _start_listing_banner_path()
 
 
@@ -1010,7 +1042,7 @@ def _ready_idea_caption(*, category_title: str, title: str, preview: str, index:
 def _ready_photo_upload_hint(
     *, category: str, need: int, received: int, idea_title: str | None = None
 ) -> str:
-    """Подсказка шага загрузки фото: для парочек фиксируем порядок мужчина -> женщина."""
+    """Подсказка шага загрузки фото; для части идей «для двоих» — порядок мужчина → женщина."""
     cat = (category or "").strip().lower()
     t = (idea_title or "").strip()
     is_object_in_scene = t == _OBJECT_IN_SCENE_TITLE and need == 2
@@ -1030,6 +1062,19 @@ def _ready_photo_upload_hint(
             )
         return "<b>Фото получено: 2/2</b>"
     is_for_two = cat == "for_two" and need == 2
+    if is_for_two and t == _POLAROID_CURTAIN_TITLE:
+        if received <= 0:
+            return (
+                "Пришли <b>первое</b> из двух фото.\n"
+                "<blockquote><i>Порядок не важен: нужны два снимка любых «участников» — два человека или, например, питомцы; "
+                "главное, чтобы по фото было понятно, кого совместить в кадре Polaroid.</i></blockquote>"
+            )
+        if received == 1:
+            return (
+                "<b>Фото получено: 1/2</b>\n"
+                "<blockquote><i>Пришли <b>второе</b> фото — второй участник. На результат не влияет, что загружать первым и что вторым.</i></blockquote>"
+            )
+        return "<b>Фото получено: 2/2</b>"
     if is_for_two:
         if received <= 0:
             return (
@@ -1057,6 +1102,8 @@ def _is_minecraft_ready_idea(title: str, base_prompt: str = "") -> bool:
 
 _POSTER_TEXT_MAX_LEN = 48
 _FLUFFY_TEXT_MAX_LEN = 40
+_PLASTER_TEXT_MAX_LEN = 48
+_CHALK_ASPHALT_TEXT_MAX_LEN = 120
 
 
 def _ready_title_from_state_data(data: dict) -> str:
@@ -1073,6 +1120,10 @@ def _headline_max_len_for_title(title: str) -> int:
         return _FLUFFY_TEXT_MAX_LEN
     if (title or "").strip() == _FANTASY_3D_GAME_TITLE:
         return _FANTASY_HEADLINE_MAX_LEN
+    if (title or "").strip() == _PLASTER_FASHION_STUDIO_TITLE:
+        return _PLASTER_TEXT_MAX_LEN
+    if (title or "").strip() == _CHALK_ON_ASPHALT_TITLE:
+        return _CHALK_ASPHALT_TEXT_MAX_LEN
     return _POSTER_TEXT_MAX_LEN
 
 
@@ -1081,7 +1132,12 @@ def _has_cyrillic(s: str) -> bool:
 
 
 def _ready_idea_needs_headline_input(title: str) -> bool:
-    return (title or "").strip() in (_POSTER_TEXT_READY_TITLE, _FLUFFY_LETTERS_TITLE)
+    return (title or "").strip() in (
+        _POSTER_TEXT_READY_TITLE,
+        _FLUFFY_LETTERS_TITLE,
+        _PLASTER_FASHION_STUDIO_TITLE,
+        _CHALK_ON_ASPHALT_TITLE,
+    )
 
 
 def _regen_keyboard() -> InlineKeyboardMarkup:
@@ -2019,6 +2075,17 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
                 f"<blockquote><i>Теперь введи слово или короткую фразу (до {_FLUFFY_TEXT_MAX_LEN} символов, пробелы считаются) — "
                 "из неё соберут пушистые 3D-буквы с мордочками. Лицо берётся только с фото выше.</i></blockquote>"
             )
+        elif (title or "").strip() == _PLASTER_FASHION_STUDIO_TITLE:
+            head_hint = (
+                f"<blockquote><i>Теперь пришли <b>текст для гипсовых букв</b> (до {_PLASTER_TEXT_MAX_LEN} символов, кириллица или латиница). "
+                "Можно две строки: отправь два ряда через перевод строки — верхний и нижний ярус скульптуры. "
+                "Этот текст появится на объёмных гипсовых словах рядом с тобой.</i></blockquote>"
+            )
+        elif (title or "").strip() == _CHALK_ON_ASPHALT_TITLE:
+            head_hint = (
+                f"<blockquote><i>Теперь пришли <b>надпись мелом</b> над портретом (до {_CHALK_ASPHALT_TEXT_MAX_LEN} символов) — кириллица или латиница. "
+                "Можно несколько строк через перевод строки. Рисунок на асфальте строится по твоему фото выше.</i></blockquote>"
+            )
         else:
             head_hint = (
                 f"<blockquote><i>Теперь пришли текст для заголовка на постере (до {_POSTER_TEXT_MAX_LEN} символов). "
@@ -2081,7 +2148,14 @@ async def ready_collect_poster_text(message: Message, state: FSMContext) -> None
         return
     await state.update_data(_ready_poster_text=raw)
     await state.set_state(ImageGenState.ready_waiting_confirm)
-    label = "Текст для букв" if title == _FLUFFY_LETTERS_TITLE else "Текст заголовка"
+    if title == _FLUFFY_LETTERS_TITLE:
+        label = "Текст для букв"
+    elif title == _PLASTER_FASHION_STUDIO_TITLE:
+        label = "Текст на гипсе"
+    elif title == _CHALK_ON_ASPHALT_TITLE:
+        label = "Надпись мелом"
+    else:
+        label = "Текст заголовка"
     await message.answer(
         (
             f"<b>{esc(label)}:</b> <code>{esc(raw)}</code>\n"
@@ -2209,6 +2283,7 @@ def _build_ready_prompt(
     refs_hint: str | None = None,
     skip_identity_lock_footer: bool = False,
     no_reference_images: bool = False,
+    style_reference_images_only: bool = False,
 ) -> str:
     nick = (telegram_username or "").strip()
     nick_part = (
@@ -2221,6 +2296,12 @@ def _build_ready_prompt(
         footer = (
             "No user reference photographs — generate purely from the instructions above. "
             "Single square 1:1 key-art image, ultra high quality, no watermark, no extra UI."
+        )
+    elif style_reference_images_only:
+        footer = (
+            "Attached reference image(s) are STYLE/MOOD guides only (materials, runes, particles, lighting, atmosphere). "
+            "Obey the TEXT instructions above for exact headline spelling and color — do not copy unrelated wording from the reference. "
+            "Single square 1:1 key-art, ultra high quality, no watermark, no extra UI."
         )
     elif skip_identity_lock_footer:
         footer = (
@@ -2316,7 +2397,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
                 "google/gemini-2.5-flash-image-pro"
             )
         elif (title or "").strip() == _FANTASY_3D_GAME_TITLE:
-            # Nano Banana Pro: 3D-титул / руны / типографика без референсных фото
+            # Nano Banana Pro: 3D-титул / руны; пользователь без фото, опционально статический стиль-референс в репо
             model_override = (OPENROUTER_IMAGE_GEMINI_PRO_MODEL or "").strip() or (
                 "google/gemini-2.5-flash-image-pro"
             )
@@ -2340,7 +2421,13 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or (
                 "google/gemini-3.1-flash-image-preview"
             )
-        elif title in (_POSTER_TEXT_READY_TITLE, _FLUFFY_LETTERS_TITLE, _PLASTER_FASHION_STUDIO_TITLE):
+        elif title in (
+            _POSTER_TEXT_READY_TITLE,
+            _FLUFFY_LETTERS_TITLE,
+            _PLASTER_FASHION_STUDIO_TITLE,
+            _SONY_ERICSSON_T100_TITLE,
+            _CHALK_ON_ASPHALT_TITLE,
+        ):
             # Nano Banana 2 (preview): типографика/сцена; для постера и пушистых букв — ещё референс лица; см. .env
             model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or (
                 "google/gemini-3.1-flash-image-preview"
@@ -2366,22 +2453,53 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             hq = json.dumps(poster_text_raw, ensure_ascii=False)
             cq = json.dumps(fantasy_color_raw, ensure_ascii=False)
             refs_hint = (
-                "TEXT-ONLY — no user photographs. "
+                "IMAGE #1 (attached) is STYLE reference — crystalline/stone 3D lettering energy, floating runes, magical particles, dark-fantasy atmosphere; "
+                "it is NOT user identity. Render the headline from TEXT below, not arbitrary text from the reference image. "
                 f"3D game TITLE logotype: reproduce EXACT characters, spaces, and capitalization: {hq}. "
-                f"BASE_COLOR_RUSSIAN — one user-chosen base hue word (broad color family, e.g. синий/фиолетовый/золотой; exact user string): {cq}. "
-                "Infer MOOD (dark fantasy, heroic epic, bright adventure, mystic arcane, etc.) and matching WORLD_STYLE background from the headline tone + that base color. "
+                f"BASE_COLOR_RUSSIAN — one user-chosen base hue word (broad color family; exact user string): {cq}. "
+                "Infer MOOD and WORLD_STYLE from headline tone + that base color. "
                 "Hero subject = only the headline letterforms; no subtitles or extra copy."
             )
         else:
             refs_hint = "Reference mapping: image #1 is user identity photo."
+            if title == "UFC: лицом к лицу с Макгрегором":
+                refs_hint = (
+                    "Reference mapping: image #1 is the USER identity only (left profile in the final frame — face from this upload). "
+                    "Image #2 is Conor McGregor LIKENESS reference — use for the RIGHT profile subject (beard, hair, purple check suit, expression); "
+                    "do not take the left person from image #2 as the user. Recreate the stare-down, Dana White, and UFC banner per base prompt."
+                )
+            if title == "Бордовый кино-портрет":
+                refs_hint = (
+                    "Reference mapping: image #1 is the USER identity — face, skin, age, hair only from this upload. "
+                    "Image #2 is STYLE reference ONLY — match deep burgundy/maroon background, studio lighting quality, "
+                    "and photoreal cinematic mood from image #2; do NOT copy identity, face, or body from image #2. "
+                    "Follow base prompt: vertical cinema portrait, low angle, dark wardrobe on the user."
+                )
+            if title == "Ступени у огня":
+                refs_hint = (
+                    "Reference mapping: image #1 is the USER identity — preserve face, age, and likeness only from this upload. "
+                    "Image #2 is SCENE/MOOD reference ONLY — wide stone steps, burning building behind, night, fire glow, "
+                    "dirty torn white formal outfit styling, cigarette smoke, gritty horror atmosphere; "
+                    "do NOT copy the person from image #2. Apply the base prompt pose and wardrobe rules for the user's presentation."
+                )
+            if (title or "").strip() == _MMORPG_HERO_TITLE:
+                refs_hint = (
+                    "Reference mapping: image #1 is the USER identity — face and likeness only from this upload (adapt to chosen race per base prompt). "
+                    "Image #2 is LOOK/QUALITY reference ONLY — photoreal dark-fantasy MMORPG hero: leather armor craft, dungeon ruins atmosphere, "
+                    "cinematic lighting, weapon detail tier; do NOT copy identity, face, or body from image #2. "
+                    "Random race/class/equipment still follow the base prompt; image #2 sets visual bar and mood, not a second character."
+                )
             if title == "Победа над Мухаммадом Али на ринге":
                 refs_hint = "Reference mapping: image #1 is user identity photo. Image #2 is Muhammad Ali identity photo."
             if title == "Для влюбленных: рыцарь и дама":
                 refs_hint = "Reference mapping: image #1 is knight identity photo. Image #2 is woman identity photo."
             if title == "Love is…":
                 refs_hint = "Reference mapping: image #1 is the man identity photo. Image #2 is the woman identity photo."
-            if title == "Polaroid и занавеска":
-                refs_hint = "Reference mapping: image #1 is the first person's identity photo. Image #2 is the second person's identity photo."
+            if title == _POLAROID_CURTAIN_TITLE:
+                refs_hint = (
+                    "Reference mapping: image #1 is the first uploaded subject's identity photo; image #2 is the second — "
+                    "any pairing (humans or animals); order of uploads does not change roles: merge both recognizably into one Polaroid frame per base prompt."
+                )
             if title == _OBJECT_IN_SCENE_TITLE:
                 refs_hint = (
                     "Reference mapping: image #1 is the OBJECT or prop to place — main subject from photo #1 only, "
@@ -2413,13 +2531,29 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
                 "The person from image #1 stands IN FRONT of the letter row, closer to camera, full-body star pose as in base prompt; their fluffy suit matches the letters' fur color story. Face remains photoreal human from reference only. "
                 "No extra words, no watermark, no subtitle beyond the specified letters."
             )
+        elif (title or "").strip() == _PLASTER_FASHION_STUDIO_TITLE and poster_text_raw.strip():
+            quoted = json.dumps(poster_text_raw, ensure_ascii=False)
+            refs_hint = (
+                f"{refs_hint} PLASTER TYPOGRAPHY (mandatory): Build the matte gray plaster 3D sculpture to spell EXACTLY this user text — same characters, spaces, line breaks, capitalization, and language: {quoted}. "
+                "If the text contains a newline, treat it as two stacked tiers (upper line first, lower line second). If a single line, arrange as one cohesive plaster block or balanced two-line stack as fits the composition. "
+                "No substitute wording, no URLs, no watermark on letters."
+            )
+        elif (title or "").strip() == _CHALK_ON_ASPHALT_TITLE and poster_text_raw.strip():
+            quoted = json.dumps(poster_text_raw, ensure_ascii=False)
+            refs_hint = (
+                f"{refs_hint} CHALK QUOTE (mandatory): On the asphalt directly above the chalk portrait, letter EXACTLY this user text in multicolor sidewalk chalk — same characters, line breaks, spacing, capitalization, and language: {quoted}. "
+                "Style: childlike uneven hand-drawn street lettering; pastel pink, yellow, blue, orange letters (vary hues across words/letters as in classic courtyard chalk art); must stay fully readable. "
+                "The chalk portrait below must match image #1 per base prompt. No substitute wording, no extra lines of copy beyond this quote, no watermark."
+            )
+        is_fantasy_3d_title = (title or "").strip() == _FANTASY_3D_GAME_TITLE
         prompt = _build_ready_prompt(
             base_prompt,
             callback.from_user.username,
             include_telegram_nick=include_nick,
             refs_hint=refs_hint,
             skip_identity_lock_footer=(title.strip() == _OBJECT_IN_SCENE_TITLE),
-            no_reference_images=((title or "").strip() == _FANTASY_3D_GAME_TITLE),
+            no_reference_images=(is_fantasy_3d_title and not extra_refs),
+            style_reference_images_only=(is_fantasy_3d_title and bool(extra_refs)),
         )
         await state.clear()
         user_id = callback.from_user.id
