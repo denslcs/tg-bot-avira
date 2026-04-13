@@ -125,7 +125,7 @@ READY_IDEA_CATEGORIES: list[tuple[str, str]] = [
 
 _POSTER_TEXT_READY_TITLE = "Постер с текстом"
 _FLUFFY_LETTERS_TITLE = "Пушистые буквы 3D"
-_PROMPT1_PLASTER_LETTERS_TITLE = "Гипсовая библиотека PROMPT1"
+_PLASTER_FASHION_STUDIO_TITLE = "Fashion и гипсовые буквы"
 _FANTASY_3D_GAME_TITLE = "3D заголовок фэнтези-игры"
 _MMORPG_HERO_TITLE = "MMORPG: герой фэнтези"
 _FANTASY_HEADLINE_MAX_LEN = 80
@@ -237,14 +237,14 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             1,
         ),
         (
-            _PROMPT1_PLASTER_LETTERS_TITLE,
-            "Премиум fashion: брючный костюм, ты небрежно плечом к объёмным гипсовым словам PROMPT1.RU и «библиотека» — два яруса, студийный минимализм.",
-            "CRITICAL — FACIAL IDENTITY: The uploaded photo is the ONLY source for the model's appearance. Transfer face without alteration: preserve sex, age, bone structure, skin texture, hair, and all individual traits; no face replacement, no beautification drift. UNISEX WARDROBE: elegant tailored trouser suit (pantsuit) — if male-presenting, classic slim-fit suit with trousers; if female-presenting, refined women's pantsuit or equivalent elegant tailored suit; if ambiguous, neutral premium tailoring that matches the face. MAIN COMPOSITION: stylish subject in relaxed pose, shoulder casually leaning against massive freestanding 3D letter sculptures; thoughtful, slightly mysterious expression; body organically integrated into the scene, subtle sense of pressing into the textured plaster surface of the letterforms. TYPOGRAPHY (fixed, mandatory): volumetric words built from matte gray plaster — exact two-line stack: first line \"PROMPT1.RU\", second line \"библиотека\" (Cyrillic). Letters are separate physical objects standing in space (NOT wall-mounted), massive block constructions, two stacked tiers overlapping as a layered installation; soft natural cast shadows. TECH: ultra-detailed photorealistic photography, masterpiece image quality, tack-sharp eye focus on the model's face, professional color grading, top-tier studio lighting, 8K feel. DEPTH: shallow depth of field — face in sharp focus; plaster word sculpture slightly softer but text must remain fully legible. AESTHETIC: premium fashion-editorial minimalism, clean background, luxury modern magazine cover mood, contemporary fashion photography. NEGATIVE: wrong face, different age or gender than reference, flat 2D text stickers, letters fused into a flat wall, illegible text, watermark, cluttered background.",
+            _PLASTER_FASHION_STUDIO_TITLE,
+            "Премиум fashion: брючный костюм, ты небрежно опираешься плечом на объёмные гипсовые слова — два яруса, студийный минимализм.",
+            "CRITICAL — FACIAL IDENTITY: The uploaded photo is the ONLY source for the model's appearance. Transfer face without alteration: preserve sex, age, bone structure, skin texture, hair, and all individual traits; no face replacement, no beautification drift. UNISEX WARDROBE: elegant tailored trouser suit (pantsuit) — if male-presenting, classic slim-fit suit with trousers; if female-presenting, refined women's pantsuit or equivalent elegant tailored suit; if ambiguous, neutral premium tailoring that matches the face. MAIN COMPOSITION: stylish subject in relaxed pose, shoulder casually leaning against massive freestanding 3D letter sculptures; thoughtful, slightly mysterious expression; body organically integrated into the scene, subtle sense of pressing into the textured plaster surface of the letterforms. TYPOGRAPHY (fixed, mandatory): volumetric words built from matte gray plaster — exact two-line stack: first line \"МОДА\", second line \"СТУДИЯ\" (Cyrillic, no URLs or domains). Letters are separate physical objects standing in space (NOT wall-mounted), massive block constructions, two stacked tiers overlapping as a layered installation; soft natural cast shadows. TECH: ultra-detailed photorealistic photography, masterpiece image quality, tack-sharp eye focus on the model's face, professional color grading, top-tier studio lighting, 8K feel. DEPTH: shallow depth of field — face in sharp focus; plaster word sculpture slightly softer but text must remain fully legible. AESTHETIC: premium fashion-editorial minimalism, clean background, luxury modern magazine cover mood, contemporary fashion photography. NEGATIVE: wrong face, different age or gender than reference, flat 2D text stickers, letters fused into a flat wall, illegible text, watermark, cluttered background, website URLs or brand watermarks on the letters.",
             1,
         ),
         (
             _FANTASY_3D_GAME_TITLE,
-            "Кинематографичные 3D-буквы для игры: свет из трещин, руны, туманный фон. Без фото — вводишь заголовок, потом базовый цвет одним русским словом (например: Синий).",
+            "Название, от которого хочется нажать «Играть»: громкий логотип, магия в кадре и настроение настоящего трейлера.",
             "Cinematic fantasy PC/console game title / key-art generator. Ultra-bold three-dimensional logotype with sharp aggressive beveled edges; letters feel magically forged from stone or metal; glowing cracks where inner light leaks; floating magical runes and spark particles harmonized with the PRIMARY color theme. Centered composition — the headline dominates; atmospheric blurred background (no busy readable props stealing focus). NO subtitle lines, NO extra UI text, NO watermark — only the main title lettering as the hero subject. Typography: heavy tactile 3D volume, premium game branding quality. Style families supported: dark fantasy void, epic heroic gold, bright emerald adventure, mystic arcane cyan/blue — the model must choose MOOD and WORLD_STYLE that fit the user's HEADLINE tone plus the BASE COLOR family (see runtime hint). NEGATIVE: flat 2D text sticker, thin fonts, subtitle clutter, mockup frames, studio watermark, illegible tiny letters.",
             0,
         ),
@@ -290,7 +290,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         ),
         (
             _MMORPG_HERO_TITLE,
-            "Твоё фото — в героя тёмного фэнтези MMORPG: расу и класс в духе Warcraft подберёт модель; черты лица с фото стараемся сохранить максимально (даже для орка и др.).",
+            "Погрузись в мир MMORPG: тёмное фэнтези, эпический герой и дух большой RPG — как в лучших кинематографичных трейлерах.",
             "Premium MMORPG / RPG hero portrait — highly detailed realistic dark fantasy game concept art (AAA cinematic key-art quality: painterly photoreal materials, dramatic low-key lighting, moody fog/smoke backdrop). CRITICAL IDENTITY LOCK (highest priority): image #1 is the ONLY face/body identity reference. The OUTPUT must still read unmistakably as THIS SAME PERSON — even if the race is Orc, Tauren, Worgen, etc. Predominant facial traits from the photo must WIN over generic racial features: preserve eye spacing/shape logic, brow ridge relationship, nose width/length and tip character, mouth width and lip shape, jaw/chin silhouette, cheek volume, age lines, and overall facial proportions; only then layer race-specific anatomy (green skin, tusks, heavier brow, elongated ears, snout shape, fur pattern) as a MODIFICATION on top of that likeness, not a replacement face. The result should feel like «the user transformed into that race», not a stock NPC of that race. Avoid a generic racial template — keep individual asymmetry and distinctive marks from the reference when possible. Do NOT replace with a different person; no beauty-face swap; no celebrity/orc stereotype face. UNISEX / PRESENTATION: infer apparent gender presentation from the reference and match armor silhouette, proportions, and styling (no defaulting to a generic male or female armor set when the face suggests otherwise). "
             "RANDOM BUILD (mandatory — pick ONE internally consistent set; do not label text on image): "
             "(1) RACE — choose ONE iconic high-fantasy MMORPG race inspired by classic Warcraft archetypes (examples: Human, Orc, Tauren, Night Elf, Blood Elf, Undead/Forsaken, Draenei, Worgen, Pandaren, Goblin, Gnome, Dwarf, Troll — or another coherent fantasy race that fits the same tone). Apply race styling as a veneer: tusks/ears/horns/skin tone must conform to the user's facial geometry from image #1, not erase it. "
@@ -385,7 +385,6 @@ _LOVE_IS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "love_i
 _POSTER_TEXT_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "poster_with_text_preview.png"
 _FLUFFY_LETTERS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "fluffy_letters_preview.png"
 _FANTASY_3D_TITLE_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "fantasy_game_title_3d_preview.png"
-_MMORPG_HERO_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "mmorpg_fantasy_hero_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -440,8 +439,6 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _FLUFFY_LETTERS_READY_LISTING_IMAGE
     if t == _FANTASY_3D_GAME_TITLE and _FANTASY_3D_TITLE_LISTING_IMAGE.is_file():
         return _FANTASY_3D_TITLE_LISTING_IMAGE
-    if t == _MMORPG_HERO_TITLE and _MMORPG_HERO_LISTING_IMAGE.is_file():
-        return _MMORPG_HERO_LISTING_IMAGE
     return _start_listing_banner_path()
 
 
@@ -999,7 +996,7 @@ def _ready_category_caption() -> str:
 
 def _ready_idea_caption(*, category_title: str, title: str, preview: str, index: int, total: int, photos_required: int) -> str:
     if photos_required == 0:
-        p_line = "без фото — сначала текст заголовка, затем базовый цвет по-русски"
+        p_line = "сначала текст заголовка, затем базовый цвет по-русски"
     elif photos_required == 2:
         p_line = "2 фото"
     else:
@@ -1894,7 +1891,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
                 callback.message,
                 caption=(
                     f"<b>Выбрано:</b> {esc(title)}\n"
-                    "<blockquote><i>Фото не нужны. Пришли <b>текст заголовка</b> для игрового логотипа — "
+                    "<blockquote><i>Пришли <b>текст заголовка</b> для игрового логотипа — "
                     f"латиница или кириллица, до {_FANTASY_HEADLINE_MAX_LEN} символов "
                     "(учитываются пробелы, регистр и CAPS — как напишешь).</i></blockquote>"
                 ),
@@ -2338,7 +2335,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or (
                 "google/gemini-3.1-flash-image-preview"
             )
-        elif title in (_POSTER_TEXT_READY_TITLE, _FLUFFY_LETTERS_TITLE, _PROMPT1_PLASTER_LETTERS_TITLE):
+        elif title in (_POSTER_TEXT_READY_TITLE, _FLUFFY_LETTERS_TITLE, _PLASTER_FASHION_STUDIO_TITLE):
             # Nano Banana 2 (preview): типографика/сцена; для постера и пушистых букв — ещё референс лица; см. .env
             model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or (
                 "google/gemini-3.1-flash-image-preview"

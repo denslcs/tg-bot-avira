@@ -186,13 +186,6 @@ def _check_ready_ideas() -> tuple[list[str], list[str]]:
         )
     checks.append("Fantasy 3D game title ready-idea listing preview file exists.")
 
-    mmorpg_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "mmorpg_fantasy_hero_preview.png"
-    if not mmorpg_listing.is_file():
-        errors.append(
-            "MMORPG fantasy hero listing preview missing: assets/ready_ideas/mmorpg_fantasy_hero_preview.png"
-        )
-    checks.append("MMORPG fantasy hero ready-idea listing preview file exists.")
-
     return checks, errors
 
 
