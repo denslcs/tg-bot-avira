@@ -451,7 +451,7 @@ async def menu_support(callback: CallbackQuery) -> None:
             parse_mode=HTML,
         )
         return
-    support_url = f"https://t.me/{SUPPORT_BOT_USERNAME}?start=from_avira"
+    support_url = f"https://t.me/{SUPPORT_BOT_USERNAME}?start=from_shard_creator"
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="Открыть поддержку", url=support_url)],
@@ -468,7 +468,7 @@ async def menu_support(callback: CallbackQuery) -> None:
 
 def _referral_share_url(bot_username: str | None, user_id: int) -> str:
     """Ссылка для кнопки «Пригласить»: открывает шаринг в Telegram без callback."""
-    text_share = "Заходи в Avira по моей ссылке 👇"
+    text_share = "Заходи в Shard Creator по моей ссылке 👇"
     if bot_username:
         ref_https = f"https://t.me/{bot_username}?start=ref_{user_id}"
         return "https://t.me/share/url?" + urllib.parse.urlencode(
@@ -761,7 +761,7 @@ async def cmd_support(message: Message) -> None:
             parse_mode=HTML,
         )
         return
-    support_url = f"https://t.me/{SUPPORT_BOT_USERNAME}?start=from_avira"
+    support_url = f"https://t.me/{SUPPORT_BOT_USERNAME}?start=from_shard_creator"
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="Открыть чат поддержки", url=support_url, style=BTN_PRIMARY)],

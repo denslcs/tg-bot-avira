@@ -603,7 +603,7 @@ async def pay_stars_invoice(callback: CallbackQuery) -> None:
         pd = p.period_days
         await callback.message.bot.send_invoice(
             chat_id=callback.message.chat.id,
-            title=f"Avira — {p.title}",
+            title=f"Shard Creator — {p.title}",
             description=(
                 f"Подписка {p.title}: +{p.bonus_credits} кредитов, "
                 f"{pd} дн. Картинки и готовые идеи — по кредитам."
@@ -618,7 +618,7 @@ async def pay_stars_invoice(callback: CallbackQuery) -> None:
         payload = f"pack:{callback.from_user.id}:{item_id}"
         await callback.message.bot.send_invoice(
             chat_id=callback.message.chat.id,
-            title=f"Avira — бонус-пакет {b.credits} кредитов",
+            title=f"Shard Creator — бонус-пакет {b.credits} кредитов",
             description=(f"Пакет бонусов: +{b.credits} кредитов на баланс (без продления подписки)."),
             payload=payload,
             currency="XTR",

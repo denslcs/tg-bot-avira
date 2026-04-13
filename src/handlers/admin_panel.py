@@ -70,7 +70,7 @@ async def cmd_admin_panel(message: Message) -> None:
         await message.answer("Эта команда только для администраторов.")
         return
     await message.answer(
-        "Админ-панель Avira\n\n"
+        "Админ-панель Shard Creator\n\n"
         "Быстрые кнопки ниже. Команды в чате:\n"
         "• /user ID — профиль пользователя\n"
         "• /addcredits ID сумма — начислить кредиты\n"

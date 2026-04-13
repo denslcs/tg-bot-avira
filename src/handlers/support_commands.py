@@ -48,7 +48,7 @@ async def _create_topic_for_ticket(message: Message, ticket_id: int, username: s
 @router.message(Command("start"))
 async def cmd_start(message: Message) -> None:
     await message.answer(
-        "Привет! Это поддержка Avira.\n"
+        "Привет! Это поддержка Shard Creator.\n"
         "Нажми /support и опиши проблему."
     )
 

@@ -52,7 +52,7 @@ async def support_topic_admin_reply(message: Message) -> None:
         return
     await message.bot.send_message(
         chat_id=ticket.user_id,
-        text=f"Ответ поддержки Avira:\n{answer_text}",
+        text=f"Ответ поддержки Shard Creator:\n{answer_text}",
     )
 
 
@@ -148,8 +148,14 @@ async def any_message(message: Message, state: FSMContext) -> None:
             return
 
     reply_text = (
-        "Привет! Я Avira ✨\n\n"
-        "Выбери, что хочешь: картинки, оплата, профиль и остальное — в меню ниже или команда /start."
+        "Привет! Я Shard Creator ✨\n\n"
+        "Твой креативный AI-ассистент для контента и изображений.\n\n"
+        "Что могу прямо сейчас:\n"
+        "• Генерировать картинки по твоей идее\n"
+        "• Запускать готовые сцены и стили в один клик\n"
+        "• Помогать с текстами, подписями и формулировками\n"
+        "• Держать контекст диалога, чтобы работать быстрее\n\n"
+        "Выбирай, с чего начать: «Создать картинку», «Готовые идеи», «Профиль» или «Оплатить»."
     )
     try:
         await add_dialog_message(user_id, "user", text)

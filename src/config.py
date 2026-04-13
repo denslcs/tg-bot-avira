@@ -140,7 +140,7 @@ _cdir = os.getenv("OPENROUTER_IMAGE_CACHE_DIR", "data/image_cache_openrouter").s
 OPENROUTER_IMAGE_CACHE_DIR: Path = PROJECT_ROOT / (_cdir or "data/image_cache_openrouter")
 # Опционально для статистики OpenRouter (см. документацию)
 OPENROUTER_HTTP_REFERER: str = os.getenv("OPENROUTER_HTTP_REFERER", "").strip()
-OPENROUTER_APP_TITLE: str = os.getenv("OPENROUTER_APP_TITLE", "Tg_bot_AVIRA").strip() or "Tg_bot_AVIRA"
+OPENROUTER_APP_TITLE: str = os.getenv("OPENROUTER_APP_TITLE", "Shard Creator").strip() or "Shard Creator"
 
 # Polza.ai — GPT Image (Media API); модели из POLZA_IMAGE_MODEL_IDS — Galaxy / Universe (см. img_commands).
 POLZAAI_API_KEY: str = os.getenv("POLZAAI_API_KEY", "").strip()

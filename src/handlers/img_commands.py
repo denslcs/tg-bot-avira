@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import random
 from collections.abc import Awaitable, Callable
 from io import BytesIO
 from pathlib import Path
@@ -133,6 +134,32 @@ _FANTASY_3D_GAME_TITLE = "3D заголовок фэнтези-игры"
 _MMORPG_HERO_TITLE = "MMORPG: герой фэнтези"
 _FANTASY_HEADLINE_MAX_LEN = 80
 _FANTASY_COLOR_MAX_LEN = 32
+_MMORPG_ALLOWED_RACES: tuple[str, ...] = (
+    "Orc",
+    "Undead",
+    "Human",
+    "Elf",
+    "Gnome",
+    "Goblin",
+    "Worgen",
+    "Draenei",
+    "Troll",
+    "Void Elf",
+    "Nightborne",
+)
+_MMORPG_ALLOWED_CLASSES: tuple[str, ...] = (
+    "Warrior",
+    "Mage",
+    "Warlock",
+    "Paladin",
+    "Priest",
+    "Rogue",
+    "Demon Hunter",
+    "Death Knight",
+    "Druid",
+    "Hunter (Archer)",
+)
+_MMORPG_LAST_BUILD_BY_USER: dict[int, tuple[str, str]] = {}
 # Название идеи в боте: категория «📥 Добавить фото» → карточка с этим заголовком.
 _OBJECT_IN_SCENE_TITLE = "Перемещение объекта"
 
@@ -152,6 +179,21 @@ def _ready_idea_needs_photo_then_text(title: str) -> bool:
     if _ready_idea_needs_headline_input(t):
         return True
     return t == "Minecraft"
+
+
+def _pick_mmorpg_race_class(user_id: int) -> tuple[str, str]:
+    """Pick race+class, avoiding immediate repeat for same user."""
+    all_pairs = [(r, c) for r in _MMORPG_ALLOWED_RACES for c in _MMORPG_ALLOWED_CLASSES]
+    if not all_pairs:
+        return ("Human", "Warrior")
+    prev = _MMORPG_LAST_BUILD_BY_USER.get(int(user_id))
+    if prev is not None and len(all_pairs) > 1:
+        candidates = [pair for pair in all_pairs if pair != prev]
+    else:
+        candidates = all_pairs
+    picked = random.choice(candidates)
+    _MMORPG_LAST_BUILD_BY_USER[int(user_id)] = picked
+    return picked
 
 
 def _ready_idea_requirement_line(*, title: str, photos_required: int) -> str:
@@ -174,7 +216,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Absolute Cinema",
             "Культовый студийный портрет в духе «Absolute Cinema»: ч/б, мощный взгляд, руки вверх и винтажная плёночная фактура.",
-            "Create a studio portrait in iconic \"Absolute Cinema\" style. IMPORTANT REFERENCE MAPPING: image #1 is the user's identity reference; image #2 is the style/composition reference image for the Absolute Cinema meme frame. CRITICAL IDENTITY LOCK: preserve the exact person from image #1 (face structure, age cues, skin texture, hairstyle/hairline, expression character). Replace the face/identity in the reference composition with the user while keeping the recognizable Absolute Cinema setup. STYLE: dramatic black-and-white chiaroscuro portrait, stoic expression, frontal seated composition, both hands raised at shoulder level, clean symmetrical framing, subtle analog film grain and gentle vintage texture. Keep lighting sculpted and realistic (studio key + shadow depth), with classic monochrome tonal contrast. TYPOGRAPHY: bold white all-caps text at the bottom in two lines exactly: line 1 \"ABSOLUTE\", line 2 \"CINEMA\"; centered, meme-like proportion, no extra text. RESULT: photorealistic, iconic, reaction-meme-ready image with consistent posture and mood. NEGATIVE: cartoon look, painterly style, color image, warped hands, extra fingers, wrong face identity, misspelled text, watermark, logos, extra captions.",
+            "Create a studio portrait in iconic \"Absolute Cinema\" style. IMPORTANT REFERENCE MAPPING: image #1 is the user's identity reference; image #2 is the style/composition reference image for the Absolute Cinema meme frame. CRITICAL IDENTITY LOCK: preserve the exact person from image #1 (face structure, age cues, skin texture, hairstyle/hairline, expression character). Replace the face/identity in the reference composition with the user while keeping the recognizable Absolute Cinema setup. STRICT BODY PROPORTIONS (very important): keep realistic human anatomy and perspective — normal head-to-shoulders scale, natural neck thickness, believable torso width, and full-size adult hands with correct palm/finger length. Do not enlarge the head or shrink the hands. Hands must read at natural scale relative to face (not toy-small), with anatomically correct joints and finger proportions. Keep arm length and shoulder width physically plausible in seated frontal pose. STYLE: dramatic black-and-white chiaroscuro portrait, stoic expression, frontal seated composition, both hands raised at shoulder level, clean symmetrical framing, subtle analog film grain and gentle vintage texture. Keep lighting sculpted and realistic (studio key + shadow depth), with classic monochrome tonal contrast. TYPOGRAPHY: bold white all-caps text at the bottom in two lines exactly: line 1 \"ABSOLUTE\", line 2 \"CINEMA\"; centered, meme-like proportion, no extra text. RESULT: photorealistic, iconic, reaction-meme-ready image with consistent posture and mood. NEGATIVE: cartoon look, painterly style, color image, big-head small-hands distortion, warped anatomy, extra fingers, wrong face identity, misspelled text, watermark, logos, extra captions.",
             1,
         ),
     ],
@@ -326,12 +368,14 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             _MMORPG_HERO_TITLE,
             "Погрузись в мир MMORPG: тёмное фэнтези, эпический герой и дух большой RPG — как в лучших кинематографичных трейлерах.",
-            "Premium MMORPG / RPG hero portrait — STRICT PHOTOREALISM ONLY (live-action realism). ABSOLUTE RULE: output must look like a real person in a real cinematic photo frame, not a digital illustration. Target look: high-end dark-fantasy film still or prestige live-action game cinematic (Diablo IV / Elden Ring / modern Blizzard cinematic trailer realism): real skin with pores and subsurface warmth where visible, believable metal and leather, natural film grain optional, dramatic but physically plausible light. Hard forbid any stylized output: no cartoon, anime, painterly, cel-shaded, toy-like, plastic CGI, or in-game character model look. Avoid any «in-game character model», toy, or mobile-RPG icon aesthetics. CRITICAL IDENTITY LOCK (highest priority): image #1 is the ONLY face/body identity reference. The OUTPUT must still read unmistakably as THIS SAME PERSON — even if the race is Orc, Tauren, Worgen, etc. Predominant facial traits from the photo must WIN over generic racial features: preserve eye spacing/shape logic, brow ridge relationship, nose width/length and tip character, mouth width and lip shape, jaw/chin silhouette, cheek volume, age lines, and overall facial proportions; only then layer race-specific anatomy (green skin, tusks, heavier brow, elongated ears, snout shape, fur pattern) as a MODIFICATION on top of that likeness, not a replacement face. The result should feel like «the user transformed into that race», not a stock NPC of that race. Avoid a generic racial template — keep individual asymmetry and distinctive marks from the reference when possible. Do NOT replace with a different person; no beauty-face swap; no celebrity/orc stereotype face. UNISEX / PRESENTATION: infer apparent gender presentation from the reference and match armor silhouette, proportions, and styling (no defaulting to a generic male or female armor set when the face suggests otherwise). "
+            "Premium MMORPG / RPG hero portrait — STRICT BLIZZARD-CINEMATIC REALISM: the final image must look like a frame from a high-budget World of Warcraft CGI trailer (cinematic realism), NOT like in-game render, splash art, or stylized illustration. Target look: dark-fantasy epic character shot with physically plausible lighting, realistic skin microtexture, convincing materials, and high-end cinematic depth. CRITICAL IDENTITY LOCK (highest priority): image #1 is the ONLY face/body identity source. The OUTPUT must still read unmistakably as THIS SAME PERSON — even when transformed into Warcraft race traits. Preserve eye spacing/shape, brow-to-eye relationship, nose structure, mouth/lip silhouette, jaw/chin geometry, cheek volume, and age cues; apply race anatomy as a layer, not a replacement face. Do NOT replace with another person; no beautification drift; no generic NPC face template. UNISEX / PRESENTATION: infer apparent gender presentation from the reference and match armor silhouette/proportions accordingly (no default male/female stereotype set). "
             "RANDOM BUILD (mandatory — pick ONE internally consistent set; do not label text on image): "
             "(1) RACE — RANDOM PICK exactly ONE race from this World of Warcraft list only: Orc, Undead, Human, Elf, Gnome, Goblin, Worgen, Draenei, Troll, Void Elf, Nightborne. Do not invent or use races outside this list. Apply race styling as a veneer: tusks/ears/horns/skin tone must conform to the user's facial geometry from image #1, not erase it. "
-            "(2) CLASS — RANDOM PICK exactly ONE class from this World of Warcraft list only: Warrior, Mage, Warlock, Paladin, Priest, Rogue, Demon Hunter, Death Knight, Druid, Hunter (Archer). Do not invent or use classes outside this list. Express the chosen class through gear silhouette, weapons or focus items, and subtle class fantasy (holy radiance, nature vines, fel embers, frost runes, etc.). "
-            "GEAR & RENDER: layered battle-worn plate / leather / mail / cloth with intricate filigree, straps, pauldrons, cloaks, battle damage — materials must read as real metal/leather/fabric under cinematic light (specular highlights, micro-scratches, wear), not glossy plastic toy armor. Optional subtle glowing eyes or runes if race/class-appropriate; keep effects grounded, not neon arcade. Background: simple desaturated atmospheric void, smoke, or blurred ruins — keep attention on the hero. "
-            "NEGATIVE: anything non-photorealistic, cartoon, chibi, anime, painterly concept-art look, Pixar/DreamWorks 3D, Fortnite/disney-stylized proportions, cel-shaded or toon-shaded look, WoW classic in-game shader / character-select doll, exaggerated mobile-RPG splash art, plastic CGI skin, oversized weapons as toys, floating head only, extra people, readable copyrighted logos or game UI, HUD/health bars, watermark text, flat clipart, duplicate faces, generic racial face that ignores the reference likeness.",
+            "(2) CLASS — RANDOM PICK exactly ONE class from this World of Warcraft list only: Warrior, Mage, Warlock, Paladin, Priest, Rogue, Demon Hunter, Death Knight, Druid, Hunter (Archer). Do not invent or use classes outside this list. Class must be instantly readable from silhouette + gear language + VFX accents. "
+            "(3) LOCATION — RANDOM PICK exactly ONE Warcraft-like cinematic environment and commit to it: burning battlefield with embers, frozen citadel approach, moonlit forest shrine, plague-torn gothic city, arcane observatory tower, stormy cliffside fortress, torch-lit throne hall, or desert titan ruins. Use real atmospheric depth (fog/haze/particles) and physically coherent light interaction with armor. "
+            "ARMOR QUALITY MANDATE (very important): avoid generic repetitive armor. Build a unique class- and race-specific Warcraft-grade set with complex layered construction: distinct silhouette, asymmetrical hero pieces, sculpted pauldrons, engraved cuirass, articulated gauntlets, belts/trophies/talismans, cloth+metal+leather mixing, believable wear/micro-scratches, and high material separation. Each generation must produce clearly different armor language across classes (e.g., Paladin holy ornate plate vs Rogue segmented leather vs Warlock cursed runic armor). Weapon/focus must match class fantasy and quality tier. "
+            "RENDER RULES: cinematic realism with strong key/rim lighting, volumetric atmosphere, grounded glow effects (runes/fel/frost/holy), no over-neon arcade. Composition should feel like Blizzard trailer character hero shot (mid/three-quarter, environment readable, not just empty background). "
+            "NEGATIVE: generic same-looking armor, low-detail primitive armor, mobile-RPG icon style, in-game character-select shader, cartoon/anime/painterly styles, flat background with no location story, plastic toy materials, floating head only, extra people, readable logos/UI/HUD, watermark text, duplicate faces, wrong identity.",
             1,
         ),
     ],
@@ -404,7 +448,8 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
 # Доп. изображения для API (extra_refs): только лицо Мухаммада Али для соответствующей идеи — не путать с *_preview ниже.
 _READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str] = {
     "Победа над Мухаммадом Али на ринге": r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_114b8c4714b8b9b1196d51ad8d72a-1b94cd0d-73ba-44de-b3da-08a08fade423.png",
-    "Absolute Cinema": r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_image-b74693f7-14bb-4896-9e4c-9d2d88a635a4.png",
+    "Absolute Cinema": r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_image-12bb8ef0-9f93-46b6-9971-188e07110cf6.png",
+    _MMORPG_HERO_TITLE: r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_image-26619a18-9d1f-481a-bc31-f9dd8e46575d.png",
 }
 
 # Превью для листания идей в Telegram (_ready_idea_listing_photo_path → подпись к сообщению).
@@ -2430,6 +2475,15 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             await callback.answer("Сначала введи текст.", show_alert=True)
             await state.set_state(ImageGenState.ready_waiting_poster_text)
             return
+        mmorpg_pick: tuple[str, str] | None = None
+        if (title or "").strip() == _MMORPG_HERO_TITLE:
+            mmorpg_pick = _pick_mmorpg_race_class(callback.from_user.id)
+            pick_race, pick_class = mmorpg_pick
+            base_prompt = (
+                f"{base_prompt} "
+                f"FOR THIS GENERATION (HARD LOCK): selected race = {pick_race}; selected class = {pick_class}. "
+                "Do not pick or mix any other race/class in this run."
+            )
         # Для Minecraft-идеи ник берём из шага ввода и передаём в prompt как точный текст над головой.
         include_nick = False
         overlay_nick = None
@@ -2517,10 +2571,15 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
                     "purely from the base prompt text — do not rely on an attached style reference photo."
                 )
             if (title or "").strip() == _MMORPG_HERO_TITLE:
+                pick_suffix = ""
+                if mmorpg_pick is not None:
+                    pr, pc = mmorpg_pick
+                    pick_suffix = f" Forced choice for this run: race={pr}, class={pc}."
                 refs_hint = (
-                    "Reference mapping: image #1 is the USER identity — face, body-type cues, and likeness from this upload (adapt to chosen race per base prompt). "
-                    "No second reference image: derive photoreal dark-fantasy armor, dungeon atmosphere, cinematic lighting, and gear detail "
-                    "purely from the base prompt text — do not rely on an attached style or quality reference photo."
+                    "Reference mapping: image #1 is the USER identity — face, body-type cues, and likeness (preserve this person). "
+                    "Image #2 is Warcraft cinematic style/quality reference — use it for armor complexity, material richness, class silhouette variety, "
+                    "and epic location mood only; do NOT copy identity/face/body from image #2."
+                    f"{pick_suffix}"
                 )
             if title == "Победа над Мухаммадом Али на ринге":
                 refs_hint = "Reference mapping: image #1 is user identity photo. Image #2 is Muhammad Ali identity photo."

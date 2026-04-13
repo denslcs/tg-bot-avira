@@ -1,6 +1,6 @@
-# Шпаргалка: сервер и боты Avira
+# Шпаргалка: сервер и боты Shard Creator
 
-Условия: Linux VPS, пользователь `root`, проект `/root/avira-bot`, службы `avira-main-bot` и `avira-support-bot`.
+Условия: Linux VPS, пользователь `root`, проект `/root/shard-creator-bot`, службы `shard-creator-main-bot` и `shard-creator-support-bot`.
 
 ---
 
@@ -28,22 +28,22 @@ ssh root@95.164.53.78
 ## Остановить / запустить / перезапустить ботов (systemd)
 
 ```bash
-sudo systemctl stop avira-main-bot avira-support-bot
-sudo systemctl start avira-main-bot avira-support-bot
-sudo systemctl restart avira-main-bot avira-support-bot
+sudo systemctl stop shard-creator-main-bot shard-creator-support-bot
+sudo systemctl start shard-creator-main-bot shard-creator-support-bot
+sudo systemctl restart shard-creator-main-bot shard-creator-support-bot
 ```
 
 Проверка без «листателя»:
 
 ```bash
-sudo systemctl status avira-main-bot --no-pager
-sudo systemctl status avira-support-bot --no-pager
+sudo systemctl status shard-creator-main-bot --no-pager
+sudo systemctl status shard-creator-support-bot --no-pager
 ```
 
 Включены ли в автозапуск:
 
 ```bash
-sudo systemctl is-enabled avira-main-bot avira-support-bot
+sudo systemctl is-enabled shard-creator-main-bot shard-creator-support-bot
 ```
 
 ---
@@ -53,21 +53,21 @@ sudo systemctl is-enabled avira-main-bot avira-support-bot
 Последние 80 строк:
 
 ```bash
-sudo journalctl -u avira-main-bot -n 80 --no-pager
-sudo journalctl -u avira-support-bot -n 80 --no-pager
+sudo journalctl -u shard-creator-main-bot -n 80 --no-pager
+sudo journalctl -u shard-creator-support-bot -n 80 --no-pager
 ```
 
 Лог «в реальном времени» (выйти: Ctrl+C):
 
 ```bash
-sudo journalctl -u avira-main-bot -f
+sudo journalctl -u shard-creator-main-bot -f
 ```
 
 После правки unit-файлов:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl restart avira-main-bot avira-support-bot
+sudo systemctl restart shard-creator-main-bot shard-creator-support-bot
 ```
 
 ---
@@ -77,14 +77,14 @@ sudo systemctl restart avira-main-bot avira-support-bot
 Сначала останови systemd, иначе будет два процесса одного бота:
 
 ```bash
-sudo systemctl stop avira-main-bot
-# или оба: sudo systemctl stop avira-main-bot avira-support-bot
+sudo systemctl stop shard-creator-main-bot
+# или оба: sudo systemctl stop shard-creator-main-bot shard-creator-support-bot
 ```
 
 Потом:
 
 ```bash
-cd /root/avira-bot
+cd /root/shard-creator-bot
 source venv/bin/activate
 python -m src.bot
 ```
@@ -92,7 +92,7 @@ python -m src.bot
 Во втором SSH-окне — support:
 
 ```bash
-cd /root/avira-bot
+cd /root/shard-creator-bot
 source venv/bin/activate
 python -m src.support_bot
 ```
@@ -100,7 +100,7 @@ python -m src.support_bot
 Закончил отладку — Ctrl+C, снова:
 
 ```bash
-sudo systemctl start avira-main-bot avira-support-bot
+sudo systemctl start shard-creator-main-bot shard-creator-support-bot
 ```
 
 ---
@@ -110,11 +110,11 @@ sudo systemctl start avira-main-bot avira-support-bot
 Команды ниже выполняй **на сервере** после `ssh` (в PowerShell на ПК команда `systemctl` не сработает).
 
 ```bash
-cd /root/avira-bot
+cd /root/shard-creator-bot
 git pull
 source venv/bin/activate
 pip install -r requirements.txt
-sudo systemctl restart avira-main-bot avira-support-bot
+sudo systemctl restart shard-creator-main-bot shard-creator-support-bot
 ```
 
 ---
@@ -122,13 +122,13 @@ sudo systemctl restart avira-main-bot avira-support-bot
 ## Правка `.env` на сервере
 
 ```bash
-nano /root/avira-bot/.env
+nano /root/shard-creator-bot/.env
 ```
 
 После сохранения:
 
 ```bash
-sudo systemctl restart avira-main-bot avira-support-bot
+sudo systemctl restart shard-creator-main-bot shard-creator-support-bot
 ```
 
 ---
@@ -142,8 +142,8 @@ sudo reboot
 Через 1–2 минуты снова `ssh`, затем проверка:
 
 ```bash
-sudo systemctl status avira-main-bot --no-pager
-sudo systemctl status avira-support-bot --no-pager
+sudo systemctl status shard-creator-main-bot --no-pager
+sudo systemctl status shard-creator-support-bot --no-pager
 ```
 
 ---
@@ -162,8 +162,8 @@ sudo systemctl status avira-support-bot --no-pager
 ## Файлы systemd (если нужно поправить пути)
 
 ```bash
-sudo nano /etc/systemd/system/avira-main-bot.service
-sudo nano /etc/systemd/system/avira-support-bot.service
+sudo nano /etc/systemd/system/shard-creator-main-bot.service
+sudo nano /etc/systemd/system/shard-creator-support-bot.service
 sudo systemctl daemon-reload
-sudo systemctl restart avira-main-bot avira-support-bot
+sudo systemctl restart shard-creator-main-bot shard-creator-support-bot
 ```

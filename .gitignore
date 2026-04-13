@@ -50,8 +50,8 @@ Thumbs.db
 Desktop.ini
 
 # Локальные systemd unit-файлы (в репозитории — только *.service.example)
-deploy/avira-main-bot.service
-deploy/avira-support-bot.service
+deploy/shard-creator-main-bot.service
+deploy/shard-creator-support-bot.service
 
 # Cursor / локальные артефакты воркспейса (при необходимости раскомментируй)
 # .cursor/
