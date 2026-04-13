@@ -46,7 +46,7 @@ from src.config import (
 )
 from src.database import (
     ImageChargeMeta,
-    add_credits,
+    add_credits_with_reason,
     add_idea_tokens,
     ensure_user,
     get_credits,
@@ -59,7 +59,7 @@ from src.database import (
     release_nonsub_ready_idea_slot,
     save_last_image_context,
     subscription_is_active,
-    take_credits,
+    take_credits_with_reason,
     try_consume_idea_token,
     try_reserve_daily_image_generation,
     try_reserve_nonsub_image_quota_slot,
@@ -368,14 +368,15 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             _MMORPG_HERO_TITLE,
             "Погрузись в мир MMORPG: тёмное фэнтези, эпический герой и дух большой RPG — как в лучших кинематографичных трейлерах.",
-            "Premium MMORPG / RPG hero portrait — STRICT BLIZZARD-CINEMATIC REALISM: the final image must look like a frame from a high-budget World of Warcraft CGI trailer (cinematic realism), NOT like in-game render, splash art, or stylized illustration. Target look: dark-fantasy epic character shot with physically plausible lighting, realistic skin microtexture, convincing materials, and high-end cinematic depth. CRITICAL IDENTITY LOCK (highest priority): image #1 is the ONLY face/body identity source. The OUTPUT must still read unmistakably as THIS SAME PERSON — even when transformed into Warcraft race traits. Preserve eye spacing/shape, brow-to-eye relationship, nose structure, mouth/lip silhouette, jaw/chin geometry, cheek volume, and age cues; apply race anatomy as a layer, not a replacement face. Do NOT replace with another person; no beautification drift; no generic NPC face template. UNISEX / PRESENTATION: infer apparent gender presentation from the reference and match armor silhouette/proportions accordingly (no default male/female stereotype set). "
+            "Premium MMORPG / RPG hero portrait — STRICT BLIZZARD PRE-RENDERED CINEMATIC (not game-shader): the final image must look like a single frame from a Blizzard Entertainment World of Warcraft cinematic trailer (offline CGI / film-quality), NOT like in-game engine render, character select screen, splash art, or stylized illustration. Avoid the clean \"cartoon CG\" look: no plastic skin, no toy-like metal, no flat gradient lighting, no overly smooth faces. Target: dark-fantasy epic hero shot with film-grade depth, physically plausible lighting, subsurface scattering on skin, realistic skin pores and microtexture, hair rendered as fine strands (not chunky clumps), believable metal wear (scratches, edge wear, micro-scratches), leather grain, fabric weave, and complex reflections — the same quality bar as high-end WoW expansion cinematics (pre-rendered), not real-time gameplay graphics. CRITICAL IDENTITY LOCK (highest priority): image #1 is the ONLY face/body identity source. The OUTPUT must still read unmistakably as THIS SAME PERSON — even when transformed into Warcraft race traits. Preserve eye spacing/shape, brow-to-eye relationship, nose structure, mouth/lip silhouette, jaw/chin geometry, cheek volume, and age cues; apply race anatomy as a layer, not a replacement face. Do NOT replace with another person; no beautification drift; no generic NPC face template. UNISEX / PRESENTATION: infer apparent gender presentation from the reference and match armor silhouette/proportions accordingly (no default male/female stereotype set). "
             "RANDOM BUILD (mandatory — pick ONE internally consistent set; do not label text on image): "
             "(1) RACE — RANDOM PICK exactly ONE race from this World of Warcraft list only: Orc, Undead, Human, Elf, Gnome, Goblin, Worgen, Draenei, Troll, Void Elf, Nightborne. Do not invent or use races outside this list. Apply race styling as a veneer: tusks/ears/horns/skin tone must conform to the user's facial geometry from image #1, not erase it. "
             "(2) CLASS — RANDOM PICK exactly ONE class from this World of Warcraft list only: Warrior, Mage, Warlock, Paladin, Priest, Rogue, Demon Hunter, Death Knight, Druid, Hunter (Archer). Do not invent or use classes outside this list. Class must be instantly readable from silhouette + gear language + VFX accents. "
             "(3) LOCATION — RANDOM PICK exactly ONE Warcraft-like cinematic environment and commit to it: burning battlefield with embers, frozen citadel approach, moonlit forest shrine, plague-torn gothic city, arcane observatory tower, stormy cliffside fortress, torch-lit throne hall, or desert titan ruins. Use real atmospheric depth (fog/haze/particles) and physically coherent light interaction with armor. "
             "ARMOR QUALITY MANDATE (very important): avoid generic repetitive armor. Build a unique class- and race-specific Warcraft-grade set with complex layered construction: distinct silhouette, asymmetrical hero pieces, sculpted pauldrons, engraved cuirass, articulated gauntlets, belts/trophies/talismans, cloth+metal+leather mixing, believable wear/micro-scratches, and high material separation. Each generation must produce clearly different armor language across classes (e.g., Paladin holy ornate plate vs Rogue segmented leather vs Warlock cursed runic armor). Weapon/focus must match class fantasy and quality tier. "
-            "RENDER RULES: cinematic realism with strong key/rim lighting, volumetric atmosphere, grounded glow effects (runes/fel/frost/holy), no over-neon arcade. Composition should feel like Blizzard trailer character hero shot (mid/three-quarter, environment readable, not just empty background). "
-            "NEGATIVE: generic same-looking armor, low-detail primitive armor, mobile-RPG icon style, in-game character-select shader, cartoon/anime/painterly styles, flat background with no location story, plastic toy materials, floating head only, extra people, readable logos/UI/HUD, watermark text, duplicate faces, wrong identity.",
+            "CINEMATIC CAMERA SPEC: film still look — shallow depth of field where appropriate, subtle lens vignette, gentle film grain, restrained color grading (cinematic contrast, not candy saturation), optional subtle anamorphic flare; no harsh HDR glow, no mobile-game bloom. Magic/VFX must feel physically grounded (light interacts with smoke, fog, surfaces) and not like flat neon stickers. "
+            "RENDER RULES: strong key/rim lighting, volumetric atmosphere, grounded glow effects (runes/fel/frost/holy), no over-neon arcade. Composition: Blizzard trailer character hero shot (mid/three-quarter), environment readable; image #2 (if present) is style/composition/armor quality reference only — do not copy a face from it. "
+            "NEGATIVE: generic same-looking armor, low-detail primitive armor, mobile-RPG icon style, in-game character-select shader, real-time game engine look, Fortnite/Overwatch-style clean stylization, chibi proportions, exaggerated toon shading, cartoon/anime/painterly styles, flat background with no location story, plastic toy materials, wax skin, chunky hair clumps, floating head only, extra people, readable logos/UI/HUD, watermark text, duplicate faces, wrong identity.",
             1,
         ),
     ],
@@ -688,7 +689,7 @@ async def _rollback_generation_charge(
     if meta.daily_reserved:
         await release_daily_image_generation(user_id, usage_kind)
     if meta.credit_charged:
-        await add_credits(user_id, cost)
+        await add_credits_with_reason(user_id, cost, source="image_refund", details="refund after generation fail")
     if meta.nonsub_quota_reserved:
         await release_nonsub_image_quota_slot(user_id)
     if meta.nonsub_ready_reserved:
@@ -932,7 +933,7 @@ async def _prepare_image_charge_and_daily_slot(
             )
             return False, None
         if charge:
-            ok = await take_credits(user_id, cost)
+            ok = await take_credits_with_reason(user_id, cost, source="image_generate", details="manual prompt")
             if not ok:
                 if meta.nonsub_ready_reserved:
                     await release_nonsub_ready_idea_slot(user_id)
@@ -950,7 +951,7 @@ async def _prepare_image_charge_and_daily_slot(
 
     if is_ready and has_active_sub:
         if charge:
-            ok = await take_credits(user_id, cost)
+            ok = await take_credits_with_reason(user_id, cost, source="image_generate", details="edit mode")
             if not ok:
                 balance = await get_credits(user_id)
                 extra = (
@@ -979,7 +980,7 @@ async def _prepare_image_charge_and_daily_slot(
             return False, None
         meta.nonsub_quota_reserved = True
         if charge:
-            ok = await take_credits(user_id, cost)
+            ok = await take_credits_with_reason(user_id, cost, source="ready_idea_generate", details="ready idea")
             if not ok:
                 await release_nonsub_image_quota_slot(user_id)
                 balance = await get_credits(user_id)
@@ -993,7 +994,7 @@ async def _prepare_image_charge_and_daily_slot(
         return True, meta
 
     if charge:
-        ok = await take_credits(user_id, cost)
+        ok = await take_credits_with_reason(user_id, cost, source="image_generate", details="retry generation")
         if not ok:
             balance = await get_credits(user_id)
             extra = (
@@ -1012,7 +1013,7 @@ async def _prepare_image_charge_and_daily_slot(
     if not await try_reserve_daily_image_generation(user_id, usage_kind):
         used, limit = await get_daily_image_generation_usage(user_id, usage_kind)
         if meta.credit_charged:
-            await add_credits(user_id, cost)
+            await add_credits_with_reason(user_id, cost, source="image_refund", details="refund after failed retry")
         await message.answer(
             "<b>Лимит занят</b>\n"
             f"<blockquote><i>Параллельный запрос.</i> Сегодня (МСК): <b>{esc(used)}/{esc(limit)}</b>. "

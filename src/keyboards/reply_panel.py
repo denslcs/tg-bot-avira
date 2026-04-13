@@ -6,6 +6,7 @@ def quick_panel_keyboard() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text="💰 Баланс"), KeyboardButton(text="📋 Меню")],
             [KeyboardButton(text="💬 Поддержка"), KeyboardButton(text="👥 Реф. система")],
+            [KeyboardButton(text="📊 История бюджета")],
         ],
         resize_keyboard=True,
         is_persistent=True,

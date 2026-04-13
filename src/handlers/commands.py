@@ -33,20 +33,21 @@ from src.config import (
 from src.antispam_state import reset_user_spam
 from src.private_rate_limit import reset_private_rate
 from src.database import (
-    add_credits,
+    add_credits_with_reason,
     apply_referral,
     clear_dialog_messages,
     count_generated_images_total,
     ensure_user,
+    get_budget_history_recent,
     get_credits,
     get_daily_image_generation_usage,
     get_nonsub_image_quota_status,
     get_referral_count,
     get_user_admin_profile,
     subscription_is_active,
-    take_credits,
+    take_credits_with_reason,
 )
-from src.subscription_catalog import NONSUB_IMAGE_WINDOW_DAYS, PLANS
+from src.subscription_catalog import PLANS
 from src.formatting import HTML, esc, format_subscription_ends_at
 from src.keyboards.callback_data import (
     CB_IMG_OK,
@@ -68,6 +69,21 @@ from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 router = Router(name="commands")
 
 _BACK_TO_MENU_ROW = [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)]
+
+
+def _budget_source_label(source: str) -> str:
+    labels = {
+        "credit_add": "Начисление",
+        "credit_spend": "Списание",
+        "admin_add": "Админ начислил",
+        "admin_take": "Админ списал",
+        "image_generate": "Генерация изображения",
+        "ready_idea_generate": "Готовая идея",
+        "subscription_bonus": "Бонус подписки",
+        "bonus_pack": "Бонус-пакет",
+        "subscription_purchase": "Покупка подписки",
+    }
+    return labels.get(source, source or "Операция")
 
 
 def _main_screen_text(balance: int, bonus_note: str = "") -> str:
@@ -419,6 +435,31 @@ async def quick_panel_ref(message: Message) -> None:
     await deliver_referral_screen(message.bot, message.from_user.id, message.from_user.username, message)
 
 
+@router.message(F.text == "📊 История бюджета")
+async def quick_panel_budget_history(message: Message) -> None:
+    if not message.from_user:
+        return
+    rows = await get_budget_history_recent(message.from_user.id, days=7, limit=20)
+    if not rows:
+        await message.answer(
+            "<b>📊 История бюджета (7 дней)</b>\n"
+            "<blockquote><i>Пока нет записей за последнюю неделю.</i></blockquote>",
+            parse_mode=HTML,
+            reply_markup=back_to_main_menu_keyboard(),
+        )
+        return
+    lines = ["<b>📊 История бюджета (7 дней)</b>", "<blockquote>"]
+    for item in rows:
+        sign = "+" if item.delta > 0 else ""
+        delta_text = f"{sign}{item.delta}" if item.delta else "0"
+        details = f" — {esc(item.details)}" if item.details else ""
+        lines.append(
+            f"• <b>{esc(delta_text)}</b> кр. · <i>{esc(_budget_source_label(item.source))}</i>{details}"
+        )
+    lines.append("</blockquote>")
+    await message.answer("\n".join(lines), parse_mode=HTML, reply_markup=back_to_main_menu_keyboard())
+
+
 @router.callback_query(F.data == CB_MENU_BACK_START)
 async def menu_back_start(callback: CallbackQuery, state: FSMContext) -> None:
     if not callback.from_user or not callback.message:
@@ -746,49 +787,21 @@ async def _profile_card_html(user_id: int, username_raw: str | None) -> tuple[st
         )
         plan_name = "—"
     gen_total = await count_generated_images_total(user_id)
-    days_in_bot = _days_in_bot(profile.created_at)
-    if active_sub:
-        img_limits_line = (
-            "<i>Картинки:</i> без дневного лимита, списание по кредитам.\n"
-        )
-    else:
-        fu, flim = await get_nonsub_image_quota_status(user_id)
-        img_limits_line = (
-            f"<i>Картинки без подписки (цикл до {esc(flim)} шт.):</i> <b>{esc(fu)}/{esc(flim)}</b> "
-            f"<i>— после исчерпания цикл обновится через {NONSUB_IMAGE_WINDOW_DAYS} суток от этого момента (UTC); "
-            "кредиты не обходят лимит.</i>\n"
-        )
-    if active_sub:
-        ready_limits_line = "<i>Готовые идеи:</i> без лимита по подписке.\n"
-    else:
-        ready_limits_line = (
-            f"<i>Готовые идеи без подписки (цикл {esc(rlim)} шт.):</i> <b>{esc(ru)}/{esc(rlim)}</b> "
-            f"<i>— бесплатный слот в цикле; после исчерпания следующий через {NONSUB_IMAGE_WINDOW_DAYS} суток от момента "
-            "исчерпания (UTC). Дополнительно: +1 запуск за каждых 2 приглашённых друзей по /ref.</i>\n"
-        )
-    starter_cta = ""
-    if not active_sub and profile.starter_trial_used:
-        starter_cta = (
-            "\n<blockquote><b>Пробный Starter уже был.</b> "
-            "Оформи полный тариф: <code>/start</code> → <b>Оплатить</b> (Nova, SuperNova, Galaxy, Universe).</blockquote>"
-        )
+    fu, flim = await get_nonsub_image_quota_status(user_id)
+    ready_cycle = "без лимита" if active_sub else f"{ru}/{rlim}"
+    img_cycle = "без лимита" if active_sub else f"{fu}/{flim}"
     body = (
         "<b>👤 Профиль</b>\n"
         "<blockquote>"
         f"<i>Ник:</i> <b>{esc(username)}</b>\n"
-        f"<i>ID:</i> <code>{esc(user_id)}</code>\n"
         f"<i>💰 Кредиты:</i> <b>{esc(balance)}</b>\n"
-        f"<i>🖼 Примерно доступно генераций:</i> <b>{esc(approx_images)}</b> <i>(из расчёта 30 кредитов за 1 изображение)</i>\n"
-        f"<i>🎯 Бонусные запуски «Готовых идей» (за рефералов):</i> <b>{esc(ready_bonus_uses)}</b>\n"
-        f"<i>Подписка:</i> <b>{esc(sub_status)}</b>\n"
-        f"<i>Тариф:</i> <b>{esc(plan_name)}</b>\n"
-        f"<i>Окончание:</i> <b>{esc(sub_till)}</b>\n"
+        f"<i>🖼 Примерно доступно генераций:</i> <b>{esc(approx_images)}</b>\n"
+        f"<i>🎯 Готовые идеи:</i> <b>{esc(ready_cycle)}</b>\n"
+        f"<i>🧾 Картинки:</i> <b>{esc(img_cycle)}</b>\n"
+        f"<i>🎁 Бонусные запуски (реф):</i> <b>{esc(ready_bonus_uses)}</b>\n"
+        f"<i>Подписка:</i> <b>{esc(sub_status)}</b> · <i>{esc(plan_name)}</i>\n"
         f"<i>Сгенерировано изображений:</i> <b>{esc(gen_total)}</b>\n"
-        f"<i>Дней в боте:</i> <b>{esc(days_in_bot)}</b>\n"
-        f"{img_limits_line}"
-        f"{ready_limits_line}"
         "</blockquote>"
-        f"{starter_cta}"
     )
     return body, back_to_main_menu_keyboard()
 
@@ -983,7 +996,12 @@ async def cmd_addcredits(message: Message) -> None:
         return
 
     await ensure_user(target_user_id, None)
-    ok = await add_credits(target_user_id, amount)
+    ok = await add_credits_with_reason(
+        target_user_id,
+        amount,
+        source="admin_add",
+        details=f"/addcredits by {message.from_user.id}",
+    )
     if not ok:
         await message.answer("Не удалось начислить кредиты.")
         return
@@ -1026,7 +1044,12 @@ async def cmd_takecredits(message: Message) -> None:
             f"запрошено списать {amount}. Списание не выполнено."
         )
         return
-    ok = await take_credits(target_user_id, amount)
+    ok = await take_credits_with_reason(
+        target_user_id,
+        amount,
+        source="admin_take",
+        details=f"/takecredits by {message.from_user.id}",
+    )
     if not ok:
         await message.answer("Не удалось списать кредиты (попробуй ещё раз).")
         return

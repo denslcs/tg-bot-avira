@@ -37,7 +37,8 @@ from src.config import (
     SUPPORT_BOT_USERNAME,
 )
 from src.database import (
-    add_credits,
+    add_credits_with_reason,
+    add_budget_history_event,
     ensure_user,
     get_user_admin_profile,
     mark_starter_trial_purchased,
@@ -717,7 +718,18 @@ async def successful_payment(message: Message) -> None:
             await mark_starter_trial_purchased(message.from_user.id)
         else:
             await record_subscription_purchase_now(message.from_user.id)
-        credited = await add_credits(message.from_user.id, p.bonus_credits)
+        credited = await add_credits_with_reason(
+            message.from_user.id,
+            p.bonus_credits,
+            source="subscription_bonus",
+            details=f"plan {item_id}",
+        )
+        await add_budget_history_event(
+            message.from_user.id,
+            source="subscription_purchase",
+            details=f"plan {item_id}",
+            delta=0,
+        )
         end_h = format_subscription_ends_at(new_end)
         q_lines = [
             f"<i>Срок:</i> <b>{esc(p.period_days)}</b> дн.; действует до <b>{esc(end_h)}</b>",
@@ -770,7 +782,12 @@ async def successful_payment(message: Message) -> None:
         await message.answer("Оплата получена, но пакет не найден. Напиши в поддержку.")
         return
     b = BONUS_PACKS[item_id]
-    credited = await add_credits(message.from_user.id, b.credits)
+    credited = await add_credits_with_reason(
+        message.from_user.id,
+        b.credits,
+        source="bonus_pack",
+        details=f"pack {item_id}",
+    )
     if credited:
         await message.answer(
             "<b>Оплата прошла ✅</b>\n"

@@ -101,6 +101,14 @@ class LastImageContext:
     usage_kind: str = "self"
 
 
+@dataclass
+class BudgetHistoryItem:
+    delta: int
+    source: str
+    details: str
+    created_at: str
+
+
 async def _migrate_schema(db: aiosqlite.Connection) -> None:
     async with db.execute("PRAGMA table_info(users)") as cur:
         cols = {row[1] for row in await cur.fetchall()}
@@ -333,6 +341,22 @@ async def init_db() -> None:
             )
             """
         )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_budget_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                delta INTEGER NOT NULL DEFAULT 0,
+                source TEXT NOT NULL,
+                details TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_user_budget_history_user_time "
+            "ON user_budget_history (user_id, created_at DESC)"
+        )
         await _migrate_schema(db)
         await _migrate_support_tickets(db)
         await _migrate_support_ratings_feedback(db)
@@ -484,9 +508,25 @@ async def clear_dialog_messages(user_id: int) -> None:
 
 
 async def add_credits(user_id: int, amount: int) -> bool:
+    return await add_credits_with_reason(user_id, amount)
+
+
+async def add_credits_with_reason(
+    user_id: int,
+    amount: int,
+    *,
+    source: str = "credit_add",
+    details: str = "",
+) -> bool:
     if amount <= 0:
         return False
     async with open_db() as db:
+        await db.execute(
+            """
+            DELETE FROM user_budget_history
+            WHERE datetime(created_at) < datetime('now', '-7 days')
+            """
+        )
         cur = await db.execute(
             """
             UPDATE users
@@ -495,15 +535,39 @@ async def add_credits(user_id: int, amount: int) -> bool:
             """,
             (amount, user_id),
         )
+        if cur.rowcount > 0:
+            await db.execute(
+                """
+                INSERT INTO user_budget_history (user_id, delta, source, details)
+                VALUES (?, ?, ?, ?)
+                """,
+                (user_id, amount, source, details),
+            )
         await db.commit()
         return cur.rowcount > 0
 
 
 async def take_credits(user_id: int, amount: int) -> bool:
+    return await take_credits_with_reason(user_id, amount)
+
+
+async def take_credits_with_reason(
+    user_id: int,
+    amount: int,
+    *,
+    source: str = "credit_spend",
+    details: str = "",
+) -> bool:
     """Списывает ровно amount, только если баланса хватает. Иначе баланс не меняется."""
     if amount <= 0:
         return False
     async with open_db() as db:
+        await db.execute(
+            """
+            DELETE FROM user_budget_history
+            WHERE datetime(created_at) < datetime('now', '-7 days')
+            """
+        )
         cur = await db.execute(
             """
             UPDATE users
@@ -512,8 +576,78 @@ async def take_credits(user_id: int, amount: int) -> bool:
             """,
             (amount, user_id, amount),
         )
+        if cur.rowcount > 0:
+            await db.execute(
+                """
+                INSERT INTO user_budget_history (user_id, delta, source, details)
+                VALUES (?, ?, ?, ?)
+                """,
+                (user_id, -amount, source, details),
+            )
         await db.commit()
         return cur.rowcount > 0
+
+
+async def add_budget_history_event(
+    user_id: int,
+    *,
+    source: str,
+    details: str,
+    delta: int = 0,
+) -> None:
+    async with open_db() as db:
+        await db.execute(
+            """
+            DELETE FROM user_budget_history
+            WHERE datetime(created_at) < datetime('now', '-7 days')
+            """
+        )
+        await db.execute(
+            """
+            INSERT INTO user_budget_history (user_id, delta, source, details)
+            VALUES (?, ?, ?, ?)
+            """,
+            (user_id, delta, source, details),
+        )
+        await db.commit()
+
+
+async def get_budget_history_recent(
+    user_id: int,
+    *,
+    days: int = 7,
+    limit: int = 30,
+) -> list[BudgetHistoryItem]:
+    days_safe = max(1, min(30, int(days)))
+    limit_safe = max(1, min(100, int(limit)))
+    async with open_db() as db:
+        await db.execute(
+            """
+            DELETE FROM user_budget_history
+            WHERE datetime(created_at) < datetime('now', '-7 days')
+            """
+        )
+        async with db.execute(
+            """
+            SELECT delta, source, details, created_at
+            FROM user_budget_history
+            WHERE user_id = ?
+              AND datetime(created_at) >= datetime('now', ?)
+            ORDER BY datetime(created_at) DESC, id DESC
+            LIMIT ?
+            """,
+            (user_id, f"-{days_safe} days", limit_safe),
+        ) as cur:
+            rows = await cur.fetchall()
+    return [
+        BudgetHistoryItem(
+            delta=int(row[0] or 0),
+            source=str(row[1] or ""),
+            details=str(row[2] or ""),
+            created_at=str(row[3] or ""),
+        )
+        for row in rows
+    ]
 
 
 async def apply_referral(invitee_user_id: int, inviter_user_id: int) -> bool:
