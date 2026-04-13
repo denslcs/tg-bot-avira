@@ -22,6 +22,7 @@ from src.database import (
 from src.handlers.global_errors import USER_GENERIC_ERROR
 from src.keyboards.main_menu import start_menu_keyboard
 from src.private_rate_limit import check_private_message_rate
+from src.formatting import HTML
 from src.support_state import (
     append_support_draft,
     clear_support_draft,
@@ -148,14 +149,13 @@ async def any_message(message: Message, state: FSMContext) -> None:
             return
 
     reply_text = (
-        "Привет! Я Shard Creator ✨\n\n"
-        "Твой креативный AI-ассистент для контента и изображений.\n\n"
-        "Что могу прямо сейчас:\n"
-        "• Генерировать картинки по твоей идее\n"
-        "• Запускать готовые сцены и стили в один клик\n"
-        "• Помогать с текстами, подписями и формулировками\n"
-        "• Держать контекст диалога, чтобы работать быстрее\n\n"
-        "Выбирай, с чего начать: «Создать картинку», «Готовые идеи», «Профиль» или «Оплатить»."
+        "<b>✨ Shard Creator на связи</b>\n"
+        "<i>Твой AI-помощник для контента и изображений.</i>\n\n"
+        "<b>Что можно сделать прямо сейчас:</b>\n"
+        "• Запустить генерацию по своей идее\n"
+        "• Выбрать готовый стиль и сцену\n"
+        "• Посмотреть баланс и подписку\n\n"
+        "<blockquote><i>Нажми «📋 Меню», чтобы открыть все разделы, или отправь фото и запрос — начнем сразу.</i></blockquote>"
     )
     try:
         await add_dialog_message(user_id, "user", text)
@@ -164,7 +164,7 @@ async def any_message(message: Message, state: FSMContext) -> None:
         logger.exception("add_dialog_message failed user_id=%s", user_id)
 
     try:
-        await message.answer(reply_text, reply_markup=start_menu_keyboard())
+        await message.answer(reply_text, reply_markup=start_menu_keyboard(), parse_mode=HTML)
     except Exception:
         logger.exception("answer fallback menu failed user_id=%s", user_id)
         try:

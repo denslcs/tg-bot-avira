@@ -11,6 +11,9 @@ CB_MENU_PROFILE = "menu:profile"
 CB_MENU_ABOUT = "menu:about"
 CB_MENU_PAY = "menu:pay"
 CB_MENU_SUPPORT = "menu:support"
+CB_MENU_HUB = "menu:hub"
+CB_MENU_FAQ = "menu:faq"
+CB_MENU_CHANNEL = "menu:channel"
 
 # --- Генерация изображений (handlers/img_commands.py) ---
 CB_CREATE_IMAGE = "menu:create_image"
@@ -59,6 +62,9 @@ __all__ = [
     "CB_IMG_OK",
     "CB_MENU_ABOUT",
     "CB_MENU_BACK_START",
+    "CB_MENU_CHANNEL",
+    "CB_MENU_FAQ",
+    "CB_MENU_HUB",
     "CB_MENU_PAY",
     "CB_MENU_PROFILE",
     "CB_MENU_REF",

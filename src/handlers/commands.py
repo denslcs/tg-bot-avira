@@ -24,6 +24,7 @@ from aiogram.types import (
 
 from src.config import (
     ADMIN_IDS,
+    CHANNEL_URL,
     PROJECT_ROOT,
     START_ANNOUNCEMENT,
     START_ANNOUNCEMENT_IMAGE,
@@ -51,13 +52,16 @@ from src.keyboards.callback_data import (
     CB_IMG_OK,
     CB_MENU_ABOUT,
     CB_MENU_BACK_START,
+    CB_MENU_CHANNEL,
+    CB_MENU_FAQ,
+    CB_MENU_HUB,
     CB_MENU_PROFILE,
     CB_MENU_REF,
     CB_MENU_REF_LEGACY,
     CB_MENU_SUPPORT,
     CB_REGEN,
 )
-from src.keyboards.main_menu import back_to_main_menu_keyboard, start_menu_keyboard
+from src.keyboards.main_menu import back_to_main_menu_keyboard, menu_hub_keyboard, start_menu_keyboard
 from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 
 router = Router(name="commands")
@@ -68,10 +72,14 @@ _BACK_TO_MENU_ROW = [InlineKeyboardButton(text="⬅️ Назад", callback_dat
 def _main_screen_text(balance: int, bonus_note: str = "") -> str:
     bonus_html = esc(bonus_note) if bonus_note else ""
     return (
-        "🖼 <b>Создай или измени фото</b> с помощью ИИ.\n\n"
-        "<b>Главное:</b> 🎨 <i>Создать картинку</i> и 💡 <i>Готовые идеи</i>.\n"
-        "<i>Остальное — профиль, оплата, поддержка и справка.</i>\n\n"
-        "<blockquote><i>Открой «Профиль», чтобы посмотреть баланс, статус подписки и лимиты.</i>"
+        "<b>✨ Добро пожаловать в Shard Creator</b>\n"
+        "<i>Создание и изменение фото в пару кликов.</i>\n\n"
+        "<b>🚀 Быстрый старт:</b>\n"
+        "✅ Открой <b>«📋 Меню»</b> — там все разделы: идеи, подписки, FAQ и рефералка.\n"
+        "✅ Нажми <b>«💰 Баланс»</b> — увидишь кредиты, статистику и лимиты.\n"
+        "✅ Или сразу отправь фото + короткий запрос, и я соберу готовый результат.\n\n"
+        "<blockquote><b>💡 Подсказка:</b> <i>чем точнее задача в одном сообщении, тем лучше и быстрее итоговая генерация.</i></blockquote>\n\n"
+        "<blockquote><i>Продолжая работу с ботом, ты подтверждаешь ознакомление с публичной офертой и политикой обработки персональных данных.</i>"
         f"{bonus_html}</blockquote>"
     )
 
@@ -221,7 +229,7 @@ async def send_main_menu_screen(
     await ensure_user(user_id, username)
     balance = await get_credits(user_id)
     text = _main_screen_text(balance, "")
-    kb = start_menu_keyboard()
+    kb = start_menu_keyboard(balance)
     banner = _start_banner_path()
     if banner:
         await bot.send_photo(
@@ -240,7 +248,7 @@ async def restore_main_menu_message(message: Message, user_id: int, username: st
     await ensure_user(user_id, username)
     balance = await get_credits(user_id)
     text = _main_screen_text(balance, "")
-    kb = start_menu_keyboard()
+    kb = start_menu_keyboard(balance)
     banner = _start_banner_path()
 
     if message.photo and not _is_generated_image_result_message(message):
@@ -361,7 +369,7 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
     balance = await get_credits(user_id)
 
     text = _main_screen_text(balance, bonus_note)
-    kb = start_menu_keyboard()
+    kb = start_menu_keyboard(balance)
     banner = _start_banner_path()
     if banner:
         await message.answer_photo(
@@ -390,6 +398,20 @@ async def menu_back_start(callback: CallbackQuery, state: FSMContext) -> None:
     user_id = callback.from_user.id
     await callback.answer()
     await restore_main_menu_message(callback.message, user_id, callback.from_user.username)
+
+
+@router.callback_query(F.data == CB_MENU_HUB)
+async def menu_hub(callback: CallbackQuery) -> None:
+    if not callback.message:
+        await callback.answer("Сообщение недоступно.", show_alert=True)
+        return
+    await callback.answer()
+    await edit_or_send_nav_message(
+        callback.message,
+        text="<b>📋 Главное меню</b>\n<blockquote><i>Выбери нужный раздел.</i></blockquote>",
+        reply_markup=menu_hub_keyboard(),
+        parse_mode=HTML,
+    )
 
 
 @router.message(Command("help"))
@@ -430,6 +452,54 @@ async def menu_about(callback: CallbackQuery) -> None:
         callback.message,
         text=text,
         reply_markup=back_to_main_menu_keyboard(),
+        parse_mode=HTML,
+    )
+
+
+@router.callback_query(F.data == CB_MENU_FAQ)
+async def menu_faq(callback: CallbackQuery) -> None:
+    if not callback.message:
+        await callback.answer("Сообщение недоступно.", show_alert=True)
+        return
+    await callback.answer()
+    from src.handlers.faq_handlers import _faq_keyboard
+
+    await edit_or_send_nav_message(
+        callback.message,
+        text="<b>Частые вопросы</b>\n<blockquote><i>Выбери тему — пришлю короткий ответ.</i></blockquote>",
+        reply_markup=_faq_keyboard(),
+        parse_mode=HTML,
+    )
+
+
+@router.callback_query(F.data == CB_MENU_CHANNEL)
+async def menu_channel(callback: CallbackQuery) -> None:
+    if not callback.message:
+        await callback.answer("Сообщение недоступно.", show_alert=True)
+        return
+    await callback.answer()
+    if not CHANNEL_URL:
+        await edit_or_send_nav_message(
+            callback.message,
+            text=(
+                "<b>📢 Канал</b>\n"
+                "<blockquote><i>Ссылка пока не добавлена. Заполни</i> "
+                "<code>CHANNEL_URL</code> <i>в .env, и кнопка откроет канал.</i></blockquote>"
+            ),
+            reply_markup=back_to_main_menu_keyboard(),
+            parse_mode=HTML,
+        )
+        return
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Открыть канал", url=CHANNEL_URL, style=BTN_PRIMARY)],
+            _BACK_TO_MENU_ROW,
+        ]
+    )
+    await edit_or_send_nav_message(
+        callback.message,
+        text="<b>📢 Канал</b>\n<blockquote><i>Нажми кнопку ниже, чтобы перейти в канал.</i></blockquote>",
+        reply_markup=keyboard,
         parse_mode=HTML,
     )
 
@@ -620,6 +690,7 @@ async def _profile_card_html(user_id: int, username_raw: str | None) -> tuple[st
         )
         return missing, back_to_main_menu_keyboard()
     balance = await get_credits(user_id)
+    approx_images = max(0, balance // 30)
     ready_bonus_uses = int(profile.idea_tokens or 0)
     ru, rlim = await get_daily_image_generation_usage(user_id, "ready")
     username = f"@{profile.username}" if profile.username else "—"
@@ -673,6 +744,7 @@ async def _profile_card_html(user_id: int, username_raw: str | None) -> tuple[st
         f"<i>Ник:</i> <b>{esc(username)}</b>\n"
         f"<i>ID:</i> <code>{esc(user_id)}</code>\n"
         f"<i>💰 Кредиты:</i> <b>{esc(balance)}</b>\n"
+        f"<i>🖼 Примерно доступно генераций:</i> <b>{esc(approx_images)}</b> <i>(из расчёта 30 кредитов за 1 изображение)</i>\n"
         f"<i>🎯 Бонусные запуски «Готовых идей» (за рефералов):</i> <b>{esc(ready_bonus_uses)}</b>\n"
         f"<i>Подписка:</i> <b>{esc(sub_status)}</b>\n"
         f"<i>Тариф:</i> <b>{esc(plan_name)}</b>\n"

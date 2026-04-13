@@ -41,6 +41,7 @@ def _parse_int(raw_value: str, default: int = 0) -> int:
 TELEGRAM_BOT_TOKEN: str = _must_getenv("TELEGRAM_BOT_TOKEN")
 SUPPORT_BOT_TOKEN: str = os.getenv("SUPPORT_BOT_TOKEN", "").strip()
 SUPPORT_BOT_USERNAME: str = os.getenv("SUPPORT_BOT_USERNAME", "").strip()
+CHANNEL_URL: str = os.getenv("CHANNEL_URL", "").strip()
 DB_PATH: str = os.getenv("DB_PATH", "data/bot.sqlite3").strip() or "data/bot.sqlite3"
 START_CREDITS: int = int(os.getenv("START_CREDITS", "20"))
 # Второе сообщение в ЛС сразу после главного экрана /start (новости, новый промпт). Пусто = не слать.
