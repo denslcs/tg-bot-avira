@@ -172,15 +172,9 @@ def _ready_idea_requirement_line(*, title: str, photos_required: int) -> str:
 READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     "trends": [
         (
-            "Неон-стрит",
-            "Городской вечер, мокрый асфальт, яркий неон и киношный свет.",
-            "Create a cinematic urban portrait with wet asphalt reflections, neon signs, and dynamic bokeh. Keep subject identity natural and realistic.",
-            1,
-        ),
-        (
-            "Luxury minimal",
-            "Чистый luxury-кадр с мягким контрастом и дорогой фактурой.",
-            "Create a premium fashion portrait in luxury minimal style: clean composition, soft high-end lighting, natural skin texture, elegant color grading.",
+            "Absolute Cinema",
+            "Культовый студийный портрет в духе «Absolute Cinema»: ч/б, мощный взгляд, руки вверх и винтажная плёночная фактура.",
+            "Create a studio portrait in iconic \"Absolute Cinema\" style. IMPORTANT REFERENCE MAPPING: image #1 is the user's identity reference; image #2 is the style/composition reference image for the Absolute Cinema meme frame. CRITICAL IDENTITY LOCK: preserve the exact person from image #1 (face structure, age cues, skin texture, hairstyle/hairline, expression character). Replace the face/identity in the reference composition with the user while keeping the recognizable Absolute Cinema setup. STYLE: dramatic black-and-white chiaroscuro portrait, stoic expression, frontal seated composition, both hands raised at shoulder level, clean symmetrical framing, subtle analog film grain and gentle vintage texture. Keep lighting sculpted and realistic (studio key + shadow depth), with classic monochrome tonal contrast. TYPOGRAPHY: bold white all-caps text at the bottom in two lines exactly: line 1 \"ABSOLUTE\", line 2 \"CINEMA\"; centered, meme-like proportion, no extra text. RESULT: photorealistic, iconic, reaction-meme-ready image with consistent posture and mood. NEGATIVE: cartoon look, painterly style, color image, warped hands, extra fingers, wrong face identity, misspelled text, watermark, logos, extra captions.",
             1,
         ),
     ],
@@ -209,6 +203,12 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             "На отдыхе в Италии",
             "Кинематографичный кадр на белой яхте у побережья Амальфи, мягкий закатный свет.",
             "CRITICAL IDENTITY LOCK: Use the uploaded user photo as the only source of facial identity. Keep face and hair unchanged and realistic: same facial structure, skin texture, age, and expression. No face swap artifacts, no beautification, no plastic skin. GENDER / OUTFIT RULE (unisex): infer apparent gender presentation from the reference. If female-presenting — elegant Mediterranean summer yacht look (e.g. light linen dress, blouse with tailored shorts/skirt, or refined resort co-ord); palette: cream, white, soft blue, citrus accents. If male-presenting — navy or slate linen shirt worn partly unbuttoned with rolled sleeves, white linen shorts, Riviera style. If ambiguous — neutral refined resort wear matching face and build. SCENE AESTHETIC (target look): cinematic medium-wide shot (not close-up); subject sits relaxed on cream leather yacht seating with piping, polished chrome railings; calm sea with a bright golden sun-path reflection on the water; steep Amalfi-style hillside behind with pastel Mediterranean buildings; golden-hour sky (warm orange-gold) with soft rim light on the subject. Composition: subject centered, horizon in upper third. Lighting: warm sunset, natural specular highlights on water, realistic contrast. Final: luxurious peaceful summer vibe, photorealistic, high detail, polished.",
+            1,
+        ),
+        (
+            "Самолёт бизнес-класс",
+            "Живой кадр в бизнес-джете: тёплый свет, спокойная уверенность, атмосфера дорогого перелёта без постановки.",
+            "CRITICAL IDENTITY LOCK: Use uploaded photo #1 as the ONLY identity source. Preserve the same person with high fidelity: facial structure, skin texture, age cues, hairline, and expression style. STRICT PHOTOREALISM ONLY: candid iPhone-style private-jet cabin photo, no AI-art look, no illustration, no stylization. Scene: natural unposed moment inside a premium private business jet during golden hour. Perspective should feel like a real handheld social-media story frame, slight authentic imperfection allowed (micro blur / grain), but identity remains clear. Subject: a young adult person reclining naturally in a cream leather diamond-stitched seat, one leg crossed over the other, one hand holding a crystal whiskey glass with ice, the other resting on lap. Gaze relaxed and confident toward camera with subtle, unforced expression. Wardrobe (UNISEX): clean premium dark look adapted to apparent presentation from the reference (e.g., fitted black crewneck tee or dark minimal top, dark tailored jeans or trousers, clean white sneakers). Optional accessories: thin gold chain, luxury watch in yellow-gold style, kept subtle and realistic. Cabin details: polished dark wood side table, open laptop, stack of documents/folder, brown leather duffel on nearby seat, oval jet windows with warm sunlight beams creating defined highlights on leather, wood, metal, glass, and skin. Lighting: strong natural late-afternoon sun rays from windows, high-contrast but plausible; no fake neon. Camera feel: iPhone 14 Pro candid documentary look, native processing, minimal edit, raw-file vibe. Mood: wealthy but understated, honest, grainy realism, like shot by a friend. NEGATIVE: text overlays, logos/watermarks, cartoon look, beauty retouch, plastic skin, uncanny face, extra fingers/limbs, fake CGI cabin, over-stylized cinematic VFX.",
             1,
         ),
         (
@@ -376,6 +376,12 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve facial structure, skin texture, age, hair, and overall likeness — no face replacement, no different person. UNISEX WARDROBE from reference: if female-presenting — torn, dirty white wedding dress, heavily stained; if male-presenting — torn dirty white formal wedding suit / tuxedo remnants (jacket, shirt) with the same distressed staining; if ambiguous — torn white ceremonial outfit that still reads clearly as post-wedding formal wear. POSE: subject sitting on wide stone steps of a luxurious mansion at night, relaxed but exhausted, slightly slouched; holding a cigarette, visible smoke drifting in cold night air (adult subject). FACE: messy hair; face smeared with dirt, ash, and blood stains; raw natural skin; tired but calm expression with a hint of dark satisfaction. BACKGROUND: burning mansion behind them, mostly lost in deep darkness; faint fire glow and small flames on the ruined building; light smoke and ash in the air. COMPOSITION: centered subject, medium full shot, slightly low angle, shallow depth of field, cinematic framing, portrait ~3:4 feel. LIGHTING: harsh direct on-camera flash on the subject, strong frontal flash, overexposed highlights on skin and clothing, sharp hard shadows behind, deep black shadows around, minimal ambient, slight falloff into darkness, subtle fire glow as secondary rim light. STYLE: ultra realistic, film still, 35mm photography, raw flash photography, high detail, visible skin texture, pores, imperfections, slight noise, high-ISO character; no over-stylization. MOOD: dark humor, survival, relief after chaos, eerie calm, unsettling post-violence silence. NEGATIVE: cartoon, anime, watermark, text overlay, plastic skin, beauty blur, extra limbs, duplicate faces.",
             1,
         ),
+        (
+            "Найденная фотка: тоннель",
+            "Жуткий raw-кадр из мокрого тоннеля: ты на переднем плане, а в воде за спиной — пугающее существо как практический грим.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve exact facial structure, skin texture, age cues, hairline, and expression character — no face replacement, no beauty retouch, no identity drift. This request generates an image in a disturbing horror style, resembling a rough \"found photograph\" shot at night on a cheap early-2000s camera. ALL creature elements must be practical effects only (latex masks/prosthetics/practical makeup/suit performer), not CGI, not clean 3D render, not VFX creature design. COMPOSITION: vertical portrait frame, subject in foreground (mid shot), wet hair strands, damp skin, direct tired stare; subtle panic/fatigue in expression. UNISEX STYLING: soaked dark T-shirt or dark minimal top, no gender-specific costume cliches, natural fit adapted from the reference. LOCATION: dirty underground drainage/sewer tunnel with shallow reflective water, stained concrete walls, claustrophobic depth, low visibility. BACKGROUND THREAT: one humanoid practical-FX creature emerging from water several meters behind the subject; partially out of focus but clearly threatening. LIGHTING: harsh on-camera flash, strong reflections on wet skin and puddles, hard shadows, deep black falloff. IMAGE QUALITY: gritty early-digital snapshot feel — visible noise, slight compression artifacts, mild color cast, imperfect exposure. MOOD: accidental capture of immediate danger, raw and unsettling realism. NEGATIVE: polished cinematic beauty look, fantasy armor, cartoon/anime, painterly style, obvious CGI monster, perfect studio setup, text overlays, watermark, duplicate faces, extra limbs/fingers.",
+            1,
+        ),
     ],
     "add_photo": [
         (
@@ -398,6 +404,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
 # Доп. изображения для API (extra_refs): только лицо Мухаммада Али для соответствующей идеи — не путать с *_preview ниже.
 _READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str] = {
     "Победа над Мухаммадом Али на ринге": r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_114b8c4714b8b9b1196d51ad8d72a-1b94cd0d-73ba-44de-b3da-08a08fade423.png",
+    "Absolute Cinema": r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_image-b74693f7-14bb-4896-9e4c-9d2d88a635a4.png",
 }
 
 # Превью для листания идей в Telegram (_ready_idea_listing_photo_path → подпись к сообщению).
@@ -2517,6 +2524,12 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
                 )
             if title == "Победа над Мухаммадом Али на ринге":
                 refs_hint = "Reference mapping: image #1 is user identity photo. Image #2 is Muhammad Ali identity photo."
+            if title == "Absolute Cinema":
+                refs_hint = (
+                    "Reference mapping: image #1 is the USER identity photo (face/likeness to preserve). "
+                    "Image #2 is the Absolute Cinema style/composition reference (pose, framing, monochrome mood, typography layout) — "
+                    "do not copy identity from image #2."
+                )
             if title == "Для влюбленных: рыцарь и дама":
                 refs_hint = "Reference mapping: image #1 is knight identity photo. Image #2 is woman identity photo."
             if title == "Love is…":
