@@ -9,7 +9,6 @@ from src.keyboards.callback_data import (
     CB_MENU_BACK_START,
     CB_MENU_CHANNEL,
     CB_MENU_FAQ,
-    CB_MENU_HUB,
     CB_MENU_PAY,
     CB_MENU_PROFILE,
     CB_MENU_REF,
@@ -20,7 +19,6 @@ from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 
 
 def start_menu_keyboard(balance: int | None = None) -> InlineKeyboardMarkup:
-    bal_text = f"💰 Баланс: {balance}" if isinstance(balance, int) and balance >= 0 else "💰 Баланс"
     support_url = (
         f"https://t.me/{SUPPORT_BOT_USERNAME}?start=from_shard_creator"
         if SUPPORT_BOT_USERNAME
@@ -31,19 +29,25 @@ def start_menu_keyboard(balance: int | None = None) -> InlineKeyboardMarkup:
         if support_url
         else InlineKeyboardButton(text="💬 Поддержка", callback_data=CB_MENU_SUPPORT, style=BTN_PRIMARY)
     )
-    # Панель быстрого доступа: баланс, меню разделов и поддержка.
+    # Большое главное меню на стартовом экране.
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=bal_text, callback_data=CB_MENU_PROFILE, style=BTN_SUCCESS
-                ),
-                InlineKeyboardButton(
-                    text="📋 Меню", callback_data=CB_MENU_HUB, style=BTN_PRIMARY
+                    text="💡 Готовые идеи", callback_data=CB_READY_IDEAS, style=BTN_SUCCESS
                 ),
             ],
             [
-                support_button
+                InlineKeyboardButton(
+                    text="👥 Реферальная система", callback_data=CB_MENU_REF, style=BTN_SUCCESS
+                ),
+            ],
+            [
+                InlineKeyboardButton(text="💳 Оплатить", callback_data=CB_MENU_PAY, style=BTN_PRIMARY),
+            ],
+            [
+                InlineKeyboardButton(text="ℹ️ Что умеет бот", callback_data=CB_MENU_ABOUT),
+                support_button,
             ],
         ]
     )
@@ -53,20 +57,24 @@ def menu_hub_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="🎨 Создать картинку", callback_data=CB_CREATE_IMAGE, style=BTN_SUCCESS),
-                InlineKeyboardButton(text="💡 Идеи", callback_data=CB_READY_IDEAS, style=BTN_SUCCESS),
+                InlineKeyboardButton(text="⭐ Готовые идеи", callback_data=CB_READY_IDEAS, style=BTN_SUCCESS),
+                InlineKeyboardButton(text="⭐ Подписки", callback_data=CB_MENU_PAY, style=BTN_SUCCESS),
+            ],
+            [
+                InlineKeyboardButton(text="⭐ Поддержка", callback_data=CB_MENU_SUPPORT, style=BTN_SUCCESS),
+                InlineKeyboardButton(text="⭐ Реф. система", callback_data=CB_MENU_REF, style=BTN_SUCCESS),
+            ],
+            [
+                InlineKeyboardButton(text="👤 Профиль", callback_data=CB_MENU_PROFILE, style=BTN_PRIMARY),
+                InlineKeyboardButton(text="🎨 Создать картинку", callback_data=CB_CREATE_IMAGE, style=BTN_PRIMARY),
             ],
             [
                 InlineKeyboardButton(text="ℹ️ Что умею", callback_data=CB_MENU_ABOUT, style=BTN_PRIMARY),
-                InlineKeyboardButton(text="💳 Подписки", callback_data=CB_MENU_PAY, style=BTN_PRIMARY),
-            ],
-            [
-                InlineKeyboardButton(text="👥 Реф. система", callback_data=CB_MENU_REF, style=BTN_PRIMARY),
                 InlineKeyboardButton(text="❓ FAQ", callback_data=CB_MENU_FAQ, style=BTN_PRIMARY),
             ],
             [
                 InlineKeyboardButton(text="📢 Канал", callback_data=CB_MENU_CHANNEL),
-                InlineKeyboardButton(text="💬 Поддержка", callback_data=CB_MENU_SUPPORT),
+                InlineKeyboardButton(text="💳 Баланс", callback_data=CB_MENU_PROFILE),
             ],
             [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)],
         ]

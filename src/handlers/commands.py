@@ -62,6 +62,7 @@ from src.keyboards.callback_data import (
     CB_REGEN,
 )
 from src.keyboards.main_menu import back_to_main_menu_keyboard, menu_hub_keyboard, start_menu_keyboard
+from src.keyboards.reply_panel import quick_panel_keyboard
 from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 
 router = Router(name="commands")
@@ -79,7 +80,7 @@ def _main_screen_text(balance: int, bonus_note: str = "") -> str:
         "✅ Нажми <b>«💰 Баланс»</b> — увидишь кредиты, статистику и лимиты.\n"
         "✅ Или сразу отправь фото + короткий запрос, и я соберу готовый результат.\n\n"
         "<blockquote><b>💡 Подсказка:</b> <i>чем точнее задача в одном сообщении, тем лучше и быстрее итоговая генерация.</i></blockquote>\n\n"
-        "<blockquote><i>Продолжая работу с ботом, ты подтверждаешь ознакомление с публичной офертой и политикой обработки персональных данных.</i>"
+        "<blockquote><i>Продолжая работу с ботом, ты подтверждаешь согласие на обработку персональных данных.</i>"
         f"{bonus_html}</blockquote>"
     )
 
@@ -380,6 +381,7 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         )
     else:
         await message.answer(text, reply_markup=kb, parse_mode=HTML)
+    await message.answer("Панель быстрого доступа включена ⤵️", reply_markup=quick_panel_keyboard())
 
     ann_text = START_ANNOUNCEMENT.strip() if START_ANNOUNCEMENT else ""
     if START_ANNOUNCEMENT_IMAGE:
@@ -387,6 +389,34 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         await message.answer_photo(FSInputFile(START_ANNOUNCEMENT_IMAGE), caption=cap)
     elif ann_text:
         await message.answer(ann_text[:4096])
+
+
+@router.message(F.text == "💰 Баланс")
+async def quick_panel_profile(message: Message) -> None:
+    if not message.from_user:
+        return
+    await send_profile_card(message, message.from_user.id, message.from_user.username)
+
+
+@router.message(F.text == "📋 Меню")
+async def quick_panel_menu(message: Message) -> None:
+    await message.answer(
+        "<b>📋 Главное меню</b>\n<blockquote><i>Выбери нужный раздел.</i></blockquote>",
+        reply_markup=menu_hub_keyboard(),
+        parse_mode=HTML,
+    )
+
+
+@router.message(F.text == "💬 Поддержка")
+async def quick_panel_support(message: Message) -> None:
+    await cmd_support(message)
+
+
+@router.message(F.text == "👥 Реф. система")
+async def quick_panel_ref(message: Message) -> None:
+    if not message.from_user:
+        return
+    await deliver_referral_screen(message.bot, message.from_user.id, message.from_user.username, message)
 
 
 @router.callback_query(F.data == CB_MENU_BACK_START)
