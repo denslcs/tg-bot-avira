@@ -384,7 +384,6 @@ _KNIGHT_LADY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "kn
 _LOVE_IS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "love_is_preview.png"
 _POSTER_TEXT_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "poster_with_text_preview.png"
 _FLUFFY_LETTERS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "fluffy_letters_preview.png"
-_FANTASY_3D_TITLE_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "fantasy_game_title_3d_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -437,8 +436,6 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _POSTER_TEXT_READY_LISTING_IMAGE
     if t == _FLUFFY_LETTERS_TITLE and _FLUFFY_LETTERS_READY_LISTING_IMAGE.is_file():
         return _FLUFFY_LETTERS_READY_LISTING_IMAGE
-    if t == _FANTASY_3D_GAME_TITLE and _FANTASY_3D_TITLE_LISTING_IMAGE.is_file():
-        return _FANTASY_3D_TITLE_LISTING_IMAGE
     return _start_listing_banner_path()
 
 
