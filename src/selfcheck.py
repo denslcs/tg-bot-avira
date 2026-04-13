@@ -54,9 +54,9 @@ def _check_ready_ideas() -> tuple[list[str], list[str]]:
                 errors.append(f"Empty preview at {category}[{idx}] for '{title}'.")
             if not isinstance(prompt, str) or not prompt.strip():
                 errors.append(f"Empty prompt at {category}[{idx}] for '{title}'.")
-            if photos_required not in (1, 2):
+            if photos_required not in (0, 1, 2):
                 errors.append(
-                    f"Invalid photos_required at {category}[{idx}] for '{title}' (expected 1 or 2)."
+                    f"Invalid photos_required at {category}[{idx}] for '{title}' (expected 0, 1 or 2)."
                 )
     checks.append("Ready idea tuples validated (title/preview/prompt/photos_required).")
 
@@ -178,6 +178,20 @@ def _check_ready_ideas() -> tuple[list[str], list[str]]:
             "Fluffy 3D letters listing preview missing: assets/ready_ideas/fluffy_letters_preview.png"
         )
     checks.append("Fluffy 3D letters ready-idea listing preview file exists.")
+
+    fg_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "fantasy_game_title_3d_preview.png"
+    if not fg_listing.is_file():
+        errors.append(
+            "Fantasy 3D game title listing preview missing: assets/ready_ideas/fantasy_game_title_3d_preview.png"
+        )
+    checks.append("Fantasy 3D game title ready-idea listing preview file exists.")
+
+    mmorpg_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "mmorpg_fantasy_hero_preview.png"
+    if not mmorpg_listing.is_file():
+        errors.append(
+            "MMORPG fantasy hero listing preview missing: assets/ready_ideas/mmorpg_fantasy_hero_preview.png"
+        )
+    checks.append("MMORPG fantasy hero ready-idea listing preview file exists.")
 
     return checks, errors
 
