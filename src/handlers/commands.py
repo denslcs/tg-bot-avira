@@ -70,6 +70,17 @@ router = Router(name="commands")
 
 _BACK_TO_MENU_ROW = [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)]
 
+# Невидимый символ — только чтобы обновить reply-клавиатуру с актуальным балансом.
+_QUICK_PANEL_STUB = "\u200b"
+
+
+async def _refresh_quick_panel(bot: Bot, chat_id: int, user_id: int) -> None:
+    try:
+        balance = await get_credits(user_id)
+        await bot.send_message(chat_id, _QUICK_PANEL_STUB, reply_markup=quick_panel_keyboard(balance))
+    except Exception:
+        logging.debug("quick panel refresh failed", exc_info=True)
+
 
 def _budget_source_label(source: str) -> str:
     labels = {
@@ -262,50 +273,53 @@ async def send_main_menu_screen(
 
 async def restore_main_menu_message(message: Message, user_id: int, username: str | None) -> None:
     """Вернуть главный экран: баннер остаётся тем же сообщением (подпись + клавиатура), без дубля текста."""
-    await ensure_user(user_id, username)
-    balance = await get_credits(user_id)
-    text = _main_screen_text(balance, "")
-    kb = start_menu_keyboard(balance)
-    banner = _start_banner_path()
+    try:
+        await ensure_user(user_id, username)
+        balance = await get_credits(user_id)
+        text = _main_screen_text(balance, "")
+        kb = start_menu_keyboard(balance)
+        banner = _start_banner_path()
 
-    if message.photo and not _is_generated_image_result_message(message):
-        # После готовых идей на том же сообщении может быть превью Minecraft и т.д. —
-        # только edit_caption не меняет картинку; возвращаем стартовый баннер.
-        if banner and banner.is_file():
+        if message.photo and not _is_generated_image_result_message(message):
+            # После готовых идей на том же сообщении может быть превью Minecraft и т.д. —
+            # только edit_caption не меняет картинку; возвращаем стартовый баннер.
+            if banner and banner.is_file():
+                try:
+                    await message.edit_media(
+                        media=InputMediaPhoto(
+                            media=FSInputFile(banner),
+                            caption=text,
+                            parse_mode=HTML,
+                        ),
+                        reply_markup=kb,
+                    )
+                    return
+                except Exception:
+                    logging.debug("restore_main_menu_message: edit_media failed", exc_info=True)
             try:
-                await message.edit_media(
-                    media=InputMediaPhoto(
-                        media=FSInputFile(banner),
-                        caption=text,
-                        parse_mode=HTML,
-                    ),
-                    reply_markup=kb,
-                )
+                await message.edit_caption(caption=text, reply_markup=kb, parse_mode=HTML)
                 return
             except Exception:
-                logging.debug("restore_main_menu_message: edit_media failed", exc_info=True)
-        try:
-            await message.edit_caption(caption=text, reply_markup=kb, parse_mode=HTML)
+                logging.debug("restore_main_menu_message: edit_caption failed", exc_info=True)
+
+        if message.photo and _is_generated_image_result_message(message):
+            await send_main_menu_screen(message.bot, message.chat.id, user_id, username)
             return
-        except Exception:
-            logging.debug("restore_main_menu_message: edit_caption failed", exc_info=True)
 
-    if message.photo and _is_generated_image_result_message(message):
-        await send_main_menu_screen(message.bot, message.chat.id, user_id, username)
-        return
+        if banner and not message.photo:
+            # Не удаляем UI-сообщения: только заменяем/переотправляем при необходимости.
+            edited = await edit_or_send_nav_message(message, text=text, reply_markup=kb, parse_mode=HTML)
+            if edited is not None:
+                return
+            await send_main_menu_screen(message.bot, message.chat.id, user_id, username)
+            return
 
-    if banner and not message.photo:
-        # Не удаляем UI-сообщения: только заменяем/переотправляем при необходимости.
         edited = await edit_or_send_nav_message(message, text=text, reply_markup=kb, parse_mode=HTML)
         if edited is not None:
             return
         await send_main_menu_screen(message.bot, message.chat.id, user_id, username)
-        return
-
-    edited = await edit_or_send_nav_message(message, text=text, reply_markup=kb, parse_mode=HTML)
-    if edited is not None:
-        return
-    await send_main_menu_screen(message.bot, message.chat.id, user_id, username)
+    finally:
+        await _refresh_quick_panel(message.bot, message.chat.id, user_id)
 
 
 def _parse_ref_start_arg(args: str | None) -> int | None:
@@ -397,7 +411,7 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         )
     else:
         await message.answer(text, reply_markup=kb, parse_mode=HTML)
-    await message.answer("Панель быстрого доступа включена ⤵️", reply_markup=quick_panel_keyboard())
+    await message.answer("Панель быстрого доступа включена ⤵️", reply_markup=quick_panel_keyboard(balance))
 
     ann_text = START_ANNOUNCEMENT.strip() if START_ANNOUNCEMENT else ""
     if START_ANNOUNCEMENT_IMAGE:
@@ -407,7 +421,7 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         await message.answer(ann_text[:4096])
 
 
-@router.message(F.text == "💰 Баланс")
+@router.message(F.text.startswith("💰 Баланс"))
 async def quick_panel_profile(message: Message) -> None:
     if not message.from_user:
         return
