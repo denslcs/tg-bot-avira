@@ -158,14 +158,14 @@ def _ready_idea_requirement_line(*, title: str, photos_required: int) -> str:
     """Одна строка под описанием идеи: что нужно для запуска."""
     pr = int(photos_required)
     if pr == 0:
-        return "Требуется только текст"
+        return "Нужно для запуска: только текст"
     if _ready_idea_needs_photo_then_text(title):
         if pr == 2:
-            return "Требуется 2 фото и текст"
-        return "Требуется 1 фото и текст"
+            return "Нужно для запуска: 2 фото и текст"
+        return "Нужно для запуска: 1 фото и текст"
     if pr == 2:
-        return "Требуется 2 фото"
-    return "Требуется 1 фото"
+        return "Нужно для запуска: 2 фото"
+    return "Нужно для запуска: 1 фото"
 
 
 # title, preview, prompt, photos_required
@@ -273,7 +273,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         ),
         (
             _PLASTER_FASHION_STUDIO_TITLE,
-            "Премиум fashion и гипсовые объёмные буквы. Нужно: 1 фото и текст для надписи из гипса (до 48 символов; можно две строки через Enter).",
+            "Премиум fashion в чистом светлом зале: ты в дорогом костюме у массивных объёмных букв из матового гипса — как съёмка для обложки. Потом придумаешь слово или короткую фразу, и она станет скульптурной надписью рядом с тобой; при желании — два яруса текста, верх и низ.",
             "CRITICAL — FACIAL IDENTITY: The uploaded photo is the ONLY source for the model's appearance. Transfer face without alteration: preserve sex, age, bone structure, skin texture, hair, and all individual traits; no face replacement, no beautification drift. UNISEX WARDROBE: elegant tailored trouser suit (pantsuit) — if male-presenting, classic slim-fit suit with trousers; if female-presenting, refined women's pantsuit or equivalent elegant tailored suit; if ambiguous, neutral premium tailoring that matches the face. MAIN COMPOSITION: stylish subject in relaxed pose, shoulder casually leaning against massive freestanding 3D letter sculptures; thoughtful, slightly mysterious expression; body organically integrated into the scene, subtle sense of pressing into the textured plaster surface of the letterforms. TYPOGRAPHY (mandatory): volumetric words built from matte gray plaster — exact spelling, language, line breaks, and capitalization are specified ONLY in the runtime reference hint below from the user's typed text (not fixed placeholder words). Letters are separate physical objects standing in space (NOT wall-mounted), massive block constructions; if two lines are requested, use two stacked tiers overlapping as a layered installation; soft natural cast shadows. TECH: ultra-detailed photorealistic photography, masterpiece image quality, tack-sharp eye focus on the model's face, professional color grading, top-tier studio lighting, 8K feel. DEPTH: shallow depth of field — face in sharp focus; plaster word sculpture slightly softer but text must remain fully legible. AESTHETIC: premium fashion-editorial minimalism, clean background, luxury modern magazine cover mood, contemporary fashion photography. NEGATIVE: wrong face, different age or gender than reference, flat 2D text stickers, letters fused into a flat wall, illegible text, watermark, cluttered background, website URLs or brand watermarks on the letters.",
             1,
         ),
@@ -2112,9 +2112,9 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
             )
         elif (title or "").strip() == _PLASTER_FASHION_STUDIO_TITLE:
             head_hint = (
-                f"<blockquote><i>Теперь пришли <b>текст для гипсовых букв</b> (до {_PLASTER_TEXT_MAX_LEN} символов, кириллица или латиница). "
-                "Можно две строки: отправь два ряда через перевод строки — верхний и нижний ярус скульптуры. "
-                "Этот текст появится на объёмных гипсовых словах рядом с тобой.</i></blockquote>"
+                "<blockquote><i>Теперь пришли <b>текст для гипсовых букв</b> — кириллица или латиница, лаконично, как на обложке. "
+                "Можно две строки через перевод строки: верхний и нижний ярус скульптуры. "
+                "Слова лягут на объёмные гипсовые буквы рядом с тобой.</i></blockquote>"
             )
         elif (title or "").strip() == _CHALK_ON_ASPHALT_TITLE:
             head_hint = (
