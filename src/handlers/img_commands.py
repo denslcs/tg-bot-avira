@@ -533,32 +533,15 @@ _UFC_MCGREGOR_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "ufc_mcg
 _FANTASY_GAME_TITLE_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "fantasy_game_title_preview.png"
 _POLAROID_CURTAIN_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "polaroid_curtain_preview.png"
 _BURGUNDY_CINEMA_PORTRAIT_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "burgundy_cinema_portrait_preview.png"
-_MMORPG_HERO_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "mmorpg_hero_fantasy_preview.png"
 _PLASTER_FASHION_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "plaster_fashion_preview.png"
-_CROW_DOUBLE_EXPOSURE_LISTING_IMAGE = Path(
-    r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_5399985527576008983-120b52a0-1393-443d-98ea-0a100b52afda.png"
-)
-_GTA_V_REALISM_LISTING_IMAGE = Path(
-    r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_5399985527576008979-d9161fb1-b514-423d-83f3-a5cc3724e478.png"
-)
-_TUNNEL_FOUND_PHOTO_LISTING_IMAGE = Path(
-    r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_5399985527576008934__1_-587c779a-f67c-4705-98fd-14eb8183785b.png"
-)
-_BUSINESS_JET_LISTING_IMAGE = Path(
-    r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_5399985527576008936__1_-b228cc54-0cc4-4ead-8481-ef3cfc9f39ad.png"
-)
-_ABSOLUTE_CINEMA_LISTING_IMAGE = Path(
-    r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_5399985527576008991-ef7e28c5-5181-4725-b0f9-31da21ab7244.png"
-)
-_BEARD_MUSTACHE_LISTING_IMAGE = Path(
-    r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_5399985527576008992-c7612614-6d1f-40a6-bfff-80dfdd6a1aad.png"
-)
-_GENDER_SWAP_LISTING_IMAGE = Path(
-    r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_5399985527576008994-a7d3d4bd-0ae2-4b4b-93aa-e37e0668c9ac.png"
-)
-_MMORPG_HERO_CUSTOM_LISTING_IMAGE = Path(
-    r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_5399985527576009031-fee3a617-a99e-4a80-8159-5e130778e774.png"
-)
+_CROW_DOUBLE_EXPOSURE_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "crow_double_exposure_preview.png"
+_GTA_V_REALISM_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "gta_v_realism_preview.png"
+_TUNNEL_FOUND_PHOTO_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "tunnel_found_photo_preview.png"
+_BUSINESS_JET_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "business_jet_preview.png"
+_ABSOLUTE_CINEMA_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "absolute_cinema_preview.png"
+_BEARD_MUSTACHE_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "beard_mustache_preview.png"
+_GENDER_SWAP_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "gender_swap_preview.png"
+_MMORPG_HERO_CUSTOM_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "mmorpg_hero_custom_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -604,11 +587,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _BLACK_STUDIO_READY_LISTING_IMAGE
     if t == "Бордовый кино-портрет" and _BURGUNDY_CINEMA_PORTRAIT_LISTING_IMAGE.is_file():
         return _BURGUNDY_CINEMA_PORTRAIT_LISTING_IMAGE
-    if t == _MMORPG_HERO_TITLE:
-        if _MMORPG_HERO_CUSTOM_LISTING_IMAGE.is_file():
-            return _MMORPG_HERO_CUSTOM_LISTING_IMAGE
-        if _MMORPG_HERO_LISTING_IMAGE.is_file():
-            return _MMORPG_HERO_LISTING_IMAGE
+    if t == _MMORPG_HERO_TITLE and _MMORPG_HERO_CUSTOM_LISTING_IMAGE.is_file():
+        return _MMORPG_HERO_CUSTOM_LISTING_IMAGE
     if t == "Красивый костюм с букетом" and _SUIT_BOUQUET_READY_LISTING_IMAGE.is_file():
         return _SUIT_BOUQUET_READY_LISTING_IMAGE
     if t == "Gucci editorial" and _GUCCI_EDITORIAL_READY_LISTING_IMAGE.is_file():
