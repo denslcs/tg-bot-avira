@@ -218,6 +218,8 @@ _READY_SINGLE_PERSON_HINT_EXCLUDED_TITLES = {
     "Бордовый кино-портрет",
     "Постер с текстом",
     "GTA Vice City",
+    _GTA_V_REALISM_TITLE,
+    "Двойная экспозиция: вороны",
     "Sony Ericsson T100",
     "Мел на асфальте",
 }
@@ -288,7 +290,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Самолёт бизнес-класс",
             "Живой кадр в бизнес-джете: тёплый свет, спокойная уверенность, атмосфера дорогого перелёта без постановки.",
-            "CRITICAL IDENTITY LOCK: Use uploaded photo #1 as the ONLY identity source. Preserve the same person with high fidelity: facial structure, skin texture, age cues, hairline, and expression style. STRICT PHOTOREALISM ONLY: candid iPhone-style private-jet cabin photo, no AI-art look, no illustration, no stylization. UNISEX MANDATE (strict): build the scene so it works equally for any gender presentation; no masculine-only or feminine-only assumptions. Keep pose, framing, and styling universal, and adapt fit/details naturally from the reference person only. EXAMPLE SHOT TO FOLLOW (description only, not an API reference image): person relaxed in a cream leather private-jet seat, body stretched naturally across the chair, dark T-shirt and dark jeans, white sneakers visible in foreground, one hand holding a low tumbler glass on the arm/side table, open laptop nearby, warm sun through oval windows, brown leather bag on adjacent seat. Scene: natural unposed moment inside a premium private business jet during golden hour. Perspective should feel like a real handheld social-media story frame, slight authentic imperfection allowed (micro blur / grain), but identity remains clear. Subject: the same person reclining naturally in a cream leather diamond-stitched seat, one leg crossed over the other, one hand holding a low glass with ice (or resting naturally on the armrest), the other resting on lap. Gaze relaxed and confident toward camera with subtle, unforced expression. Wardrobe (UNISEX): clean premium dark look adapted to apparent presentation from the reference (e.g., fitted black crewneck tee or dark minimal top, dark tailored jeans or trousers, clean white sneakers). Optional accessories: subtle chain or minimal watch/jewelry, kept realistic and not gender-stereotyped. Cabin details: polished dark wood side table, open laptop, stack of documents/folder, brown leather duffel on nearby seat, oval jet windows with warm sunlight beams creating defined highlights on leather, wood, metal, glass, and skin. Lighting: strong natural late-afternoon sun rays from windows, high-contrast but plausible; no fake neon. Camera feel: iPhone 14 Pro candid documentary look, native processing, minimal edit, raw-file vibe. Mood: wealthy but understated, honest, grainy realism, like shot by a friend. NEGATIVE: gender-stereotyped styling forced against the reference, text overlays, logos/watermarks, cartoon look, beauty retouch, plastic skin, uncanny face, extra fingers/limbs, fake CGI cabin, over-stylized cinematic VFX.",
+            "CRITICAL IDENTITY LOCK: Use uploaded photo #1 as the ONLY identity source. Preserve the same person with high fidelity: facial structure, skin texture, age cues, hairline, and expression style. STRICT PHOTOREALISM ONLY: candid iPhone-style private-jet cabin photo, no AI-art look, no illustration, no stylization. UNISEX MANDATE (strict): build the scene so it works equally for any gender presentation; no masculine-only or feminine-only assumptions. Keep pose, framing, and styling universal, and adapt fit/details naturally from the reference person only. Scene: natural unposed moment inside a premium private business jet during golden hour. Perspective should feel like a real handheld social-media story frame, slight authentic imperfection allowed (micro blur / grain), but identity remains clear. Subject: the same person reclining naturally in a cream leather diamond-stitched seat, one leg crossed over the other, one hand holding a low glass with ice (or resting naturally on the armrest), the other resting on lap. Gaze relaxed and confident toward camera with subtle, unforced expression. Wardrobe (UNISEX): clean premium dark look adapted to apparent presentation from the reference (e.g., fitted black crewneck tee or dark minimal top, dark tailored jeans or trousers, clean white sneakers). Optional accessories: subtle chain or minimal watch/jewelry, kept realistic and not gender-stereotyped. Cabin details: polished dark wood side table, open laptop, stack of documents/folder, brown leather duffel on nearby seat, oval jet windows with warm sunlight beams creating defined highlights on leather, wood, metal, glass, and skin. Lighting: strong natural late-afternoon sun rays from windows, high-contrast but plausible; no fake neon. Camera feel: iPhone 14 Pro candid documentary look, native processing, minimal edit, raw-file vibe. Mood: wealthy but understated, honest, grainy realism, like shot by a friend. NEGATIVE: gender-stereotyped styling forced against the reference, text overlays, logos/watermarks, cartoon look, beauty retouch, plastic skin, uncanny face, extra fingers/limbs, fake CGI cabin, over-stylized cinematic VFX.",
             1,
         ),
         (
@@ -474,7 +476,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Найденная фотка: тоннель",
             "Жуткий raw-кадр из мокрого тоннеля: ты на переднем плане, а в воде за спиной — пугающее существо как практический грим.",
-            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve exact facial structure, skin texture, age cues, hairline, and expression character — no face replacement, no beauty retouch, no identity drift. This request generates an image in a disturbing horror style, resembling a rough \"found photograph\" shot at night on a cheap early-2000s camera. ALL creature elements must be practical effects only (latex masks/prosthetics/practical makeup/suit performer), not CGI, not clean 3D render, not VFX creature design. EXAMPLE SHOT TO FOLLOW (description only, not an API reference image): person chest-deep in dirty tunnel water in the foreground, wet dark shirt, direct flash on face; deep concrete tunnel perspective; behind the person, one scary humanoid figure rising from water in soft blur. COMPOSITION: vertical portrait frame, subject in foreground (mid shot), wet hair strands, damp skin, direct tired stare; subtle panic/fatigue in expression. UNISEX STYLING: soaked dark T-shirt or dark minimal top, no gender-specific costume cliches, natural fit adapted from the reference. LOCATION: dirty underground drainage/sewer tunnel with shallow reflective water, stained concrete walls, claustrophobic depth, low visibility. BACKGROUND THREAT: one humanoid practical-FX creature emerging from water several meters behind the subject; partially out of focus but clearly threatening. LIGHTING: harsh on-camera flash, strong reflections on wet skin and puddles, hard shadows, deep black falloff. IMAGE QUALITY: gritty early-digital snapshot feel — visible noise, slight compression artifacts, mild color cast, imperfect exposure. MOOD: accidental capture of immediate danger, raw and unsettling realism. NEGATIVE: polished cinematic beauty look, fantasy armor, cartoon/anime, painterly style, obvious CGI monster, perfect studio setup, text overlays, watermark, duplicate faces, extra limbs/fingers.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve exact facial structure, skin texture, age cues, hairline, and expression character — no face replacement, no beauty retouch, no identity drift. This request generates an image in a disturbing horror style, resembling a rough \"found photograph\" shot at night on a cheap early-2000s camera. ALL creature elements must be practical effects only (latex masks/prosthetics/practical makeup/suit performer), not CGI, not clean 3D render, not VFX creature design. COMPOSITION: vertical portrait frame, subject in foreground (mid shot), wet hair strands, damp skin, direct tired stare; subtle panic/fatigue in expression. UNISEX STYLING: soaked dark T-shirt or dark minimal top, no gender-specific costume cliches, natural fit adapted from the reference. LOCATION: dirty underground drainage/sewer tunnel with shallow reflective water, stained concrete walls, claustrophobic depth, low visibility. BACKGROUND THREAT: one humanoid practical-FX creature emerging from water several meters behind the subject; partially out of focus but clearly threatening. LIGHTING: harsh on-camera flash, strong reflections on wet skin and puddles, hard shadows, deep black falloff. IMAGE QUALITY: gritty early-digital snapshot feel — visible noise, slight compression artifacts, mild color cast, imperfect exposure. MOOD: accidental capture of immediate danger, raw and unsettling realism. NEGATIVE: polished cinematic beauty look, fantasy armor, cartoon/anime, painterly style, obvious CGI monster, perfect studio setup, text overlays, watermark, duplicate faces, extra limbs/fingers.",
             1,
         ),
     ],
@@ -533,6 +535,14 @@ _POLAROID_CURTAIN_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "pol
 _BURGUNDY_CINEMA_PORTRAIT_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "burgundy_cinema_portrait_preview.png"
 _MMORPG_HERO_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "mmorpg_hero_fantasy_preview.png"
 _PLASTER_FASHION_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "plaster_fashion_preview.png"
+_CROW_DOUBLE_EXPOSURE_LISTING_IMAGE = PROJECT_ROOT / "assets" / "c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_5399985527576008983-120b52a0-1393-443d-98ea-0a100b52afda.png"
+_GTA_V_REALISM_LISTING_IMAGE = PROJECT_ROOT / "assets" / "c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_5399985527576008979-d9161fb1-b514-423d-83f3-a5cc3724e478.png"
+_TUNNEL_FOUND_PHOTO_LISTING_IMAGE = PROJECT_ROOT / "assets" / "c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_5399985527576008934__1_-587c779a-f67c-4705-98fd-14eb8183785b.png"
+_BUSINESS_JET_LISTING_IMAGE = PROJECT_ROOT / "assets" / "c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_5399985527576008936__1_-b228cc54-0cc4-4ead-8481-ef3cfc9f39ad.png"
+_ABSOLUTE_CINEMA_LISTING_IMAGE = PROJECT_ROOT / "assets" / "c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_5399985527576008991-ef7e28c5-5181-4725-b0f9-31da21ab7244.png"
+_BEARD_MUSTACHE_LISTING_IMAGE = PROJECT_ROOT / "assets" / "c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_5399985527576008992-c7612614-6d1f-40a6-bfff-80dfdd6a1aad.png"
+_GENDER_SWAP_LISTING_IMAGE = PROJECT_ROOT / "assets" / "c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_5399985527576008994-a7d3d4bd-0ae2-4b4b-93aa-e37e0668c9ac.png"
+_MMORPG_HERO_CUSTOM_LISTING_IMAGE = PROJECT_ROOT / "assets" / "c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_5399985527576009031-fee3a617-a99e-4a80-8159-5e130778e774.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -578,8 +588,11 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _BLACK_STUDIO_READY_LISTING_IMAGE
     if t == "Бордовый кино-портрет" and _BURGUNDY_CINEMA_PORTRAIT_LISTING_IMAGE.is_file():
         return _BURGUNDY_CINEMA_PORTRAIT_LISTING_IMAGE
-    if t == _MMORPG_HERO_TITLE and _MMORPG_HERO_LISTING_IMAGE.is_file():
-        return _MMORPG_HERO_LISTING_IMAGE
+    if t == _MMORPG_HERO_TITLE:
+        if _MMORPG_HERO_CUSTOM_LISTING_IMAGE.is_file():
+            return _MMORPG_HERO_CUSTOM_LISTING_IMAGE
+        if _MMORPG_HERO_LISTING_IMAGE.is_file():
+            return _MMORPG_HERO_LISTING_IMAGE
     if t == "Красивый костюм с букетом" and _SUIT_BOUQUET_READY_LISTING_IMAGE.is_file():
         return _SUIT_BOUQUET_READY_LISTING_IMAGE
     if t == "Gucci editorial" and _GUCCI_EDITORIAL_READY_LISTING_IMAGE.is_file():
@@ -604,6 +617,20 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _CHALK_ASPHALT_LISTING_IMAGE
     if t == "Ступени у огня" and _STUPENI_U_OGNYA_LISTING_IMAGE.is_file():
         return _STUPENI_U_OGNYA_LISTING_IMAGE
+    if t == "Двойная экспозиция: вороны" and _CROW_DOUBLE_EXPOSURE_LISTING_IMAGE.is_file():
+        return _CROW_DOUBLE_EXPOSURE_LISTING_IMAGE
+    if t == _GTA_V_REALISM_TITLE and _GTA_V_REALISM_LISTING_IMAGE.is_file():
+        return _GTA_V_REALISM_LISTING_IMAGE
+    if t == "Найденная фотка: тоннель" and _TUNNEL_FOUND_PHOTO_LISTING_IMAGE.is_file():
+        return _TUNNEL_FOUND_PHOTO_LISTING_IMAGE
+    if t == "Самолёт бизнес-класс" and _BUSINESS_JET_LISTING_IMAGE.is_file():
+        return _BUSINESS_JET_LISTING_IMAGE
+    if t == "Absolute Cinema" and _ABSOLUTE_CINEMA_LISTING_IMAGE.is_file():
+        return _ABSOLUTE_CINEMA_LISTING_IMAGE
+    if t == "Густая борода + усы" and _BEARD_MUSTACHE_LISTING_IMAGE.is_file():
+        return _BEARD_MUSTACHE_LISTING_IMAGE
+    if t == "Смена пола" and _GENDER_SWAP_LISTING_IMAGE.is_file():
+        return _GENDER_SWAP_LISTING_IMAGE
     return _start_listing_banner_path()
 
 
