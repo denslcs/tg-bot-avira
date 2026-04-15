@@ -53,10 +53,14 @@ from src.handlers.commands import edit_or_send_nav_message
 from src.keyboards.callback_data import (
     CB_MENU_BACK_START,
     CB_MENU_PAY,
+    CB_MENU_PAY_HUB,
+    CB_MENU_HUB,
     CB_PAY_BONUS_MENU,
+    CB_PAY_BONUS_MENU_HUB,
     CB_PAY_CRYPTO_PREFIX,
     CB_PAY_INTL_PREFIX,
     CB_PAY_MENU,
+    CB_PAY_MENU_HUB,
     CB_PAY_PACK_PREFIX,
     CB_PAY_PLAN_PREFIX,
     CB_PAY_RUB_PREFIX,
@@ -161,7 +165,11 @@ def _plans_menu_caption() -> str:
     )
 
 
-def _plans_keyboard() -> InlineKeyboardMarkup:
+def _plans_keyboard(
+    *,
+    back_callback: str = CB_MENU_BACK_START,
+    bonus_menu_callback: str = CB_PAY_BONUS_MENU,
+) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for pid in PLANS_ORDER:
         p = PLANS[pid]
@@ -178,12 +186,12 @@ def _plans_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text="🎁 Пакеты бонусов",
-                callback_data=CB_PAY_BONUS_MENU,
+                callback_data=bonus_menu_callback,
                 style=BTN_SUCCESS,
             )
         ]
     )
-    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)])
+    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -294,12 +302,12 @@ def _bonus_packs_caption() -> str:
     return "\n\n".join(lines)
 
 
-def _bonus_packs_keyboard() -> InlineKeyboardMarkup:
+def _bonus_packs_keyboard(*, pay_menu_callback: str = CB_PAY_MENU) -> InlineKeyboardMarkup:
     """Сверху зелёные (два младших пакета в ряд), ниже синий крупный, внизу нейтральный «Назад»."""
     rows: list[list[InlineKeyboardButton]] = []
     order = list(BONUS_PACKS_ORDER)
     if not order:
-        rows.append([InlineKeyboardButton(text="⬅️ Назад к тарифам", callback_data=CB_PAY_MENU)])
+        rows.append([InlineKeyboardButton(text="⬅️ Назад к тарифам", callback_data=pay_menu_callback)])
         return InlineKeyboardMarkup(inline_keyboard=rows)
     if len(order) == 1:
         b = BONUS_PACKS[order[0]]
@@ -340,7 +348,7 @@ def _bonus_packs_keyboard() -> InlineKeyboardMarkup:
                     )
                 ]
             )
-    rows.append([InlineKeyboardButton(text="⬅️ Назад к тарифам", callback_data=CB_PAY_MENU)])
+    rows.append([InlineKeyboardButton(text="⬅️ Назад к тарифам", callback_data=pay_menu_callback)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -360,7 +368,13 @@ async def _send_plans_menu_to_chat(bot, chat_id: int) -> None:
         await bot.send_message(chat_id, caption, reply_markup=kb, parse_mode=HTML)
 
 
-async def send_subscription_menu(message: Message, *, replace_previous: bool = False) -> None:
+async def send_subscription_menu(
+    message: Message,
+    *,
+    replace_previous: bool = False,
+    back_callback: str = CB_MENU_BACK_START,
+    bonus_menu_callback: str = CB_PAY_BONUS_MENU,
+) -> None:
     """Тарифы и оплата — то же, что кнопка «Оплатить» в /start."""
     if not message.from_user:
         return
@@ -369,7 +383,7 @@ async def send_subscription_menu(message: Message, *, replace_previous: bool = F
     bot = message.bot
     if replace_previous:
         caption = _plans_menu_caption()
-        kb = _plans_keyboard()
+        kb = _plans_keyboard(back_callback=back_callback, bonus_menu_callback=bonus_menu_callback)
         edited = await edit_or_send_nav_message(
             message,
             text=caption,
@@ -381,13 +395,19 @@ async def send_subscription_menu(message: Message, *, replace_previous: bool = F
     await _send_plans_menu_to_chat(bot, chat_id)
 
 
-@router.callback_query(F.data == CB_MENU_PAY)
+@router.callback_query((F.data == CB_MENU_PAY) | (F.data == CB_MENU_PAY_HUB))
 async def menu_pay(callback: CallbackQuery) -> None:
     if callback.message is None or callback.from_user is None:
         await callback.answer()
         return
     await callback.answer()
-    await send_subscription_menu(callback.message, replace_previous=True)
+    is_hub = callback.data == CB_MENU_PAY_HUB
+    await send_subscription_menu(
+        callback.message,
+        replace_previous=True,
+        back_callback=(CB_MENU_HUB if is_hub else CB_MENU_BACK_START),
+        bonus_menu_callback=(CB_PAY_BONUS_MENU_HUB if is_hub else CB_PAY_BONUS_MENU),
+    )
 
 
 @router.message(Command("pay"))
@@ -395,14 +415,18 @@ async def cmd_pay(message: Message) -> None:
     await send_subscription_menu(message)
 
 
-@router.callback_query(F.data == CB_PAY_MENU)
+@router.callback_query((F.data == CB_PAY_MENU) | (F.data == CB_PAY_MENU_HUB))
 async def pay_back_plans(callback: CallbackQuery) -> None:
     if callback.message is None:
         await callback.answer()
         return
     await callback.answer()
     caption = _plans_menu_caption()
-    kb = _plans_keyboard()
+    is_hub = callback.data == CB_PAY_MENU_HUB
+    kb = _plans_keyboard(
+        back_callback=(CB_MENU_HUB if is_hub else CB_MENU_BACK_START),
+        bonus_menu_callback=(CB_PAY_BONUS_MENU_HUB if is_hub else CB_PAY_BONUS_MENU),
+    )
     await edit_or_send_nav_message(
         callback.message,
         text=caption,
@@ -439,24 +463,34 @@ async def pay_pick_plan(callback: CallbackQuery) -> None:
         await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
         return
     await callback.answer()
+    back_to_plans_callback = CB_PAY_MENU
+    if callback.message and callback.message.reply_markup:
+        for row in callback.message.reply_markup.inline_keyboard:
+            for btn in row:
+                if (getattr(btn, "text", "") or "").strip() == "⬅️ Назад" and getattr(btn, "callback_data", None):
+                    back_to_plans_callback = (
+                        CB_PAY_MENU_HUB if str(btn.callback_data) == CB_MENU_HUB else CB_PAY_MENU
+                    )
+                    break
     await edit_or_send_nav_message(
         callback.message,
         text=_pay_methods_text(plan_id),
-        reply_markup=_methods_keyboard(plan_id, is_pack=False, back_callback_data=CB_PAY_MENU),
+        reply_markup=_methods_keyboard(plan_id, is_pack=False, back_callback_data=back_to_plans_callback),
         parse_mode=HTML,
     )
 
 
-@router.callback_query(F.data == CB_PAY_BONUS_MENU)
+@router.callback_query((F.data == CB_PAY_BONUS_MENU) | (F.data == CB_PAY_BONUS_MENU_HUB))
 async def pay_bonus_menu(callback: CallbackQuery) -> None:
     if callback.message is None:
         await callback.answer()
         return
     await callback.answer()
+    is_hub = callback.data == CB_PAY_BONUS_MENU_HUB
     await edit_or_send_nav_message(
         callback.message,
         text=_bonus_packs_caption(),
-        reply_markup=_bonus_packs_keyboard(),
+        reply_markup=_bonus_packs_keyboard(pay_menu_callback=(CB_PAY_MENU_HUB if is_hub else CB_PAY_MENU)),
         parse_mode=HTML,
     )
 
@@ -471,10 +505,21 @@ async def pay_pick_pack(callback: CallbackQuery) -> None:
         await callback.answer("Неизвестный пакет", show_alert=True)
         return
     await callback.answer()
+    back_to_bonus_callback = CB_PAY_BONUS_MENU
+    if callback.message and callback.message.reply_markup:
+        for row in callback.message.reply_markup.inline_keyboard:
+            for btn in row:
+                if (getattr(btn, "text", "") or "").strip() == "⬅️ Назад к тарифам":
+                    back_to_bonus_callback = (
+                        CB_PAY_BONUS_MENU_HUB
+                        if str(getattr(btn, "callback_data", "")) == CB_PAY_MENU_HUB
+                        else CB_PAY_BONUS_MENU
+                    )
+                    break
     await edit_or_send_nav_message(
         callback.message,
         text=_pack_methods_text(pack_id),
-        reply_markup=_methods_keyboard(pack_id, is_pack=True, back_callback_data=CB_PAY_BONUS_MENU),
+        reply_markup=_methods_keyboard(pack_id, is_pack=True, back_callback_data=back_to_bonus_callback),
         parse_mode=HTML,
     )
 

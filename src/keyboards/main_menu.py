@@ -4,15 +4,23 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from src.config import SUPPORT_BOT_USERNAME
 from src.keyboards.callback_data import (
+    CB_CREATE_IMAGE_HUB,
     CB_CREATE_IMAGE,
     CB_MENU_ABOUT,
+    CB_MENU_ABOUT_HUB,
     CB_MENU_BACK_START,
     CB_MENU_CHANNEL,
+    CB_MENU_CHANNEL_HUB,
     CB_MENU_FAQ,
+    CB_MENU_FAQ_HUB,
     CB_MENU_PAY,
+    CB_MENU_PAY_HUB,
     CB_MENU_PROFILE,
+    CB_MENU_PROFILE_HUB,
     CB_MENU_REF,
+    CB_MENU_REF_HUB,
     CB_MENU_SUPPORT,
+    CB_MENU_SUPPORT_HUB,
     CB_READY_IDEAS,
     CB_READY_IDEAS_HUB,
 )
@@ -61,30 +69,32 @@ def menu_hub_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="⭐ Готовые идеи", callback_data=CB_READY_IDEAS_HUB, style=BTN_SUCCESS
                 ),
-                InlineKeyboardButton(text="⭐ Подписки", callback_data=CB_MENU_PAY, style=BTN_SUCCESS),
+                InlineKeyboardButton(text="⭐ Подписки", callback_data=CB_MENU_PAY_HUB, style=BTN_SUCCESS),
             ],
             [
-                InlineKeyboardButton(text="⭐ Поддержка", callback_data=CB_MENU_SUPPORT, style=BTN_SUCCESS),
-                InlineKeyboardButton(text="⭐ Реф. система", callback_data=CB_MENU_REF, style=BTN_SUCCESS),
+                InlineKeyboardButton(text="⭐ Поддержка", callback_data=CB_MENU_SUPPORT_HUB, style=BTN_SUCCESS),
+                InlineKeyboardButton(text="⭐ Реф. система", callback_data=CB_MENU_REF_HUB, style=BTN_SUCCESS),
             ],
             [
-                InlineKeyboardButton(text="👤 Профиль", callback_data=CB_MENU_PROFILE, style=BTN_PRIMARY),
-                InlineKeyboardButton(text="🎨 Создать картинку", callback_data=CB_CREATE_IMAGE, style=BTN_PRIMARY),
+                InlineKeyboardButton(text="👤 Профиль", callback_data=CB_MENU_PROFILE_HUB, style=BTN_PRIMARY),
+                InlineKeyboardButton(
+                    text="🎨 Создать картинку", callback_data=CB_CREATE_IMAGE_HUB, style=BTN_PRIMARY
+                ),
             ],
             [
-                InlineKeyboardButton(text="ℹ️ Что умею", callback_data=CB_MENU_ABOUT, style=BTN_PRIMARY),
-                InlineKeyboardButton(text="❓ FAQ", callback_data=CB_MENU_FAQ, style=BTN_PRIMARY),
+                InlineKeyboardButton(text="ℹ️ Что умею", callback_data=CB_MENU_ABOUT_HUB, style=BTN_PRIMARY),
+                InlineKeyboardButton(text="❓ FAQ", callback_data=CB_MENU_FAQ_HUB, style=BTN_PRIMARY),
             ],
             [
-                InlineKeyboardButton(text="📢 Канал", callback_data=CB_MENU_CHANNEL),
-                InlineKeyboardButton(text="💳 Баланс", callback_data=CB_MENU_PROFILE),
+                InlineKeyboardButton(text="📢 Канал", callback_data=CB_MENU_CHANNEL_HUB),
+                InlineKeyboardButton(text="💳 Баланс", callback_data=CB_MENU_PROFILE_HUB),
             ],
             [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)],
         ]
     )
 
 
-def back_to_main_menu_keyboard() -> InlineKeyboardMarkup:
+def back_to_main_menu_keyboard(back_callback: str = CB_MENU_BACK_START) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)]]
+        inline_keyboard=[[InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)]]
     )

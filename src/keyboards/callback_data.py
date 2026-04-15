@@ -14,9 +14,17 @@ CB_MENU_SUPPORT = "menu:support"
 CB_MENU_HUB = "menu:hub"
 CB_MENU_FAQ = "menu:faq"
 CB_MENU_CHANNEL = "menu:channel"
+CB_MENU_PROFILE_HUB = "menu:profile_hub"
+CB_MENU_ABOUT_HUB = "menu:about_hub"
+CB_MENU_PAY_HUB = "menu:pay_hub"
+CB_MENU_REF_HUB = "menu:ref_hub"
+CB_MENU_SUPPORT_HUB = "menu:support_hub"
+CB_MENU_FAQ_HUB = "menu:faq_hub"
+CB_MENU_CHANNEL_HUB = "menu:channel_hub"
 
 # --- Генерация изображений (handlers/img_commands.py) ---
 CB_CREATE_IMAGE = "menu:create_image"
+CB_CREATE_IMAGE_HUB = "menu:create_image_hub"
 CB_MENU_BACK_START = "menu:back_start"
 CB_BACK_IMAGE_MODELS = "img:back_models"
 CB_GEN_TEXT = "img:mode:text"
@@ -40,7 +48,9 @@ CB_IMG_MODEL_SEL_PREFIX = "img:m:"
 
 # --- Оплата (handlers/payments.py) ---
 CB_PAY_MENU = "pay:menu"
+CB_PAY_MENU_HUB = "pay:menu_hub"
 CB_PAY_BONUS_MENU = "pay:bonus_menu"
+CB_PAY_BONUS_MENU_HUB = "pay:bonus_menu_hub"
 CB_PAY_PLAN_PREFIX = "pay:p:"
 CB_PAY_PACK_PREFIX = "pay:b:"
 CB_PAY_STARS_PREFIX = "pay:s:"
@@ -68,13 +78,22 @@ __all__ = [
     "CB_MENU_HUB",
     "CB_MENU_PAY",
     "CB_MENU_PROFILE",
+    "CB_MENU_PROFILE_HUB",
     "CB_MENU_REF",
+    "CB_MENU_REF_HUB",
     "CB_MENU_REF_LEGACY",
     "CB_MENU_SUPPORT",
+    "CB_MENU_SUPPORT_HUB",
+    "CB_MENU_ABOUT_HUB",
+    "CB_MENU_PAY_HUB",
+    "CB_MENU_FAQ_HUB",
+    "CB_MENU_CHANNEL_HUB",
     "CB_PAY_BONUS_MENU",
+    "CB_PAY_BONUS_MENU_HUB",
     "CB_PAY_CRYPTO_PREFIX",
     "CB_PAY_INTL_PREFIX",
     "CB_PAY_MENU",
+    "CB_PAY_MENU_HUB",
     "CB_PAY_PACK_PREFIX",
     "CB_PAY_PLAN_PREFIX",
     "CB_PAY_RUB_PREFIX",
@@ -83,6 +102,7 @@ __all__ = [
     "CB_PICK_NANO_2",
     "CB_PICK_QWEN",
     "CB_PICK_FLUX",
+    "CB_CREATE_IMAGE_HUB",
     "CB_READY_IDEAS",
     "CB_READY_IDEAS_HUB",
     "CB_REGEN",

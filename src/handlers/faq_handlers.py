@@ -64,7 +64,7 @@ _FAQ: list[tuple[str, str, str]] = [
 ]
 
 
-def _faq_keyboard() -> InlineKeyboardMarkup:
+def _faq_keyboard(back_callback: str = CB_MENU_BACK_START) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     row: list[InlineKeyboardButton] = []
     for i, (slug, title, _) in enumerate(_FAQ):
@@ -76,8 +76,18 @@ def _faq_keyboard() -> InlineKeyboardMarkup:
             row = []
     if row:
         rows.append(row)
-    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)])
+    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _faq_back_callback_from_message(message: Message | None) -> str:
+    if not message or not message.reply_markup or not message.reply_markup.inline_keyboard:
+        return CB_MENU_BACK_START
+    for row in message.reply_markup.inline_keyboard:
+        for btn in row:
+            if (getattr(btn, "text", "") or "").strip() == "⬅️ Назад" and getattr(btn, "callback_data", None):
+                return str(btn.callback_data)
+    return CB_MENU_BACK_START
 
 
 @router.message(Command("faq"))
@@ -106,9 +116,10 @@ async def faq_callback(callback: CallbackQuery) -> None:
     text = f"<b>{esc(title)}</b>\n\n<blockquote>{esc(body)}</blockquote>"
     await callback.answer()
     if callback.message:
+        back_callback = _faq_back_callback_from_message(callback.message)
         await edit_or_send_nav_message(
             callback.message,
             text=text,
-            reply_markup=_faq_keyboard(),
+            reply_markup=_faq_keyboard(back_callback=back_callback),
             parse_mode=HTML,
         )

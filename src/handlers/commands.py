@@ -52,14 +52,20 @@ from src.formatting import HTML, esc, format_subscription_ends_at
 from src.keyboards.callback_data import (
     CB_IMG_OK,
     CB_MENU_ABOUT,
+    CB_MENU_ABOUT_HUB,
     CB_MENU_BACK_START,
     CB_MENU_CHANNEL,
+    CB_MENU_CHANNEL_HUB,
     CB_MENU_FAQ,
+    CB_MENU_FAQ_HUB,
     CB_MENU_HUB,
     CB_MENU_PROFILE,
+    CB_MENU_PROFILE_HUB,
     CB_MENU_REF,
+    CB_MENU_REF_HUB,
     CB_MENU_REF_LEGACY,
     CB_MENU_SUPPORT,
+    CB_MENU_SUPPORT_HUB,
     CB_REGEN,
 )
 from src.keyboards.main_menu import back_to_main_menu_keyboard, menu_hub_keyboard, start_menu_keyboard
@@ -69,6 +75,10 @@ from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 router = Router(name="commands")
 
 _BACK_TO_MENU_ROW = [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)]
+
+
+def _back_row(back_callback: str) -> list[InlineKeyboardButton]:
+    return [InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)]
 
 # Невидимый символ — только чтобы обновить reply-клавиатуру с актуальным балансом.
 _QUICK_PANEL_STUB = "\u200b"
@@ -520,12 +530,13 @@ async def cmd_help(message: Message) -> None:
     )
 
 
-@router.callback_query(F.data == CB_MENU_ABOUT)
+@router.callback_query((F.data == CB_MENU_ABOUT) | (F.data == CB_MENU_ABOUT_HUB))
 async def menu_about(callback: CallbackQuery) -> None:
     if not callback.message:
         await callback.answer("Сообщение недоступно.", show_alert=True)
         return
     await callback.answer()
+    back_callback = CB_MENU_HUB if callback.data == CB_MENU_ABOUT_HUB else CB_MENU_BACK_START
     text = (
         "<b>Что умеет бот</b>\n"
         "<blockquote>"
@@ -540,33 +551,35 @@ async def menu_about(callback: CallbackQuery) -> None:
     await edit_or_send_nav_message(
         callback.message,
         text=text,
-        reply_markup=back_to_main_menu_keyboard(),
+        reply_markup=back_to_main_menu_keyboard(back_callback),
         parse_mode=HTML,
     )
 
 
-@router.callback_query(F.data == CB_MENU_FAQ)
+@router.callback_query((F.data == CB_MENU_FAQ) | (F.data == CB_MENU_FAQ_HUB))
 async def menu_faq(callback: CallbackQuery) -> None:
     if not callback.message:
         await callback.answer("Сообщение недоступно.", show_alert=True)
         return
     await callback.answer()
+    back_callback = CB_MENU_HUB if callback.data == CB_MENU_FAQ_HUB else CB_MENU_BACK_START
     from src.handlers.faq_handlers import _faq_keyboard
 
     await edit_or_send_nav_message(
         callback.message,
         text="<b>Частые вопросы</b>\n<blockquote><i>Выбери тему — пришлю короткий ответ.</i></blockquote>",
-        reply_markup=_faq_keyboard(),
+        reply_markup=_faq_keyboard(back_callback=back_callback),
         parse_mode=HTML,
     )
 
 
-@router.callback_query(F.data == CB_MENU_CHANNEL)
+@router.callback_query((F.data == CB_MENU_CHANNEL) | (F.data == CB_MENU_CHANNEL_HUB))
 async def menu_channel(callback: CallbackQuery) -> None:
     if not callback.message:
         await callback.answer("Сообщение недоступно.", show_alert=True)
         return
     await callback.answer()
+    back_callback = CB_MENU_HUB if callback.data == CB_MENU_CHANNEL_HUB else CB_MENU_BACK_START
     if not CHANNEL_URL:
         await edit_or_send_nav_message(
             callback.message,
@@ -575,14 +588,14 @@ async def menu_channel(callback: CallbackQuery) -> None:
                 "<blockquote><i>Ссылка пока не добавлена. Заполни</i> "
                 "<code>CHANNEL_URL</code> <i>в .env, и кнопка откроет канал.</i></blockquote>"
             ),
-            reply_markup=back_to_main_menu_keyboard(),
+            reply_markup=back_to_main_menu_keyboard(back_callback),
             parse_mode=HTML,
         )
         return
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="Открыть канал", url=CHANNEL_URL, style=BTN_PRIMARY)],
-            _BACK_TO_MENU_ROW,
+            _back_row(back_callback),
         ]
     )
     await edit_or_send_nav_message(
@@ -593,12 +606,13 @@ async def menu_channel(callback: CallbackQuery) -> None:
     )
 
 
-@router.callback_query(F.data == CB_MENU_SUPPORT)
+@router.callback_query((F.data == CB_MENU_SUPPORT) | (F.data == CB_MENU_SUPPORT_HUB))
 async def menu_support(callback: CallbackQuery) -> None:
     if not callback.message:
         await callback.answer("Сообщение недоступно.", show_alert=True)
         return
     await callback.answer()
+    back_callback = CB_MENU_HUB if callback.data == CB_MENU_SUPPORT_HUB else CB_MENU_BACK_START
     if not SUPPORT_BOT_USERNAME:
         await edit_or_send_nav_message(
             callback.message,
@@ -606,7 +620,7 @@ async def menu_support(callback: CallbackQuery) -> None:
                 "<blockquote><i>Поддержка пока не настроена</i> "
                 "(пустой <code>SUPPORT_BOT_USERNAME</code>).</blockquote>"
             ),
-            reply_markup=back_to_main_menu_keyboard(),
+            reply_markup=back_to_main_menu_keyboard(back_callback),
             parse_mode=HTML,
         )
         return
@@ -614,7 +628,7 @@ async def menu_support(callback: CallbackQuery) -> None:
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="Открыть поддержку", url=support_url)],
-            _BACK_TO_MENU_ROW,
+            _back_row(back_callback),
         ]
     )
     await edit_or_send_nav_message(
@@ -645,6 +659,8 @@ async def _build_referral_message(
     user_id: int,
     username: str | None,
     bot_username: str | None,
+    *,
+    back_callback: str = CB_MENU_BACK_START,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """bot_username — из await bot.me(); у aiogram.Bot нет атрибута .username."""
     await ensure_user(user_id, username)
@@ -687,16 +703,28 @@ async def _build_referral_message(
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="📩 Пригласить", url=share_url, style=BTN_SUCCESS)],
-            _BACK_TO_MENU_ROW,
+            _back_row(back_callback),
         ]
     )
     return text, kb
 
 
-async def deliver_referral_screen(bot: Bot, user_id: int, username: str | None, reply_via: Message | None) -> None:
+async def deliver_referral_screen(
+    bot: Bot,
+    user_id: int,
+    username: str | None,
+    reply_via: Message | None,
+    *,
+    back_callback: str = CB_MENU_BACK_START,
+) -> None:
     """Отправить экран рефералки (callback или команда /ref)."""
     me = await bot.me()
-    text, kb = await _build_referral_message(user_id, username, me.username)
+    text, kb = await _build_referral_message(
+        user_id,
+        username,
+        me.username,
+        back_callback=back_callback,
+    )
     try:
         if reply_via:
             await edit_or_send_nav_message(
@@ -725,18 +753,22 @@ async def deliver_referral_screen(bot: Bot, user_id: int, username: str | None, 
             logging.exception("deliver_referral_screen: не удалось отправить сообщение об ошибке")
 
 
-@router.callback_query((F.data == CB_MENU_REF) | (F.data == CB_MENU_REF_LEGACY))
+@router.callback_query(
+    (F.data == CB_MENU_REF) | (F.data == CB_MENU_REF_LEGACY) | (F.data == CB_MENU_REF_HUB)
+)
 async def menu_ref(callback: CallbackQuery) -> None:
     if not callback.from_user:
         await callback.answer("Не удалось определить пользователя.", show_alert=True)
         return
     # Сразу снимаем «часики» у кнопки; иначе клиент ждёт до конца отправки сообщения (до ~20 с).
     await callback.answer()
+    back_callback = CB_MENU_HUB if callback.data == CB_MENU_REF_HUB else CB_MENU_BACK_START
     await deliver_referral_screen(
         callback.bot,
         callback.from_user.id,
         callback.from_user.username,
         callback.message,
+        back_callback=back_callback,
     )
 
 
@@ -755,21 +787,28 @@ async def cmd_profile(message: Message) -> None:
     await send_profile_card(message, message.from_user.id, message.from_user.username)
 
 
-@router.callback_query(F.data == CB_MENU_PROFILE)
+@router.callback_query((F.data == CB_MENU_PROFILE) | (F.data == CB_MENU_PROFILE_HUB))
 async def menu_profile(callback: CallbackQuery) -> None:
     if not callback.from_user or not callback.message:
         await callback.answer()
         return
     await callback.answer()
+    back_callback = CB_MENU_HUB if callback.data == CB_MENU_PROFILE_HUB else CB_MENU_BACK_START
     await send_profile_card(
         callback.message,
         callback.from_user.id,
         callback.from_user.username,
         edit_existing=True,
+        back_callback=back_callback,
     )
 
 
-async def _profile_card_html(user_id: int, username_raw: str | None) -> tuple[str, InlineKeyboardMarkup]:
+async def _profile_card_html(
+    user_id: int,
+    username_raw: str | None,
+    *,
+    back_callback: str = CB_MENU_BACK_START,
+) -> tuple[str, InlineKeyboardMarkup]:
     """Текст профиля и клавиатура «Назад» (не вызывать для админов — у них отдельный экран)."""
     await ensure_user(user_id, username_raw)
     profile = await get_user_admin_profile(user_id)
@@ -777,7 +816,7 @@ async def _profile_card_html(user_id: int, username_raw: str | None) -> tuple[st
         missing = (
             "<blockquote><i>Профиль пока не найден. Нажми</i> <code>/start</code> <i>и попробуй снова.</i></blockquote>"
         )
-        return missing, back_to_main_menu_keyboard()
+        return missing, back_to_main_menu_keyboard(back_callback)
     balance = await get_credits(user_id)
     approx_images = max(0, balance // 30)
     ready_bonus_uses = int(profile.idea_tokens or 0)
@@ -817,7 +856,7 @@ async def _profile_card_html(user_id: int, username_raw: str | None) -> tuple[st
         f"<i>Сгенерировано изображений:</i> <b>{esc(gen_total)}</b>\n"
         "</blockquote>"
     )
-    return body, back_to_main_menu_keyboard()
+    return body, back_to_main_menu_keyboard(back_callback)
 
 
 async def send_profile_card(
@@ -826,16 +865,17 @@ async def send_profile_card(
     username_raw: str | None,
     *,
     edit_existing: bool = False,
+    back_callback: str = CB_MENU_BACK_START,
 ) -> None:
     if user_id in ADMIN_IDS:
         text = "<blockquote><b>Режим админа</b> — безлимит по кредитам.</blockquote>"
-        kb = back_to_main_menu_keyboard()
+        kb = back_to_main_menu_keyboard(back_callback)
         if edit_existing:
             await edit_or_send_nav_message(message, text=text, reply_markup=kb, parse_mode=HTML)
         else:
             await message.answer(text, reply_markup=kb, parse_mode=HTML)
         return
-    text, kb = await _profile_card_html(user_id, username_raw)
+    text, kb = await _profile_card_html(user_id, username_raw, back_callback=back_callback)
     if edit_existing:
         await edit_or_send_nav_message(message, text=text, reply_markup=kb, parse_mode=HTML)
     else:

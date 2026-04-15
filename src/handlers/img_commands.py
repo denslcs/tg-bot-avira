@@ -70,6 +70,7 @@ from src.handlers.commands import edit_or_send_nav_message, restore_main_menu_me
 from src.keyboards.main_menu import start_menu_keyboard
 from src.keyboards.callback_data import (
     CB_BACK_IMAGE_MODELS,
+    CB_CREATE_IMAGE_HUB,
     CB_CREATE_IMAGE,
     CB_IMG_CANCEL,
     CB_IMG_MODEL_SEL_PREFIX,
@@ -722,8 +723,6 @@ _GEN_STATUS_DONE_TEXT = (
     "<i>✅ Генерация завершена.</i> Результат — в следующем сообщении."
 )
 
-_BACK_MAIN = [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)]
-
 # Имитация прогресса: OpenRouter/Polza не отдают реальный %, только «пока ждём».
 _GEN_PROGRESS_INTERVAL_SEC = 2.0
 _GEN_PROGRESS_STEP = 10
@@ -845,8 +844,10 @@ def _waiting_prompt_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def _missing_config_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[_BACK_MAIN])
+def _missing_config_kb(back_callback: str = CB_MENU_BACK_START) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)]]
+    )
 
 
 class ImageGenState(StatesGroup):
@@ -957,7 +958,10 @@ async def _effective_image_model_and_cost(user_id: int, requested_model: str) ->
     return OPENROUTER_IMAGE_MODEL.strip(), OPENROUTER_IMAGE_COST_CREDITS
 
 
-def _subscriber_model_pick_keyboard(choices: list[tuple[str, str, int, str]]) -> InlineKeyboardMarkup:
+def _subscriber_model_pick_keyboard(
+    choices: list[tuple[str, str, int, str]],
+    back_callback: str = CB_MENU_BACK_START,
+) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for i, (label, _mid, cost, _hint) in enumerate(choices):
         rows.append(
@@ -969,9 +973,7 @@ def _subscriber_model_pick_keyboard(choices: list[tuple[str, str, int, str]]) ->
                 )
             ]
         )
-    rows.append(
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)]
-    )
+    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -1732,12 +1734,14 @@ async def _show_image_model_pick(
     state: FSMContext,
     user_id: int,
     username: str | None,
+    *,
+    back_callback: str = CB_MENU_BACK_START,
 ) -> None:
     if not is_openrouter_image_configured():
         await edit_or_send_nav_message(
             message,
             text=_IMAGE_GEN_MISSING_TEXT,
-            reply_markup=_missing_config_kb(),
+            reply_markup=_missing_config_kb(back_callback),
             parse_mode=HTML,
         )
         return
@@ -1748,10 +1752,18 @@ async def _show_image_model_pick(
     else:
         profile = await get_user_admin_profile(user_id)
         if not profile or not subscription_is_active(profile.subscription_ends_at):
-            await _start_image_flow(message, state, user_id, username, replace_menu=True)
+            await _start_image_flow(
+                message,
+                state,
+                user_id,
+                username,
+                replace_menu=True,
+                back_callback=back_callback,
+            )
             return
         plan_id = (profile.subscription_plan or "").strip().lower()
     await state.clear()
+    await state.update_data(_img_back_cb=back_callback)
     choices = _model_choices_for_subscription_plan(plan_id)
     if len(choices) < 2:
         m = choices[0]
@@ -1771,7 +1783,7 @@ async def _show_image_model_pick(
     await edit_or_send_nav_message(
         message,
         text=cap,
-        reply_markup=_subscriber_model_pick_keyboard(choices),
+        reply_markup=_subscriber_model_pick_keyboard(choices, back_callback=back_callback),
         parse_mode=HTML,
     )
 
@@ -1783,20 +1795,26 @@ async def _start_image_flow(
     username: str | None,
     *,
     replace_menu: bool = False,
+    back_callback: str = CB_MENU_BACK_START,
 ) -> None:
     if not is_openrouter_image_configured():
         if replace_menu:
             await edit_or_send_nav_message(
                 message,
                 text=_IMAGE_GEN_MISSING_TEXT,
-                reply_markup=_missing_config_kb(),
+                reply_markup=_missing_config_kb(back_callback),
                 parse_mode=HTML,
             )
         else:
-            await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
+            await message.answer(
+                _IMAGE_GEN_MISSING_TEXT,
+                reply_markup=_missing_config_kb(back_callback),
+                parse_mode=HTML,
+            )
         return
     await ensure_user(user_id, username)
     await state.clear()
+    await state.update_data(_img_back_cb=back_callback)
     await _send_waiting_prompt_step(
         message.bot,
         message.chat.id,
@@ -1903,15 +1921,36 @@ async def back_to_image_flow(callback: CallbackQuery, state: FSMContext) -> None
         return
     await callback.answer()
     uid = callback.from_user.id
+    data = await state.get_data()
+    back_callback = str(data.get("_img_back_cb") or CB_MENU_BACK_START)
     if uid in ADMIN_IDS:
-        await _show_image_model_pick(callback.message, state, uid, callback.from_user.username)
+        await _show_image_model_pick(
+            callback.message,
+            state,
+            uid,
+            callback.from_user.username,
+            back_callback=back_callback,
+        )
         return
     await ensure_user(uid, callback.from_user.username)
     profile = await get_user_admin_profile(uid)
     if profile and subscription_is_active(profile.subscription_ends_at):
-        await _show_image_model_pick(callback.message, state, uid, callback.from_user.username)
+        await _show_image_model_pick(
+            callback.message,
+            state,
+            uid,
+            callback.from_user.username,
+            back_callback=back_callback,
+        )
     else:
-        await _start_image_flow(callback.message, state, uid, callback.from_user.username, replace_menu=True)
+        await _start_image_flow(
+            callback.message,
+            state,
+            uid,
+            callback.from_user.username,
+            replace_menu=True,
+            back_callback=back_callback,
+        )
 
 
 async def _send_ready_ideas_screen(
@@ -2822,13 +2861,14 @@ async def ready_waiting_confirm_hint(message: Message) -> None:
     )
 
 
-@router.callback_query(F.data == CB_CREATE_IMAGE)
+@router.callback_query((F.data == CB_CREATE_IMAGE) | (F.data == CB_CREATE_IMAGE_HUB))
 async def open_image_menu(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.from_user is None or callback.message is None:
         await callback.answer("Ошибка запроса.", show_alert=True)
         return
     await callback.answer()
     uid = callback.from_user.id
+    back_callback = CB_MENU_HUB if callback.data == CB_CREATE_IMAGE_HUB else CB_MENU_BACK_START
     await ensure_user(uid, callback.from_user.username)
     profile = await get_user_admin_profile(uid)
     has_sub = bool(profile and subscription_is_active(profile.subscription_ends_at))
@@ -2838,9 +2878,17 @@ async def open_image_menu(callback: CallbackQuery, state: FSMContext) -> None:
             state,
             uid,
             callback.from_user.username,
+            back_callback=back_callback,
         )
     else:
-        await _start_image_flow(callback.message, state, uid, callback.from_user.username, replace_menu=True)
+        await _start_image_flow(
+            callback.message,
+            state,
+            uid,
+            callback.from_user.username,
+            replace_menu=True,
+            back_callback=back_callback,
+        )
 
 
 @router.message(ImageGenState.waiting_prompt, ~F.text)
