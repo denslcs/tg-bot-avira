@@ -26,6 +26,7 @@ CB_PICK_NANO_2 = "img:pick_nano2"
 CB_PICK_QWEN = "img:pick_qwen"
 CB_PICK_FLUX = "img:pick_flux"
 CB_READY_IDEAS = "menu:ready_ideas"
+CB_READY_IDEAS_HUB = "menu:ready_ideas_hub"
 CB_APPLY_READY_PREFIX = "img:idea:"
 CB_READY_CAT_PREFIX = "img:idea_cat:"
 CB_READY_NAV_PREFIX = "img:idea_nav:"
@@ -83,5 +84,6 @@ __all__ = [
     "CB_PICK_QWEN",
     "CB_PICK_FLUX",
     "CB_READY_IDEAS",
+    "CB_READY_IDEAS_HUB",
     "CB_REGEN",
 ]

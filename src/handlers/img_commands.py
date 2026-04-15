@@ -75,9 +75,11 @@ from src.keyboards.callback_data import (
     CB_IMG_MODEL_SEL_PREFIX,
     CB_IMG_OK,
     CB_MENU_BACK_START,
+    CB_MENU_HUB,
     CB_READY_CAT_PREFIX,
     CB_READY_CONFIRM,
     CB_READY_IDEAS,
+    CB_READY_IDEAS_HUB,
     CB_READY_NAV_PREFIX,
     CB_READY_PHOTO_BACK,
     CB_REGEN,
@@ -1098,7 +1100,7 @@ async def _prepare_image_charge_and_daily_slot(
     return True, meta
 
 
-def _ready_categories_keyboard() -> InlineKeyboardMarkup:
+def _ready_categories_keyboard(back_callback: str = CB_MENU_BACK_START) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     pair: list[InlineKeyboardButton] = []
     for slug, title in READY_IDEA_CATEGORIES:
@@ -1114,7 +1116,7 @@ def _ready_categories_keyboard() -> InlineKeyboardMarkup:
             pair = []
     if pair:
         rows.append(pair)
-    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)])
+    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -1122,7 +1124,11 @@ def _ideas_for_category(category: str) -> list[tuple[str, str, str, int]]:
     return READY_IDEA_ITEMS.get((category or "").strip().lower(), [])
 
 
-def _ready_browser_keyboard(index: int, total: int) -> InlineKeyboardMarkup:
+def _ready_browser_keyboard(
+    index: int,
+    total: int,
+    back_callback: str = CB_MENU_BACK_START,
+) -> InlineKeyboardMarkup:
     prev_i = (index - 1) % total
     next_i = (index + 1) % total
     return InlineKeyboardMarkup(
@@ -1150,7 +1156,7 @@ def _ready_browser_keyboard(index: int, total: int) -> InlineKeyboardMarkup:
                     callback_data=f"{CB_READY_NAV_PREFIX}back_cats",
                 )
             ],
-            [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)],
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)],
         ]
     )
 
@@ -1915,6 +1921,7 @@ async def _send_ready_ideas_screen(
     username: str | None,
     *,
     edit: bool = False,
+    back_callback: str = CB_MENU_BACK_START,
 ) -> None:
     await state.clear()
     if not is_openrouter_image_configured():
@@ -1929,9 +1936,10 @@ async def _send_ready_ideas_screen(
             await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
         return
     await ensure_user(user_id, username)
+    await state.update_data(_ready_back_cb=back_callback)
     await state.set_state(ImageGenState.ready_choosing_category)
     cap = _ready_category_caption()
-    kb = _ready_categories_keyboard()
+    kb = _ready_categories_keyboard(back_callback=back_callback)
     if edit:
         edited = await _edit_ready_nav_message(
             message,
@@ -1957,6 +1965,23 @@ async def open_ready_ideas(callback: CallbackQuery, state: FSMContext) -> None:
         callback.from_user.id,
         callback.from_user.username,
         edit=True,
+        back_callback=CB_MENU_BACK_START,
+    )
+
+
+@router.callback_query(F.data == CB_READY_IDEAS_HUB)
+async def open_ready_ideas_from_hub(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.from_user is None or callback.message is None:
+        await callback.answer("Ошибка запроса.", show_alert=True)
+        return
+    await callback.answer()
+    await _send_ready_ideas_screen(
+        callback.message,
+        state,
+        callback.from_user.id,
+        callback.from_user.username,
+        edit=True,
+        back_callback=CB_MENU_HUB,
     )
 
 
@@ -1975,19 +2000,21 @@ async def _open_ready_card(
     index: int,
     edit: bool,
 ) -> None:
+    data = await state.get_data()
+    back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
     ideas = _ideas_for_category(category)
     if not ideas:
         if edit:
             await _edit_ready_nav_message(
                 message,
                 caption="<b>В этой категории пока пусто.</b>\n<blockquote><i>Выбери другое направление.</i></blockquote>",
-                reply_markup=_ready_categories_keyboard(),
+                reply_markup=_ready_categories_keyboard(back_callback=back_callback),
                 listing_photo=_ready_categories_listing_photo(),
             )
         else:
             await message.answer(
                 "<b>В этой категории пока пусто.</b>\n<blockquote><i>Выбери другое направление.</i></blockquote>",
-                reply_markup=_ready_categories_keyboard(),
+                reply_markup=_ready_categories_keyboard(back_callback=back_callback),
                 parse_mode=HTML,
             )
         await state.set_state(ImageGenState.ready_choosing_category)
@@ -2006,7 +2033,7 @@ async def _open_ready_card(
     )
     await state.update_data(_ready_category=category, _ready_index=idx)
     await state.set_state(ImageGenState.ready_browsing_idea)
-    kb = _ready_browser_keyboard(idx, total)
+    kb = _ready_browser_keyboard(idx, total, back_callback=back_callback)
     photo_path = _ready_idea_listing_photo_path(title)
 
     if edit and photo_path is not None and not message.photo:
@@ -2064,11 +2091,13 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
         return
     payload = callback.data.replace(CB_READY_NAV_PREFIX, "", 1)
     if payload == "back_cats":
+        data = await state.get_data()
+        back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
         await state.set_state(ImageGenState.ready_choosing_category)
         await _edit_ready_nav_message(
             callback.message,
             caption=_ready_category_caption(),
-            reply_markup=_ready_categories_keyboard(),
+            reply_markup=_ready_categories_keyboard(back_callback=back_callback),
             listing_photo=_ready_categories_listing_photo(),
         )
         await callback.answer()
@@ -2154,6 +2183,7 @@ async def ready_photo_back(callback: CallbackQuery, state: FSMContext) -> None:
         return
     await callback.answer()
     data = await state.get_data()
+    back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
     category = str(data.get("_ready_category") or "").strip().lower()
     idx = int(data.get("_ready_index") or 0)
     if not category:
@@ -2163,6 +2193,7 @@ async def ready_photo_back(callback: CallbackQuery, state: FSMContext) -> None:
             callback.from_user.id,
             callback.from_user.username,
             edit=True,
+            back_callback=back_callback,
         )
         return
     await _open_ready_card(callback.message, state, category=category, index=idx, edit=True)
@@ -2503,6 +2534,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             )
             return
         data = await state.get_data()
+        back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
         category = str(data.get("_ready_category") or "").strip().lower()
         idx_raw = data.get("_ready_index")
         try:
@@ -2519,6 +2551,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
                 callback.from_user.id,
                 callback.from_user.username,
                 edit=True,
+                back_callback=back_callback,
             )
             return
         title, _preview, base_prompt, need = ideas[idx]
@@ -2762,14 +2795,17 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             callback.from_user.id,
             callback.from_user.username,
             edit=True,
+            back_callback=back_callback,
         )
 
 
 @router.message(ImageGenState.ready_choosing_category)
-async def ready_choose_category_hint(message: Message) -> None:
+async def ready_choose_category_hint(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
     await message.answer(
         "Сначала выбери категорию кнопками выше 👆",
-        reply_markup=_ready_categories_keyboard(),
+        reply_markup=_ready_categories_keyboard(back_callback=back_callback),
     )
 
 

@@ -14,6 +14,7 @@ from src.keyboards.callback_data import (
     CB_MENU_REF,
     CB_MENU_SUPPORT,
     CB_READY_IDEAS,
+    CB_READY_IDEAS_HUB,
 )
 from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 
@@ -57,7 +58,9 @@ def menu_hub_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="⭐ Готовые идеи", callback_data=CB_READY_IDEAS, style=BTN_SUCCESS),
+                InlineKeyboardButton(
+                    text="⭐ Готовые идеи", callback_data=CB_READY_IDEAS_HUB, style=BTN_SUCCESS
+                ),
                 InlineKeyboardButton(text="⭐ Подписки", callback_data=CB_MENU_PAY, style=BTN_SUCCESS),
             ],
             [
