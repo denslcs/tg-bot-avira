@@ -38,6 +38,7 @@ CB_READY_IDEAS_HUB = "menu:ready_ideas_hub"
 CB_APPLY_READY_PREFIX = "img:idea:"
 CB_READY_CAT_PREFIX = "img:idea_cat:"
 CB_READY_NAV_PREFIX = "img:idea_nav:"
+CB_READY_BEARD_SIZE_PREFIX = "img:idea_beard_size:"
 CB_READY_PHOTO_BACK = "img:idea_photo_back"
 CB_READY_CONFIRM = "img:idea_confirm"
 CB_REGEN = "img:regen"
@@ -62,6 +63,7 @@ __all__ = [
     "CB_APPLY_READY_PREFIX",
     "CB_READY_CAT_PREFIX",
     "CB_READY_NAV_PREFIX",
+    "CB_READY_BEARD_SIZE_PREFIX",
     "CB_READY_PHOTO_BACK",
     "CB_READY_CONFIRM",
     "CB_BACK_IMAGE_MODELS",

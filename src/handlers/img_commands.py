@@ -77,6 +77,7 @@ from src.keyboards.callback_data import (
     CB_IMG_OK,
     CB_MENU_BACK_START,
     CB_MENU_HUB,
+    CB_READY_BEARD_SIZE_PREFIX,
     CB_READY_CAT_PREFIX,
     CB_READY_CONFIRM,
     CB_READY_IDEAS,
@@ -120,6 +121,7 @@ READY_IDEA_CATEGORIES: list[tuple[str, str]] = [
     ("for_two", "💞 Для двоих"),
     ("texts", "📝 Тексты"),
     ("movies", "🎬 Фильмы / Сериалы"),
+    ("superheroes", "🦸 Супергерои"),
     ("games", "🎮 Игры"),
     ("colors", "🎨 Цвета"),
     ("art_styles", "🖌 Арт-стили"),
@@ -130,6 +132,9 @@ READY_IDEA_CATEGORIES: list[tuple[str, str]] = [
 _POSTER_TEXT_READY_TITLE = "Постер с текстом"
 _FLUFFY_LETTERS_TITLE = "Пушистые буквы 3D"
 _PLASTER_FASHION_STUDIO_TITLE = "Fashion и гипсовые буквы"
+_LUXURY_TORN_COVER_TITLE = "Luxury torn cover"
+_SUPERHERO_MIRROR_TITLE = "Mirror superhero multiverse"
+_BEARD_MUSTACHE_TITLE = "Густая борода + усы"
 _SONY_ERICSSON_T100_TITLE = "Sony Ericsson T100"
 _CHALK_ON_ASPHALT_TITLE = "Мел на асфальте"
 _POLAROID_CURTAIN_TITLE = "Polaroid и занавеска"
@@ -166,6 +171,59 @@ _MMORPG_ALLOWED_CLASSES: tuple[str, ...] = (
 _MMORPG_LAST_BUILD_BY_USER: dict[int, tuple[str, str]] = {}
 # Название идеи в боте: категория «📥 Добавить фото» → карточка с этим заголовком.
 _OBJECT_IN_SCENE_TITLE = "Перемещение объекта"
+_LUXURY_COVER_BRANDS: tuple[str, ...] = (
+    "Gucci",
+    "Fendi",
+    "Prada",
+    "Balenciaga",
+    "Versace",
+    "Chloe",
+    "Hermes",
+    "Dior",
+    "Louis Vuitton",
+)
+_LUXURY_COVER_COUNTRIES: tuple[str, ...] = (
+    "Italian",
+    "French",
+    "British",
+    "American",
+    "Japanese",
+)
+_LUXURY_COVER_COLORS: tuple[tuple[str, str], ...] = (
+    ("emerald", "green"),
+    ("fuchsia", "magenta"),
+    ("cobalt", "blue"),
+    ("crimson", "red"),
+    ("amber", "yellow"),
+    ("teal", "turquoise"),
+    ("violet", "purple"),
+)
+_LUXURY_COVER_TEXTS: tuple[str, ...] = (
+    "ETERNAL GLAMOUR",
+    "URBAN SOPHISTICATED",
+    "SUMMER LUXURY",
+    "GLAMOUR UNVEILED",
+    "FASHION EVOLUTION",
+    "ICONIC STYLE",
+    "LUXE REBORN",
+    "MODERN VOGUE",
+)
+_SUPERHERO_POOL: tuple[tuple[str, str], ...] = (
+    ("Marvel", "Spider-Man"),
+    ("Marvel", "Iron Man"),
+    ("Marvel", "Captain America"),
+    ("Marvel", "Black Widow"),
+    ("Marvel", "Scarlet Witch"),
+    ("DC", "Batman"),
+    ("DC", "Superman"),
+    ("DC", "Wonder Woman"),
+    ("DC", "The Flash"),
+    ("DC", "Aquaman"),
+    ("The Boys", "Homelander"),
+    ("The Boys", "Starlight"),
+    ("The Boys", "Queen Maeve"),
+    ("The Boys", "Black Noir"),
+)
 
 
 def _ready_idea_needs_headline_input(title: str) -> bool:
@@ -198,6 +256,20 @@ def _pick_mmorpg_race_class(user_id: int) -> tuple[str, str]:
     picked = random.choice(candidates)
     _MMORPG_LAST_BUILD_BY_USER[int(user_id)] = picked
     return picked
+
+
+def _pick_luxury_cover_vars() -> tuple[str, str, str, str, str]:
+    """Runtime randomization for luxury torn-cover idea."""
+    brand = random.choice(_LUXURY_COVER_BRANDS)
+    country = random.choice(_LUXURY_COVER_COUNTRIES)
+    color_name, color_tone = random.choice(_LUXURY_COVER_COLORS)
+    text = random.choice(_LUXURY_COVER_TEXTS)
+    return brand, country, color_name, color_tone, text
+
+
+def _pick_superhero_vars() -> tuple[str, str]:
+    """Random universe and hero for superhero mirror look."""
+    return random.choice(_SUPERHERO_POOL)
 
 
 def _ready_idea_requirement_line(*, title: str, photos_required: int) -> str:
@@ -274,6 +346,12 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             "Gucci editorial",
             "High-fashion: Gucci-эстетика, смелые принты, драматичный свет, кадр как обложка Vogue.",
             "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve facial structure, skin texture, age, hair — recognizable and natural; no face replacement, no plastic doll skin. INPUT CROP: If face-only or head-and-shoulders, infer full body with proportions matching the face; if full body is shown, keep silhouette coherent. High-fashion editorial inspired by Alessandro Michele–era maximal Gucci runway mood — NOT an official ad; do not reproduce exact logos, GG monograms, or trademark prints; use original dense floral, geometric, and jewel-tone prints in that spirit. UNISEX: adapt layering and silhouette to apparent gender from the reference while keeping the same maximalist eclectic mix. LOOK: fierce, intense gaze; optional oversized square gradient-tint sunglasses; silk headscarf tied under chin; cream shirt with bold original floral print; dark velvet waistcoat; structured jacket with bold geometric diamond/grid pattern draped on shoulders; chunky pearl statement necklace. SETTING: minimalist grey studio, soft directional light and clean shadows; optional velvet armchair, white plinth with open large-format book or magazine (generic artwork, no readable logos). Vogue-style composition, cover framing. LIGHTING: dramatic directional light, cinematic shadows, subtle rim; glossy editorial skin with real pores (no waxy CGI). CAMERA: confident pose, ultra-sharp eyes, shallow depth of field, rich cohesive color grading. TECH: ultra-detailed, very high resolution; avoid fake HDR halos. NEGATIVE: readable brand logos, watermark, Telegram username text, oversmoothed skin, warped limbs, extra fingers, cluttered background, cheap CGI.",
+            1,
+        ),
+        (
+            _LUXURY_TORN_COVER_TITLE,
+            "Коллаж как люкс-обложка: рваная бумага, слои лица, сочный цвет, случайный бренд и стиль журнала.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve exact face geometry, skin texture, age cues, and hairline — no face replacement. Build a premium fashion magazine cover composition with a torn-paper collage effect. Main concept: one person appears in layered paper strips with close-up face fragments aligned naturally across tears. UNISEX MANDATE: styling must work for any gender presentation; adapt outfit fit and beauty styling to the reference while keeping the same high-fashion editorial energy. Wardrobe: luxury denim jacket over a clean white top, matching bag, polished magazine-cover posture. Background: vibrant monochrome studio backdrop matching the selected cover color family. Layout rules: bold title text on the left side, one luxury brand label at top right, VOGUE + country caption at bottom left, barcode on the right. Keep composition clean and premium, like a real glossy cover. Photorealistic 8K studio quality, glossy print feel, crisp details, controlled highlights, no clutter. STRICT CLEAN OUTPUT: no watermark, no platform logo, no app signature, no generated-by stamp, no random corner marks. NEGATIVE: cartoon style, plastic skin, wrong face, extra people, unreadable typography noise, watermark.",
             1,
         ),
     ],
@@ -386,6 +464,14 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             "Avatar",
             "Как бы ты выглядел будучи одним из народа Нави.",
             "CRITICAL IDENTITY LOCK: Use the uploaded user photo as the only identity reference. Keep face structure, age, skin texture, and hairstyle recognizable and realistic. Transform the user into a highly detailed, photorealistic Avatar-universe character (Na'vi aesthetics, blue skin, cinematic tribal costume design, premium textures). GENDER ADAPTATION RULE: infer presentation from the user photo and choose matching character styling automatically. If the user appears male, use a Jake-inspired warrior costume and masculine silhouette. If the user appears female, use a Neytiri-inspired warrior costume and feminine silhouette. Keep the final result respectful, realistic, and coherent. Camera and mood: slightly low upward-facing angle, dramatic cinematic lighting, high contrast, deep saturated blue background, warm highlights on one side of the face and soft velvety shadows on the other. No props, no extra accessories. Emphasize detailed costume materials, realistic skin texture, controlled color grading, and an editorial close portrait feeling.",
+            1,
+        ),
+    ],
+    "superheroes": [
+        (
+            _SUPERHERO_MIRROR_TITLE,
+            "Коллаж 2×2 у зеркала: ты в рандомном образе супергероя из Marvel / DC / The Boys.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY identity source. Preserve exact face geometry, skin texture, age cues, hairline, and recognizable likeness — no face replacement. Create a photorealistic 2x2 mirror-selfie collage in one single vertical image: four separate full-body mirror photos in a modern apartment/bedroom interior, each panel showing the SAME person in a different pose angle and slightly different framing while keeping identity stable. UNISEX MANDATE (strict): adapt body fit, armor tailoring, makeup intensity, and silhouette to the person's presentation from the reference; no gender stereotypes, no caricature. SUPERHERO COSTUME RULE: use one selected hero-inspired suit with high-fidelity practical textures (fabric weave, armor plates, seams, utility belt, boots, gloves, cape if applicable), realistic wear and lighting response; no toy/plastic cosplay look. CAMERA FEEL: believable smartphone mirror selfies, natural hand/phone placement, room reflections, coherent perspective, soft indoor daylight mixed with ambient room lighting. COMPOSITION: clean 2x2 grid collage, each panel clearly separated, full body visible, polished editorial social-media style, no extra people. QUALITY: photorealistic, high-detail, sharp face consistency across all four panels. STRICT CLEAN OUTPUT: no watermark, no platform logo, no app signature, no generated-by stamp, no random corner marks. NEGATIVE: different faces between panels, cartoon/anime style, malformed limbs, unreadable text overlays, watermark.",
             1,
         ),
     ],
@@ -858,6 +944,7 @@ class ImageGenState(StatesGroup):
     ready_waiting_photos = State()
     ready_waiting_minecraft_nick = State()
     ready_waiting_poster_text = State()
+    ready_waiting_beard_size = State()
     ready_waiting_fantasy_headline = State()
     ready_waiting_fantasy_color = State()
     ready_waiting_confirm = State()
@@ -1176,6 +1263,32 @@ def _ready_confirm_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="✅ Подтвердить", callback_data=CB_READY_CONFIRM, style=BTN_SUCCESS)],
+            [InlineKeyboardButton(text="↩️ Назад к фото", callback_data=CB_READY_PHOTO_BACK)],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data=CB_IMG_CANCEL, style=BTN_DANGER)],
+        ]
+    )
+
+
+def _ready_beard_size_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Короткая",
+                    callback_data=f"{CB_READY_BEARD_SIZE_PREFIX}short",
+                    style=BTN_PRIMARY,
+                ),
+                InlineKeyboardButton(
+                    text="Средняя",
+                    callback_data=f"{CB_READY_BEARD_SIZE_PREFIX}medium",
+                    style=BTN_PRIMARY,
+                ),
+                InlineKeyboardButton(
+                    text="Длинная",
+                    callback_data=f"{CB_READY_BEARD_SIZE_PREFIX}long",
+                    style=BTN_PRIMARY,
+                ),
+            ],
             [InlineKeyboardButton(text="↩️ Назад к фото", callback_data=CB_READY_PHOTO_BACK)],
             [InlineKeyboardButton(text="❌ Отмена", callback_data=CB_IMG_CANCEL, style=BTN_DANGER)],
         ]
@@ -2173,6 +2286,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
             _ready_need=photos_required,
             _ready_overlay_nick="",
             _ready_poster_text="",
+            _ready_beard_size="",
             _ready_fantasy_color="",
         )
         if photos_required == 0 and (title or "").strip() == _FANTASY_3D_GAME_TITLE:
@@ -2299,6 +2413,18 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
                 "<blockquote><i>Теперь пришли ник для надписи над головой (до 30 символов).</i></blockquote>"
             ),
             reply_markup=_ready_wait_photo_keyboard(),
+            parse_mode=HTML,
+        )
+        return
+    if (title or "").strip() == _BEARD_MUSTACHE_TITLE:
+        await state.set_state(ImageGenState.ready_waiting_beard_size)
+        await message.answer(
+            (
+                f"{_ready_photo_upload_hint(category=category, need=need, received=len(photos), idea_title=title)}\n"
+                "<b>Фото зафиксированы.</b>\n"
+                "<blockquote><i>Теперь выбери размер бороды: короткая, средняя или длинная.</i></blockquote>"
+            ),
+            reply_markup=_ready_beard_size_keyboard(),
             parse_mode=HTML,
         )
         return
@@ -2500,6 +2626,35 @@ async def ready_collect_minecraft_nick(message: Message, state: FSMContext) -> N
     )
 
 
+@router.callback_query(F.data.startswith(CB_READY_BEARD_SIZE_PREFIX))
+async def ready_pick_beard_size(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.from_user is None or callback.message is None or not callback.data:
+        await callback.answer("Ошибка запроса.", show_alert=True)
+        return
+    raw = callback.data.replace(CB_READY_BEARD_SIZE_PREFIX, "", 1).strip().lower()
+    labels = {
+        "short": "короткая",
+        "medium": "средняя",
+        "long": "длинная",
+    }
+    label = labels.get(raw)
+    if label is None:
+        await callback.answer("Некорректный выбор.", show_alert=True)
+        return
+    await callback.answer()
+    await state.update_data(_ready_beard_size=raw)
+    await state.set_state(ImageGenState.ready_waiting_confirm)
+    await _edit_ready_nav_message(
+        callback.message,
+        caption=(
+            f"<b>Размер бороды:</b> <code>{esc(label)}</code>\n"
+            "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
+        ),
+        reply_markup=_ready_confirm_keyboard(),
+        listing_photo=_ready_categories_listing_photo(),
+    )
+
+
 # Ко всем готовым идеям с референсом лица (добавляется в _build_ready_prompt).
 _READY_IDEA_UNISEX_GLOBAL = (
     "GLOBAL UNISEX / PRESENTATION: From the reference photo(s), infer apparent gender presentation for each "
@@ -2546,7 +2701,8 @@ def _build_ready_prompt(
     else:
         footer = (
             f"{_READY_IDEA_UNISEX_GLOBAL}\n\n"
-            "Use all reference images from input. Preserve facial identity and natural skin texture."
+            "Use all reference images from input. Preserve facial identity and natural skin texture. "
+            "Output must be clean: no watermark, no platform/app logo, no generated-by label, no random corner signature."
         )
     return (
         f"{(base_prompt or '').strip()}\n\n"
@@ -2604,6 +2760,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             return
         overlay_nick_saved = str(data.get("_ready_overlay_nick") or "").strip()
         poster_text_raw = str(data.get("_ready_poster_text") or "")
+        beard_size_raw = str(data.get("_ready_beard_size") or "").strip().lower()
         fantasy_color_raw = str(data.get("_ready_fantasy_color") or "").strip()
         is_minecraft_ready = _is_minecraft_ready_idea(title, base_prompt)
         needs_headline = _ready_idea_needs_headline_input(title)
@@ -2624,7 +2781,22 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             await callback.answer("Сначала введи текст.", show_alert=True)
             await state.set_state(ImageGenState.ready_waiting_poster_text)
             return
+        if (title or "").strip() == _BEARD_MUSTACHE_TITLE and beard_size_raw not in {"short", "medium", "long"}:
+            await callback.answer("Сначала выбери размер бороды.", show_alert=True)
+            await state.set_state(ImageGenState.ready_waiting_beard_size)
+            await _edit_ready_nav_message(
+                callback.message,
+                caption=(
+                    "<b>Выбери размер бороды</b>\n"
+                    "<blockquote><i>Выбери один вариант: короткая, средняя или длинная.</i></blockquote>"
+                ),
+                reply_markup=_ready_beard_size_keyboard(),
+                listing_photo=_ready_categories_listing_photo(),
+            )
+            return
         mmorpg_pick: tuple[str, str] | None = None
+        luxury_cover_pick: tuple[str, str, str, str, str] | None = None
+        superhero_pick: tuple[str, str] | None = None
         if (title or "").strip() == _MMORPG_HERO_TITLE:
             mmorpg_pick = _pick_mmorpg_race_class(callback.from_user.id)
             pick_race, pick_class = mmorpg_pick
@@ -2633,6 +2805,10 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
                 f"FOR THIS GENERATION (HARD LOCK): selected race = {pick_race}; selected class = {pick_class}. "
                 "Do not pick or mix any other race/class in this run."
             )
+        if (title or "").strip() == _LUXURY_TORN_COVER_TITLE:
+            luxury_cover_pick = _pick_luxury_cover_vars()
+        if (title or "").strip() == _SUPERHERO_MIRROR_TITLE:
+            superhero_pick = _pick_superhero_vars()
         # Для Minecraft-идеи ник берём из шага ввода и передаём в prompt как точный текст над головой.
         include_nick = False
         overlay_nick = None
@@ -2662,7 +2838,12 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or (
                 "google/gemini-3.1-flash-image-preview"
             )
-        elif title in ("Красивый костюм с букетом", "Gucci editorial"):
+        elif title in (
+            "Красивый костюм с букетом",
+            "Gucci editorial",
+            _LUXURY_TORN_COVER_TITLE,
+            _SUPERHERO_MIRROR_TITLE,
+        ):
             model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or (
                 "google/gemini-3.1-flash-image-preview"
             )
@@ -2753,6 +2934,38 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
                     "ignore its original surroundings when building the final shot. "
                     "Image #2 is the DESTINATION environment — use this image as the base scene; "
                     "the subject from #1 must appear physically inside this scene with correct scale, lighting, and shadows."
+                )
+            if title == _BEARD_MUSTACHE_TITLE:
+                beard_map = {
+                    "short": "short (close-cropped, neat, dense short beard with connected moustache)",
+                    "medium": "medium (full medium-length beard with natural volume and connected moustache)",
+                    "long": "long (long dense beard with realistic weight/flow and connected moustache)",
+                }
+                beard_instruction = beard_map.get(
+                    beard_size_raw,
+                    "medium (full medium-length beard with natural volume and connected moustache)",
+                )
+                refs_hint = (
+                    f"{refs_hint} FOR THIS GENERATION (HARD LOCK): beard_size={beard_instruction}. "
+                    "Apply exactly this beard length; do not choose another size."
+                )
+            if title == _LUXURY_TORN_COVER_TITLE and luxury_cover_pick is not None:
+                brand, country, color_name, color_tone, cover_text = luxury_cover_pick
+                refs_hint = (
+                    "Reference mapping: image #1 is the USER identity photo (single person). "
+                    "FOR THIS GENERATION (HARD LOCK): "
+                    f"Luxury_Brand={brand}; Country={country}; Color1_hair={color_name}; "
+                    f"Color2_theme={color_tone}; Text={cover_text}. "
+                    "Apply these values exactly. Keep one-person torn-paper collage layout with layered close-up face slices, "
+                    "bold left typography, brand tag at top-right, VOGUE+Country at bottom-left, and barcode on the right."
+                )
+            if title == _SUPERHERO_MIRROR_TITLE and superhero_pick is not None:
+                universe, hero = superhero_pick
+                refs_hint = (
+                    "Reference mapping: image #1 is the USER identity photo (single person). "
+                    f"FOR THIS GENERATION (HARD LOCK): Universe={universe}; Superhero={hero}. "
+                    "Build all four collage panels around this exact hero-inspired look only. "
+                    "Keep the same person recognizable in every panel, with a practical high-quality costume in a realistic mirror-selfie apartment setup."
                 )
         if is_minecraft_ready and overlay_nick_saved:
             refs_hint = (
@@ -2858,6 +3071,14 @@ async def ready_waiting_confirm_hint(message: Message) -> None:
     await message.answer(
         "Нажми «✅ Подтвердить» для запуска или «❌ Отмена».",
         reply_markup=_ready_confirm_keyboard(),
+    )
+
+
+@router.message(ImageGenState.ready_waiting_beard_size)
+async def ready_waiting_beard_size_hint(message: Message) -> None:
+    await message.answer(
+        "Выбери размер бороды кнопками: короткая / средняя / длинная.",
+        reply_markup=_ready_beard_size_keyboard(),
     )
 
 
