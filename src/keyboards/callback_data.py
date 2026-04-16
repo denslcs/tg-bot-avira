@@ -14,6 +14,7 @@ CB_MENU_SUPPORT = "menu:support"
 CB_MENU_HUB = "menu:hub"
 CB_MENU_FAQ = "menu:faq"
 CB_MENU_CHANNEL = "menu:channel"
+CB_MENU_MELLSTROY = "menu:mellstroy"
 CB_MENU_PROFILE_HUB = "menu:profile_hub"
 CB_MENU_ABOUT_HUB = "menu:about_hub"
 CB_MENU_PAY_HUB = "menu:pay_hub"
@@ -76,6 +77,7 @@ __all__ = [
     "CB_MENU_ABOUT",
     "CB_MENU_BACK_START",
     "CB_MENU_CHANNEL",
+    "CB_MENU_MELLSTROY",
     "CB_MENU_FAQ",
     "CB_MENU_HUB",
     "CB_MENU_PAY",

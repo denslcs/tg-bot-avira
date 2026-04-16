@@ -77,6 +77,7 @@ from src.keyboards.callback_data import (
     CB_IMG_OK,
     CB_MENU_BACK_START,
     CB_MENU_HUB,
+    CB_MENU_MELLSTROY,
     CB_READY_BEARD_SIZE_PREFIX,
     CB_READY_CAT_PREFIX,
     CB_READY_CONFIRM,
@@ -135,6 +136,7 @@ _PLASTER_FASHION_STUDIO_TITLE = "Fashion и гипсовые буквы"
 _LUXURY_TORN_COVER_TITLE = "Luxury torn cover"
 _SUPERHERO_MIRROR_TITLE = "Mirror superhero multiverse"
 _BEARD_MUSTACHE_TITLE = "Густая борода + усы"
+_MELLSTROY_PHOTO_TITLE = "Фото с Меллстройностью"
 _SONY_ERICSSON_T100_TITLE = "Sony Ericsson T100"
 _CHALK_ON_ASPHALT_TITLE = "Мел на асфальте"
 _POLAROID_CURTAIN_TITLE = "Polaroid и занавеска"
@@ -351,7 +353,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             _LUXURY_TORN_COVER_TITLE,
             "Будто ты уже на обложке модного журнала: дерзкий визуал, люксовый вайб и кадр, который хочется сохранить в галерею.",
-            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve exact face geometry, skin texture, age cues, and hairline — no face replacement. Build a premium fashion magazine cover composition with a torn-paper collage effect. Main concept: one person appears as a layered collage where torn paper strips reveal multiple aligned fragments of the same face (eyes / mid-face / lips), with realistic paper fibers and irregular ripped edges like editorial cutout design. Tear layout must look like the provided references: broad horizontal/diagonal ripped bands crossing the portrait, plus one dominant portrait panel and additional close-up fragments, all of the SAME person. UNISEX MANDATE: styling must work for any gender presentation; adapt outfit fit and beauty styling to the reference while keeping the same high-fashion editorial energy. Wardrobe: luxury denim jacket over a clean white top, matching bag, polished magazine-cover posture. FRAMING RULE (strict): subject must be visible not lower than knees (knee-up / three-quarter framing or higher), never tiny full-body in the distance. Background: vibrant monochrome studio backdrop matching the selected cover color family. Layout rules: bold title text on the left side, one luxury brand label at top right, VOGUE + country caption at bottom left. Do NOT add any QR code or barcode anywhere. Keep composition clean and premium, like a real glossy cover. Photorealistic 8K studio quality, glossy print feel, crisp details, controlled highlights, no clutter. STRICT CLEAN OUTPUT: no watermark, no platform logo, no app signature, no generated-by stamp, no random corner marks. NEGATIVE: cartoon style, plastic skin, wrong face, extra people, unreadable typography noise, watermark, QR code, barcode.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve exact face geometry, skin texture, age cues, and hairline — no face replacement. Build a premium fashion magazine cover composition with a torn-paper collage effect. Main concept: one person appears as a layered collage where torn paper strips reveal multiple aligned fragments of the same face (eyes / mid-face / lips), with realistic paper fibers and irregular ripped edges like editorial cutout design. Tear layout must look like the provided references: broad horizontal/diagonal ripped bands crossing the portrait, plus one dominant portrait panel and additional close-up fragments, all of the SAME person. UNISEX WITH PRESENTATION LOCK: adapt styling to apparent gender from the reference — male-presenting subject in clearly masculine fashion silhouette; female-presenting subject in clearly feminine fashion silhouette; if ambiguous, use a balanced neutral editorial silhouette. WARDROBE VARIATION RULE: for each generation, vary the outfit pieces while staying luxury editorial (for example denim set, fitted jacket, skirt/trousers, structured top, layered accessories, bag), not the same fixed outfit every time. COLOR HARMONY RULE: wardrobe and accessories must harmonize with the selected background color family (Color2_theme), using matching or complementary tones while keeping a premium fashion palette. FRAMING RULE (strict): subject must be visible not lower than knees (knee-up / three-quarter framing or higher), never tiny full-body in the distance. Background: vibrant monochrome studio backdrop matching the selected cover color family. Layout rules: bold title text on the left side, one luxury brand label at top right, VOGUE + country caption at bottom left. Do NOT add any QR code or barcode anywhere. Keep composition clean and premium, like a real glossy cover. Photorealistic 8K studio quality, glossy print feel, crisp details, controlled highlights, no clutter. STRICT CLEAN OUTPUT: no watermark, no platform logo, no app signature, no generated-by stamp, no random corner marks. NEGATIVE: cartoon style, plastic skin, wrong face, extra people, unreadable typography noise, watermark, QR code, barcode.",
             1,
         ),
     ],
@@ -382,6 +384,12 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         ),
     ],
     "celebrities": [
+        (
+            _MELLSTROY_PHOTO_TITLE,
+            "Ты в кадре с Меллстроем, котностью на руках и Фогой, который выглядывает из-за угла.",
+            "CRITICAL IDENTITY LOCK: image #1 (uploaded by user) is the ONLY source of the user's identity. Keep face structure, skin texture, age cues, and hairstyle recognizable. COMPOSITION (strict): photorealistic scene where the user stands full figure with Mellstroy nearby; both must be visible not lower than knees (knee-up or fuller). The user is holding the cat from reference image #3 in their hands (natural size and pose). Add Foga from reference image #4 peeking from behind a corner/wall edge in the background. FOGA LOCK (strict): do NOT redesign or stylize Foga — keep the same appearance and proportions as in reference image #4. MELLSTROY LOCK: preserve recognizable identity from reference image #2. Keep all subjects coherent in one realistic environment with natural perspective, shadows, and lighting. UNISEX: adapt user's clothing fit to their gender presentation from image #1. NEGATIVE: face swap errors, cropped bodies below knees, extra people, cartoon style, changed Foga face, watermark, text overlays.",
+            1,
+        ),
         (
             "Переговоры с Путиным",
             "Ты сидишь в кабинете Путина на официальных переговорах.",
@@ -588,10 +596,15 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
 }
 
 # Доп. изображения для API (extra_refs): только лицо Мухаммада Али для соответствующей идеи — не путать с *_preview ниже.
-_READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str] = {
+_READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str | list[str]] = {
     "Победа над Мухаммадом Али на ринге": r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_114b8c4714b8b9b1196d51ad8d72a-1b94cd0d-73ba-44de-b3da-08a08fade423.png",
     "Absolute Cinema": r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_image-12bb8ef0-9f93-46b6-9971-188e07110cf6.png",
     _MMORPG_HERO_TITLE: r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_image-26619a18-9d1f-481a-bc31-f9dd8e46575d.png",
+    _MELLSTROY_PHOTO_TITLE: [
+        str(PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "mellstroy_ref.png"),
+        str(PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "mellstroy_cat_ref.png"),
+        str(PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "foga_ref.png"),
+    ],
 }
 
 # Превью для листания идей в Telegram (_ready_idea_listing_photo_path → подпись к сообщению).
@@ -631,8 +644,11 @@ _ABSOLUTE_CINEMA_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "cust
 _BEARD_MUSTACHE_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "beard_mustache_preview.png"
 _GENDER_SWAP_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "gender_swap_preview.png"
 _MMORPG_HERO_CUSTOM_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "mmorpg_hero_custom_preview.png"
-_LUXURY_TORN_COVER_LISTING_IMAGE = Path(
-    r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_4a6a3155-2b1f-4c56-8b26-9cc7e5b87d54-0e454aa0-2a03-44b9-bc0f-dbef4ddac1e3.png"
+_LUXURY_TORN_COVER_LISTING_IMAGE = (
+    PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "luxury_torn_cover_preview.png"
+)
+_SUPERHERO_MIRROR_LISTING_IMAGE = (
+    PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "superhero_mirror_multiverse_preview.png"
 )
 
 
@@ -683,6 +699,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _MMORPG_HERO_CUSTOM_LISTING_IMAGE
     if t == _LUXURY_TORN_COVER_TITLE and _LUXURY_TORN_COVER_LISTING_IMAGE.is_file():
         return _LUXURY_TORN_COVER_LISTING_IMAGE
+    if t == _SUPERHERO_MIRROR_TITLE and _SUPERHERO_MIRROR_LISTING_IMAGE.is_file():
+        return _SUPERHERO_MIRROR_LISTING_IMAGE
     if t == "Красивый костюм с букетом" and _SUIT_BOUQUET_READY_LISTING_IMAGE.is_file():
         return _SUIT_BOUQUET_READY_LISTING_IMAGE
     if t == "Gucci editorial" and _GUCCI_EDITORIAL_READY_LISTING_IMAGE.is_file():
@@ -1499,7 +1517,11 @@ async def _send_result_photo_with_regen(
         cache_note = ""
         if served_from_cache:
             cache_note = "\n<i>Кэш: тот же промпт+модель — файл с диска, запрос к API не уходил.</i>"
-        caption = f"<b>Готово ✅</b>\n<i>Режим админа — кредиты не списывались.</i>{cache_note}"
+        caption = (
+            "<b>Готово!</b>\n"
+            "<i>сгенерировано при помощи Shard Creator</i>\n"
+            f"<i>Режим админа — кредиты не списывались.</i>{cache_note}"
+        )
     else:
         balance = await get_credits(user_id)
         spent = ""
@@ -1507,7 +1529,8 @@ async def _send_result_photo_with_regen(
             cw = _credits_word(cost)
             spent = f"Списано: <b>{esc(cost)}</b> {cw}.\n"
         caption = (
-            f"<b>Готово ✅</b>\n"
+            "<b>Готово!</b>\n"
+            "<i>сгенерировано при помощи Shard Creator</i>\n"
             f"{spent}"
             f"<blockquote><i>💰 Баланс:</i> <b>{esc(balance)}</b></blockquote>{day_note}"
         )
@@ -2147,6 +2170,53 @@ async def cmd_ready_ideas(message: Message, state: FSMContext) -> None:
     if not message.from_user:
         return
     await _send_ready_ideas_screen(message, state, message.from_user.id, message.from_user.username)
+
+
+@router.callback_query(F.data == CB_MENU_MELLSTROY)
+async def open_mellstroy_prompt(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.from_user is None or callback.message is None:
+        await callback.answer("Ошибка запроса.", show_alert=True)
+        return
+    await callback.answer()
+    if not is_openrouter_image_configured():
+        await _edit_ready_nav_message(
+            callback.message,
+            caption=_IMAGE_GEN_MISSING_TEXT,
+            reply_markup=_missing_config_kb(CB_MENU_BACK_START),
+            listing_photo=_ready_categories_listing_photo(),
+        )
+        return
+    category = "celebrities"
+    ideas = _ideas_for_category(category)
+    target_idx = next((i for i, it in enumerate(ideas) if (it[0] or "").strip() == _MELLSTROY_PHOTO_TITLE), -1)
+    if target_idx < 0:
+        await callback.answer("Идея пока недоступна.", show_alert=True)
+        return
+    title, _preview, _prompt, photos_required = ideas[target_idx]
+    await state.clear()
+    await state.update_data(
+        _ready_back_cb=CB_MENU_BACK_START,
+        _ready_category=category,
+        _ready_index=target_idx,
+        _ready_photos=[],
+        _ready_need=photos_required,
+        _ready_overlay_nick="",
+        _ready_poster_text="",
+        _ready_beard_size="",
+        _ready_fantasy_color="",
+    )
+    await state.set_state(ImageGenState.ready_waiting_photos)
+    first_hint = _ready_photo_upload_hint(category=category, need=photos_required, received=0, idea_title=title)
+    await _edit_ready_nav_message(
+        callback.message,
+        caption=(
+            f"<b>Выбрано:</b> {esc(title)}\n"
+            f"{first_hint}\n"
+            "<blockquote><i>Загрузи своё фото — Меллстрой, котность и Фога уже встроены как референсы.</i></blockquote>"
+        ),
+        reply_markup=_ready_wait_photo_keyboard(),
+        listing_photo=_ready_idea_listing_photo_path(title) or _ready_categories_listing_photo(),
+    )
 
 
 async def _open_ready_card(
@@ -2872,14 +2942,16 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
         if title in ("Clash Royale", "На отдыхе в Италии", "Game of Thrones"):
             static_ref = None
         if static_ref:
-            p = Path(static_ref)
-            if p.is_file():
-                try:
-                    extra_refs.append(p.read_bytes())
-                except OSError:
-                    logging.warning("Failed to read static ready ref: %s", static_ref)
-            else:
-                logging.warning("Static ready ref is missing: %s", static_ref)
+            ref_paths = [static_ref] if isinstance(static_ref, str) else list(static_ref)
+            for ref_path in ref_paths:
+                p = Path(ref_path)
+                if p.is_file():
+                    try:
+                        extra_refs.append(p.read_bytes())
+                    except OSError:
+                        logging.warning("Failed to read static ready ref: %s", ref_path)
+                else:
+                    logging.warning("Static ready ref is missing: %s", ref_path)
         if (title or "").strip() == _FANTASY_3D_GAME_TITLE:
             hq = json.dumps(poster_text_raw, ensure_ascii=False)
             cq = json.dumps(fantasy_color_raw, ensure_ascii=False)
@@ -2963,7 +3035,8 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
                     f"Color2_theme={color_tone}; Text={cover_text}. "
                     "Apply these values exactly. Keep one-person torn-paper collage layout matching reference style with horizontal/diagonal ripped bands and layered close-up face slices. "
                     "Use bold left typography, brand tag at top-right, VOGUE+Country at bottom-left. "
-                    "No QR code, no barcode. Subject framing must be knee-up or closer (not below knees)."
+                    "No QR code, no barcode. Subject framing must be knee-up or closer (not below knees). "
+                    "Vary clothing design each run, but keep luxury editorial styling and color harmony with Color2_theme."
                 )
             if title == _SUPERHERO_MIRROR_TITLE and superhero_pick is not None:
                 universe, hero = superhero_pick
