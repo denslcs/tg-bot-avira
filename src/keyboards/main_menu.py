@@ -48,18 +48,18 @@ def start_menu_keyboard(balance: int | None = None) -> InlineKeyboardMarkup:
                 ),
             ],
             [
-                InlineKeyboardButton(text="👥 Реферальная система", callback_data=CB_MENU_REF),
-            ],
-            [
                 InlineKeyboardButton(text="💳 Оплатить", callback_data=CB_MENU_PAY, style=BTN_SUCCESS),
             ],
             [
-                InlineKeyboardButton(text="ℹ️ Что умеет бот", callback_data=CB_MENU_ABOUT),
                 support_button,
             ],
             [
+                InlineKeyboardButton(text="👥 Реферальная система", callback_data=CB_MENU_REF),
+                InlineKeyboardButton(text="ℹ️ Что умеет бот", callback_data=CB_MENU_ABOUT),
+            ],
+            [
                 InlineKeyboardButton(
-                    text="Фото с Меллстройностью",
+                    text="🔥 ФОТО С МЕЛЛСТРОЙНОСТЬЮ 🔥",
                     callback_data=CB_MENU_MELLSTROY,
                     style=BTN_DANGER,
                 )
@@ -74,26 +74,26 @@ def menu_hub_keyboard() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(
                     text="⭐ Готовые идеи", callback_data=CB_READY_IDEAS_HUB, style=BTN_DANGER
-                ),
+                )
+            ],
+            [
                 InlineKeyboardButton(text="⭐ Подписки", callback_data=CB_MENU_PAY_HUB, style=BTN_SUCCESS),
+                InlineKeyboardButton(text="📢 Канал", callback_data=CB_MENU_CHANNEL_HUB, style=BTN_SUCCESS),
             ],
             [
                 InlineKeyboardButton(text="⭐ Поддержка", callback_data=CB_MENU_SUPPORT_HUB, style=BTN_PRIMARY),
-                InlineKeyboardButton(text="⭐ Реф. система", callback_data=CB_MENU_REF_HUB),
-            ],
-            [
                 InlineKeyboardButton(text="👤 Профиль", callback_data=CB_MENU_PROFILE_HUB, style=BTN_PRIMARY),
                 InlineKeyboardButton(
                     text="🎨 Создать картинку", callback_data=CB_CREATE_IMAGE_HUB, style=BTN_PRIMARY
                 ),
             ],
             [
-                InlineKeyboardButton(text="ℹ️ Что умею", callback_data=CB_MENU_ABOUT_HUB),
-                InlineKeyboardButton(text="❓ FAQ", callback_data=CB_MENU_FAQ_HUB),
+                InlineKeyboardButton(text="💳 Баланс", callback_data=CB_MENU_PROFILE_HUB, style=BTN_PRIMARY),
             ],
             [
-                InlineKeyboardButton(text="📢 Канал", callback_data=CB_MENU_CHANNEL_HUB, style=BTN_SUCCESS),
-                InlineKeyboardButton(text="💳 Баланс", callback_data=CB_MENU_PROFILE_HUB, style=BTN_PRIMARY),
+                InlineKeyboardButton(text="⭐ Реф. система", callback_data=CB_MENU_REF_HUB),
+                InlineKeyboardButton(text="ℹ️ Что умею", callback_data=CB_MENU_ABOUT_HUB),
+                InlineKeyboardButton(text="❓ FAQ", callback_data=CB_MENU_FAQ_HUB),
             ],
             [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)],
         ]
