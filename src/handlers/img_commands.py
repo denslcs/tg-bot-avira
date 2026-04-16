@@ -386,7 +386,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     "celebrities": [
         (
             _MELLSTROY_PHOTO_TITLE,
-            "Ты в кадре с Меллстроем, котностью на руках и Фогой из-за угла.",
+            "Попал на скрытую тусовку к Мелу.",
             "CRITICAL IDENTITY LOCK: image #1 (uploaded by user) is the ONLY source of the user's identity. Keep face structure, skin texture, age cues, hairstyle, and facial expression recognizable with high-fidelity detail. USER FACE QUALITY LOCK (strict): prioritize a sharp, natural, high-quality user face with realistic skin texture, clean eyes, correct anatomy, and no blur or plastic smoothing. COMPOSITION (strict): photorealistic scene where the user stands full figure with Mellstroy nearby; both must be visible not lower than knees (knee-up or fuller). The user is holding the cat from reference image #3 in their hands (natural size and pose). Add Foga from reference image #4 peeking from behind a corner/wall edge in the background. FOGA LOCK (strict): do NOT redesign or stylize Foga — keep the same appearance and proportions as in reference image #4. MELLSTROY FACE LOCK (ABSOLUTE): never alter Mellstroy's face in any way; no face replacement, no face mixing, no morphing, no beautification, no age shift, no expression rewrite — Mellstroy's face must stay exactly as in reference image #2. GLOBAL FACE CONSISTENCY LOCK: everyone keeps their own face only; no identity transfer between people, no blending one person's facial features into another. APARTMENT ENVIRONMENT LOCK: keep the same premium apartment vibe (luxury modern suite style) and improve interior realism/detailing: refined warm ambient lighting, realistic lamps, curtains, textured walls, polished wood/metal surfaces, coherent depth and perspective, and clean high-end decor without clutter. CAMERA LOOK: shot as if captured on iPhone 14 Pro, realistic smartphone optics, natural dynamic range, subtle handheld realism, crisp detail, and authentic mobile photo processing. Keep all subjects coherent in one realistic environment with natural perspective, shadows, and lighting. UNISEX: adapt user's clothing fit to their gender presentation from image #1. NEGATIVE: face swap errors, identity mix, face morph, low-detail face, blurry face, over-smoothed skin, cropped bodies below knees, extra people, cartoon style, changed Foga face, watermark, text overlays.",
             1,
         ),
@@ -650,6 +650,9 @@ _LUXURY_TORN_COVER_LISTING_IMAGE = (
 _SUPERHERO_MIRROR_LISTING_IMAGE = (
     PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "superhero_mirror_multiverse_preview.png"
 )
+_MELLSTROY_PHOTO_LISTING_IMAGE = (
+    PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "mellstroy_preview.png"
+)
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -701,6 +704,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _LUXURY_TORN_COVER_LISTING_IMAGE
     if t == _SUPERHERO_MIRROR_TITLE and _SUPERHERO_MIRROR_LISTING_IMAGE.is_file():
         return _SUPERHERO_MIRROR_LISTING_IMAGE
+    if t == _MELLSTROY_PHOTO_TITLE and _MELLSTROY_PHOTO_LISTING_IMAGE.is_file():
+        return _MELLSTROY_PHOTO_LISTING_IMAGE
     if t == "Красивый костюм с букетом" and _SUIT_BOUQUET_READY_LISTING_IMAGE.is_file():
         return _SUIT_BOUQUET_READY_LISTING_IMAGE
     if t == "Gucci editorial" and _GUCCI_EDITORIAL_READY_LISTING_IMAGE.is_file():
@@ -1232,8 +1237,16 @@ def _ready_categories_keyboard(back_callback: str = CB_MENU_BACK_START) -> Inlin
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _ideas_for_category(category: str) -> list[tuple[str, str, str, int]]:
-    return READY_IDEA_ITEMS.get((category or "").strip().lower(), [])
+def _ideas_for_category(
+    category: str,
+    *,
+    include_hidden_start_only: bool = False,
+) -> list[tuple[str, str, str, int]]:
+    ideas = READY_IDEA_ITEMS.get((category or "").strip().lower(), [])
+    if include_hidden_start_only:
+        return ideas
+    # Идея доступна из старт-панели, но скрыта из общего листинга «Готовых идей».
+    return [it for it in ideas if (it[0] or "").strip() != _MELLSTROY_PHOTO_TITLE]
 
 
 def _ready_browser_keyboard(
@@ -1273,13 +1286,22 @@ def _ready_browser_keyboard(
     )
 
 
-def _ready_wait_photo_keyboard() -> InlineKeyboardMarkup:
+def _ready_wait_photo_keyboard(
+    back_text: str = "↩️ К идеям",
+    back_callback: str = CB_READY_PHOTO_BACK,
+) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="↩️ К идеям", callback_data=CB_READY_PHOTO_BACK)],
+            [InlineKeyboardButton(text=back_text, callback_data=back_callback)],
             [InlineKeyboardButton(text="❌ Отмена", callback_data=CB_IMG_CANCEL, style=BTN_DANGER)],
         ]
     )
+
+
+def _ready_wait_photo_keyboard_for_state(data: dict) -> InlineKeyboardMarkup:
+    if bool(data.get("_ready_include_hidden_start_only")):
+        return _ready_wait_photo_keyboard(back_text="⬅️ Назад", back_callback=CB_MENU_BACK_START)
+    return _ready_wait_photo_keyboard()
 
 
 def _ready_confirm_keyboard() -> InlineKeyboardMarkup:
@@ -1424,7 +1446,8 @@ _CHALK_ASPHALT_TEXT_MAX_LEN = 120
 def _ready_title_from_state_data(data: dict) -> str:
     category = str(data.get("_ready_category") or "").strip().lower()
     idx = int(data.get("_ready_index") or 0)
-    ideas = _ideas_for_category(category)
+    include_hidden = bool(data.get("_ready_include_hidden_start_only"))
+    ideas = _ideas_for_category(category, include_hidden_start_only=include_hidden)
     if ideas and 0 <= idx < len(ideas):
         return str(ideas[idx][0] or "").strip()
     return ""
@@ -2187,7 +2210,7 @@ async def open_mellstroy_prompt(callback: CallbackQuery, state: FSMContext) -> N
         )
         return
     category = "celebrities"
-    ideas = _ideas_for_category(category)
+    ideas = _ideas_for_category(category, include_hidden_start_only=True)
     target_idx = next((i for i, it in enumerate(ideas) if (it[0] or "").strip() == _MELLSTROY_PHOTO_TITLE), -1)
     if target_idx < 0:
         await callback.answer("Идея пока недоступна.", show_alert=True)
@@ -2196,6 +2219,7 @@ async def open_mellstroy_prompt(callback: CallbackQuery, state: FSMContext) -> N
     await state.clear()
     await state.update_data(
         _ready_back_cb=CB_MENU_BACK_START,
+        _ready_include_hidden_start_only=True,
         _ready_category=category,
         _ready_index=target_idx,
         _ready_photos=[],
@@ -2212,9 +2236,12 @@ async def open_mellstroy_prompt(callback: CallbackQuery, state: FSMContext) -> N
         caption=(
             f"<b>Выбрано:</b> {esc(title)}\n"
             f"{first_hint}\n"
-            "<blockquote><i>Загрузи 1 фото. Меллстрой, котность и Фога уже добавлены.</i></blockquote>"
+            "<blockquote><i>Попал на скрытую тусовку к Мелу.</i></blockquote>"
         ),
-        reply_markup=_ready_wait_photo_keyboard(),
+        reply_markup=_ready_wait_photo_keyboard(
+            back_text="⬅️ Назад",
+            back_callback=CB_MENU_BACK_START,
+        ),
         listing_photo=_ready_idea_listing_photo_path(title) or _ready_categories_listing_photo(),
     )
 
@@ -2411,6 +2438,29 @@ async def ready_photo_back(callback: CallbackQuery, state: FSMContext) -> None:
         return
     await callback.answer()
     data = await state.get_data()
+    if bool(data.get("_ready_include_hidden_start_only")):
+        category = str(data.get("_ready_category") or "").strip().lower()
+        need = int(data.get("_ready_need") or 1)
+        photos = list(data.get("_ready_photos") or [])
+        title = _ready_title_from_state_data(data) or _MELLSTROY_PHOTO_TITLE
+        hint = _ready_photo_upload_hint(
+            category=category,
+            need=need,
+            received=len(photos),
+            idea_title=title,
+        )
+        await state.set_state(ImageGenState.ready_waiting_photos)
+        await _edit_ready_nav_message(
+            callback.message,
+            caption=(
+                f"<b>Выбрано:</b> {esc(title)}\n"
+                f"{hint}\n"
+                "<blockquote><i>Попал на скрытую тусовку к Мелу.</i></blockquote>"
+            ),
+            reply_markup=_ready_wait_photo_keyboard_for_state(data),
+            listing_photo=_ready_idea_listing_photo_path(title) or _ready_categories_listing_photo(),
+        )
+        return
     back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
     category = str(data.get("_ready_category") or "").strip().lower()
     idx = int(data.get("_ready_index") or 0)
@@ -2441,7 +2491,7 @@ async def ready_need_photo_hint(message: Message, state: FSMContext) -> None:
     )
     await message.answer(
         f"{hint}\nКогда соберем нужное количество, появится подтверждение.",
-        reply_markup=_ready_wait_photo_keyboard(),
+        reply_markup=_ready_wait_photo_keyboard_for_state(data),
         parse_mode=HTML,
     )
 
@@ -2471,13 +2521,14 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
         )
         await message.answer(
             hint,
-            reply_markup=_ready_wait_photo_keyboard(),
+            reply_markup=_ready_wait_photo_keyboard_for_state(data),
             parse_mode=HTML,
         )
         return
     category = str(data.get("_ready_category") or "").strip().lower()
     idx = int(data.get("_ready_index") or 0)
-    ideas = _ideas_for_category(category)
+    include_hidden = bool(data.get("_ready_include_hidden_start_only"))
+    ideas = _ideas_for_category(category, include_hidden_start_only=include_hidden)
     title = ideas[idx][0] if ideas and 0 <= idx < len(ideas) else ""
     if _is_minecraft_ready_idea(title, ideas[idx][2] if ideas and 0 <= idx < len(ideas) else ""):
         await state.set_state(ImageGenState.ready_waiting_minecraft_nick)
@@ -2806,13 +2857,14 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
         data = await state.get_data()
         back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
         category = str(data.get("_ready_category") or "").strip().lower()
+        include_hidden = bool(data.get("_ready_include_hidden_start_only"))
         idx_raw = data.get("_ready_index")
         try:
             idx = int(idx_raw if idx_raw is not None else 0)
         except (TypeError, ValueError):
             idx = -1
         photos = list(data.get("_ready_photos") or [])
-        ideas = _ideas_for_category(category)
+        ideas = _ideas_for_category(category, include_hidden_start_only=include_hidden)
         if not ideas or idx < 0 or idx >= len(ideas):
             await callback.answer("Идея не найдена. Выбери заново.", show_alert=True)
             await _send_ready_ideas_screen(
