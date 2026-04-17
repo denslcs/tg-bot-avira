@@ -1369,13 +1369,13 @@ def _ready_category_caption() -> str:
         "<b>💡 Готовые идеи</b>\n"
         "<blockquote><i>Выбери направление и вариант. Под описанием каждой идеи указано, что нужно: "
         "одно или два фото, только текст, или фото и текст. Дальше — «Выбрать», загрузка и подтверждение. "
-        f"Стоимость одной генерации — {esc(OPENROUTER_IMAGE_COST_CREDITS)} кр.</i></blockquote>"
+        f"Стоимость одной генерации — {esc(OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS)} кр.</i></blockquote>"
     )
 
 
 def _ready_generation_cost_html() -> str:
-    """Совпадает со списанием кредитов при генерации (см. OPENROUTER_IMAGE_COST_CREDITS)."""
-    return f"<blockquote><i>Стоимость генерации: {esc(OPENROUTER_IMAGE_COST_CREDITS)} кр.</i></blockquote>"
+    """Совпадает со списанием кредитов при ready-генерации."""
+    return f"<blockquote><i>Стоимость генерации: {esc(OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS)} кр.</i></blockquote>"
 
 
 def _ready_idea_caption(*, category_title: str, title: str, preview: str, index: int, total: int, photos_required: int) -> str:
@@ -1509,7 +1509,7 @@ async def _user_eligible_redo_half_price(user_id: int) -> bool:
     if not prof or not subscription_is_active(prof.subscription_ends_at):
         return False
     plan = (prof.subscription_plan or "").strip().lower()
-    if plan not in ("galaxy", "universe"):
+    if plan not in ("starter", "galaxy", "universe"):
         return False
     last = await get_redo_half_price_utc_date(user_id)
     return (last or "") != _utc_today_iso()
@@ -1522,7 +1522,7 @@ async def _image_gen_priority_from_user_id(user_id: int) -> bool:
     if not prof or not subscription_is_active(prof.subscription_ends_at):
         return False
     plan = (prof.subscription_plan or "").strip().lower()
-    return plan in ("galaxy", "universe")
+    return plan in ("starter", "galaxy", "universe")
 
 
 async def _redo_more_button_label(user_id: int, base_cost: int) -> str:
@@ -1539,7 +1539,7 @@ async def _start_ready_redo_flow(
     username: str | None,
     ctx: LastImageContext,
 ) -> None:
-    """Повтор той же готовой идеи: новые фото, тот же промпт; скидка Galaxy/Universe — см. _user_eligible_redo_half_price."""
+    """Повтор той же готовой идеи: новые фото, тот же промпт; скидка Starter/Galaxy/Universe — см. _user_eligible_redo_half_price."""
     if ctx.kind != "text" or ctx.usage_kind != "ready":
         await message.answer("Повтор недоступен. Открой нужный раздел в меню.")
         return
@@ -1568,7 +1568,7 @@ async def _start_ready_redo_flow(
     disc = ""
     if consume:
         disc = (
-            "\n<blockquote><i>Galaxy / Universe: <b>−50%</b> на этот повтор — не чаще "
+            "\n<blockquote><i>Starter / Galaxy / Universe: <b>−50%</b> на этот повтор — не чаще "
             "<b>одного раза в сутки</b> (UTC).</i></blockquote>"
         )
     await message.answer(
@@ -1577,6 +1577,17 @@ async def _start_ready_redo_flow(
         "(в том же порядке, что и в прошлый раз).</i></blockquote>"
         f"{disc}"
         f"<blockquote><i>К списанию: <b>{effective}</b> кр.</i></blockquote>",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="❌ Отмена",
+                        callback_data=CB_BACK_TO_READY_IDEAS,
+                        style=BTN_DANGER,
+                    )
+                ]
+            ]
+        ),
         parse_mode=HTML,
     )
 

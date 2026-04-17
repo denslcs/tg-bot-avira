@@ -308,6 +308,20 @@ async def restore_main_menu_message(message: Message, user_id: int, username: st
                     return
                 except Exception:
                     logging.debug("restore_main_menu_message: edit_media failed", exc_info=True)
+            # Если стартового баннера нет, не перезаписываем подпись текущего превью:
+            # оставляем фото «на месте», снимаем с него клавиатуру и отправляем меню отдельно.
+            if not banner:
+                try:
+                    await message.edit_reply_markup(reply_markup=None)
+                except Exception:
+                    logging.debug("restore_main_menu_message: strip keyboard failed", exc_info=True)
+                await message.bot.send_message(
+                    message.chat.id,
+                    text,
+                    reply_markup=kb,
+                    parse_mode=HTML,
+                )
+                return
             try:
                 await message.edit_caption(caption=text, reply_markup=kb, parse_mode=HTML)
                 return
@@ -840,7 +854,7 @@ async def _profile_card_html(
             # В БД мог не быть записан тариф (старые выдачи / только срок); доступ как у Universe.
             plan_name = PLANS["universe"].title
         pid = "universe" if is_admin else (profile.subscription_plan or "").strip().lower()
-        if pid in ("galaxy", "universe"):
+        if pid in ("starter", "galaxy", "universe"):
             priority_note = "\n<i>⚡ Приоритет очереди генераций и скидка на повтор «готовой идеи» (см. подсказки после картинки).</i>"
     elif is_admin:
         sub_status = "админ-безлимит"

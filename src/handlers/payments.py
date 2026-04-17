@@ -153,11 +153,11 @@ async def _can_buy_plan(user_id: int, plan_id: str) -> tuple[bool, str | None]:
     return await subscription_can_purchase_plan(user_id, plan_id)
 
 
-async def _has_active_universe(user_id: int) -> bool:
+async def _has_active_starter_or_universe(user_id: int) -> bool:
     prof = await get_user_admin_profile(user_id)
     if not prof or not subscription_is_active(prof.subscription_ends_at):
         return False
-    return (prof.subscription_plan or "").strip().lower() == "universe"
+    return (prof.subscription_plan or "").strip().lower() in ("starter", "universe")
 
 
 def _discount_pack_values(pack_id: str, *, apply_universe_discount: bool) -> tuple[int, float, int, bool]:
@@ -192,8 +192,6 @@ def _plans_menu_caption() -> str:
         f"<blockquote><b>Starter</b> — пробный пакет на <b>{esc(st.period_days)}</b> дн., все модели как у Universe, "
         f"<b>одна покупка на аккаунт</b> (повторно недоступен). Остальные тарифы — <b>{esc(SUBSCRIPTION_PERIOD_DAYS)}</b> дн.</blockquote>\n"
         "Ограничений на число генераций по подписке нет — списываются кредиты.\n\n"
-        "<blockquote><i>У полных тарифов чем выше пакет — тем <b>ниже цена одного кредита</b> на балансе "
-        "(крупный объём выгоднее).</i></blockquote>\n\n"
         f"<blockquote><i>Полные тарифы:</i> не чаще <b>одного раза в {esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дней "
         f"после <b>окончания</b> подписки. Пока подписка активна — заранее продлевается только текущий тариф: дни суммируются, "
         f"бонус за повтор того же тарифа +5% (для Universe при раннем продлении +10%). "
@@ -566,7 +564,7 @@ async def pay_bonus_menu(callback: CallbackQuery) -> None:
         return
     await callback.answer()
     is_hub = callback.data == CB_PAY_BONUS_MENU_HUB
-    universe_discount = await _has_active_universe(callback.from_user.id) if callback.from_user else False
+    universe_discount = await _has_active_starter_or_universe(callback.from_user.id) if callback.from_user else False
     await edit_or_send_nav_message(
         callback.message,
         text=_bonus_packs_caption(universe_discount=universe_discount),
@@ -588,7 +586,7 @@ async def pay_pick_pack(callback: CallbackQuery) -> None:
         await callback.answer("Неизвестный пакет", show_alert=True)
         return
     await callback.answer()
-    universe_discount = await _has_active_universe(callback.from_user.id) if callback.from_user else False
+    universe_discount = await _has_active_starter_or_universe(callback.from_user.id) if callback.from_user else False
     rub, usd, stars, discounted = _discount_pack_values(pack_id, apply_universe_discount=universe_discount)
     back_to_bonus_callback = CB_PAY_BONUS_MENU
     if callback.message and callback.message.reply_markup:
@@ -699,7 +697,7 @@ async def pay_rub(callback: CallbackQuery) -> None:
             await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
             return
     pack_rub_override = None
-    if item_id in BONUS_PACKS and callback.from_user and await _has_active_universe(callback.from_user.id):
+    if item_id in BONUS_PACKS and callback.from_user and await _has_active_starter_or_universe(callback.from_user.id):
         pack_rub_override, _usd, _stars, _disc = _discount_pack_values(
             item_id, apply_universe_discount=True
         )
@@ -727,7 +725,7 @@ async def pay_intl(callback: CallbackQuery) -> None:
             await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
             return
     pack_rub_override = None
-    if item_id in BONUS_PACKS and callback.from_user and await _has_active_universe(callback.from_user.id):
+    if item_id in BONUS_PACKS and callback.from_user and await _has_active_starter_or_universe(callback.from_user.id):
         pack_rub_override, _usd, _stars, _disc = _discount_pack_values(
             item_id, apply_universe_discount=True
         )
@@ -755,7 +753,7 @@ async def pay_crypto(callback: CallbackQuery) -> None:
             await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
             return
     pack_rub_override = None
-    if item_id in BONUS_PACKS and callback.from_user and await _has_active_universe(callback.from_user.id):
+    if item_id in BONUS_PACKS and callback.from_user and await _has_active_starter_or_universe(callback.from_user.id):
         pack_rub_override, _usd, _stars, _disc = _discount_pack_values(
             item_id, apply_universe_discount=True
         )
@@ -797,7 +795,7 @@ async def pay_stars_invoice(callback: CallbackQuery) -> None:
         )
     elif item_id in BONUS_PACKS:
         b = BONUS_PACKS[item_id]
-        universe_discount = await _has_active_universe(callback.from_user.id)
+        universe_discount = await _has_active_starter_or_universe(callback.from_user.id)
         rub, _usd, stars, discounted = _discount_pack_values(
             item_id, apply_universe_discount=universe_discount
         )
@@ -852,7 +850,7 @@ async def pre_checkout(q: PreCheckoutQuery) -> None:
         if item_id not in BONUS_PACKS:
             await q.answer(ok=False, error_message="Неизвестный пакет. Запроси новый счёт.")
             return
-        universe_discount = await _has_active_universe(q.from_user.id)
+        universe_discount = await _has_active_starter_or_universe(q.from_user.id)
         _rub, _usd, stars, _disc = _discount_pack_values(
             item_id, apply_universe_discount=universe_discount
         )
@@ -1053,7 +1051,7 @@ async def successful_payment(message: Message) -> None:
         await message.answer("Оплата получена, но пакет не найден. Напиши в поддержку.")
         return
     b = BONUS_PACKS[item_id]
-    universe_discount = await _has_active_universe(message.from_user.id)
+    universe_discount = await _has_active_starter_or_universe(message.from_user.id)
     _rub, _usd, stars_expected, discounted = _discount_pack_values(
         item_id, apply_universe_discount=universe_discount
     )

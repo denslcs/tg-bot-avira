@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test-token")
 
 from src import database as db  # noqa: E402
-from src.handlers.payments import _discount_pack_values, _has_active_universe  # noqa: E402
+from src.handlers.payments import _discount_pack_values, _has_active_starter_or_universe  # noqa: E402
 
 
 class SubscriptionFlowsTests(unittest.IsolatedAsyncioTestCase):
@@ -107,12 +107,12 @@ class SubscriptionFlowsTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_universe_discount_tied_to_active_subscription_only(self) -> None:
         # Нет подписки -> скидки нет.
-        self.assertFalse(await _has_active_universe(self.uid))
+        self.assertFalse(await _has_active_starter_or_universe(self.uid))
 
         # Активная Universe -> скидка есть.
         end = await db.reset_subscription_days(self.uid, 30, "universe")
         self.assertIsNotNone(end)
-        self.assertTrue(await _has_active_universe(self.uid))
+        self.assertTrue(await _has_active_starter_or_universe(self.uid))
 
         # Подписка истекла -> скидка исчезает.
         past = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
@@ -122,7 +122,13 @@ class SubscriptionFlowsTests(unittest.IsolatedAsyncioTestCase):
                 (past, self.uid),
             )
             await conn.commit()
-        self.assertFalse(await _has_active_universe(self.uid))
+        self.assertFalse(await _has_active_starter_or_universe(self.uid))
+
+    async def test_starter_has_pack_discount_privilege_while_active(self) -> None:
+        self.assertFalse(await _has_active_starter_or_universe(self.uid))
+        end = await db.reset_subscription_days(self.uid, 3, "starter")
+        self.assertIsNotNone(end)
+        self.assertTrue(await _has_active_starter_or_universe(self.uid))
 
 
 if __name__ == "__main__":
