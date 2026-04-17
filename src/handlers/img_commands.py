@@ -122,7 +122,8 @@ except Exception:  # pragma: no cover - pillow is optional at runtime
 router = Router(name="img_commands")
 
 READY_IDEA_CATEGORIES: list[tuple[str, str]] = [
-    ("trends", "🔥 Тренды"),
+    ("memes", "😂 Мемы"),
+    ("appearance", "🧔 Внешность"),
     ("outfits", "👕 Одежда"),
     ("locations", "🏝 Локации"),
     ("celebrities", "🌟 Знаменитости"),
@@ -338,13 +339,15 @@ def _ready_idea_recommendation_line(*, title: str, photos_required: int) -> str:
 
 # title, preview, prompt, photos_required
 READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
-    "trends": [
+    "memes": [
         (
             "Absolute Cinema",
             "Культовый студийный портрет в духе «Absolute Cinema»: ч/б, мощный взгляд, руки вверх и винтажная плёночная фактура.",
             "Create a studio portrait in iconic \"Absolute Cinema\" meme style. IMPORTANT REFERENCE MAPPING: image #1 is the USER identity reference; image #2 is the Absolute Cinema style/composition pose reference. CRITICAL IDENTITY LOCK: preserve the exact person from image #1 (face structure, age cues, skin texture, hairstyle/hairline, expression character). Replace identity in the reference composition with the user while keeping the recognizable Absolute Cinema setup. OUTFIT RULE (mandatory): the person must ALWAYS wear a formal suit jacket in the final image (classic dark tailored suit look). This is mandatory even if image #1 is face-only / head-only / tight portrait. If body/clothes are missing in input, infer a realistic full upper body in suit with natural neck/shoulder transition. POSE RULE (mandatory): seated on a sofa/couch exactly like the reference mood, frontal composition, both hands raised at shoulder level (\"hands up\" gesture), calm stoic expression, no pose drift. PROPORTION LOCK (very important): realistic human anatomy and perspective — normal head-to-shoulders ratio, natural neck thickness, believable torso width, and full-size adult hands with correct palm/finger length. Do not enlarge the head or shrink hands. Keep arm length, shoulder width, elbow position, and wrist size physically plausible for a seated person. STYLE: dramatic monochrome (black-and-white) studio chiaroscuro, sculpted key light + rich shadow depth, subtle analog film grain and mild vintage texture, clean symmetrical framing. TYPOGRAPHY: bold white all-caps text at the bottom in two lines exactly: line 1 \"ABSOLUTE\", line 2 \"CINEMA\"; centered, meme-like proportion, no extra text. RESULT: photorealistic, iconic, reaction-meme-ready image with consistent posture and proportional anatomy. NEGATIVE: no suit, casual clothes/hoodie/t-shirt, standing pose, wrong hand pose, wrong couch setup, cartoon look, painterly style, color image, big-head small-hands distortion, warped anatomy, extra fingers, wrong face identity, misspelled text, watermark, logos, extra captions.",
             1,
         ),
+    ],
+    "appearance": [
         (
             "Густая борода + усы",
             "Добавь густую объёмную бороду и усы, естественно подогнанные под твой цвет волос.",
@@ -602,15 +605,19 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             _OBJECT_IN_SCENE_TITLE,
             "Сначала фото объекта, потом фото места — бот вставит первое во второе.",
-            "COMPOSITE TASK — SINGLE OUTPUT PHOTO. Photorealistic integration, not a side-by-side collage. "
-            "Identify the main subject in image #1 (object, vehicle, furniture, product, animal, or other prop — not necessarily a person). "
-            "Image #2 is the destination: full scene / room / street / interior where that subject must appear. "
-            "Cut out the subject from #1 conceptually: do not paste the entire frame of #1; place only the subject into #2. "
-            "Match perspective, scale, and floor/contact plane; add contact shadows, ambient occlusion, and light direction consistent with #2. "
-            "Color-grade the subject to match white balance and illumination of the destination. "
-            "Edges must be clean without halos; no sticker look. "
-            "If image #1 contains a person, keep their face recognizable; if it is purely an object, preserve its materials and shape. "
-            "FORBIDDEN: split screen, before/after panels, visible rectangular crop from #1, duplicate UI, watermark, text overlays.",
+            "COMPOSITE TASK — SINGLE OUTPUT PHOTO. Photorealistic integration only, never side-by-side collage. "
+            "Image #1 = source subject (object, vehicle, furniture, product, animal, or person). "
+            "Image #2 = destination scene where this subject must naturally exist. "
+            "Extract only the subject from #1 conceptually and place it into #2; never paste the whole frame from #1. "
+            "REALISM LOCK (strict): insertion must look physically real, as if shot in one camera frame — not a pasted sticker. "
+            "Match camera perspective, lens distortion, scale, horizon, and contact plane with #2; preserve believable distance to nearby objects. "
+            "Lighting lock: match key/fill/back light direction, intensity, color temperature, shadow softness, and reflections according to #2. "
+            "Add realistic contact shadows, ambient occlusion, grounding reflections, and subtle bounce light where needed. "
+            "Material lock: preserve true textures (metal/glass/fabric/skin/fur) and adapt them to scene lighting without plastic/flat look. "
+            "Edge lock: clean natural edges with fine hair/fur detail and depth-of-field coherence; no halos, no cutout borders. "
+            "If source subject is a person: FACE IDENTITY LOCK (absolute) — do not change face, age, facial structure, skin texture, or hairstyle; keep the exact same person recognizable. "
+            "If source is non-human object: preserve geometry, proportions, branding/details, and realistic wear. "
+            "FORBIDDEN: sticker-like overlay, split screen, before/after panels, visible rectangular crop from #1, duplicate UI, watermark, text overlays.",
             2,
         ),
     ],
@@ -1740,11 +1747,23 @@ async def _send_result_photo_with_regen(
             caption=made_caption,
             parse_mode=HTML,
         )
-        if charge and deducted_credits and not is_admin:
+        if is_admin:
+            await message.answer(
+                "👑 Режим админа: кредиты не списывались.",
+                parse_mode=HTML,
+            )
+        elif charge and deducted_credits:
             balance_after = await get_credits(user_id)
             cw = _credits_word(cost)
             await message.answer(
                 f"💳 Списано: <b>{esc(cost)}</b> {cw}.\n"
+                f"💰 Баланс: <b>{esc(balance_after)}</b>.",
+                parse_mode=HTML,
+            )
+        elif charge:
+            balance_after = await get_credits(user_id)
+            await message.answer(
+                "ℹ️ Кредиты за эту генерацию не списались.\n"
                 f"💰 Баланс: <b>{esc(balance_after)}</b>.",
                 parse_mode=HTML,
             )
