@@ -826,11 +826,11 @@ async def _profile_card_html(
     if active_sub:
         sub_status = "активна"
         sub_till = format_subscription_ends_at(profile.subscription_ends_at)
-        plan_name = (
-            PLANS[profile.subscription_plan].title
-            if profile.subscription_plan and profile.subscription_plan in PLANS
-            else "—"
-        )
+        if profile.subscription_plan and profile.subscription_plan in PLANS:
+            plan_name = PLANS[profile.subscription_plan].title
+        else:
+            # В БД мог не быть записан тариф (старые выдачи / только срок); доступ как у Universe.
+            plan_name = PLANS["universe"].title
     else:
         sub_status = "не активна"
         sub_till = (

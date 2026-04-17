@@ -916,8 +916,15 @@ async def update_ticket_thread(ticket_id: int, thread_id: int, username: str | N
         await db.commit()
 
 
-def _parse_dt_utc(raw: str) -> datetime:
-    s = raw.replace("Z", "+00:00")
+def _parse_dt_utc(raw: str | datetime) -> datetime:
+    if isinstance(raw, datetime):
+        dt = raw
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+        return dt
+    s = str(raw).replace("Z", "+00:00")
     dt = datetime.fromisoformat(s)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
@@ -935,6 +942,12 @@ def normalize_subscription_ends_at_value(raw: object | None) -> str | None:
         else:
             dt = dt.astimezone(timezone.utc)
         return dt.isoformat()
+    if isinstance(raw, (bytes, bytearray)):
+        try:
+            s = raw.decode("utf-8").strip()
+        except UnicodeDecodeError:
+            return None
+        return s if s else None
     s = str(raw).strip()
     return s if s else None
 
@@ -998,7 +1011,7 @@ def subscription_cooldown_days_remaining(last_purchase_iso: str | None) -> int:
         return 0
     try:
         dt = _parse_dt_utc(raw)
-    except ValueError:
+    except (ValueError, TypeError):
         return 0
     now = datetime.now(timezone.utc)
     end = dt + timedelta(days=SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)
@@ -1484,13 +1497,14 @@ async def release_daily_image_generation(user_id: int, usage_kind: str) -> None:
         await db.commit()
 
 
-def _add_days_subscription(existing_iso: str | None, days: int) -> str:
+def _add_days_subscription(existing_iso: object | None, days: int) -> str:
     now = datetime.now(timezone.utc)
-    if existing_iso:
+    normalized = normalize_subscription_ends_at_value(existing_iso)
+    if normalized:
         try:
-            end = _parse_dt_utc(existing_iso)
+            end = _parse_dt_utc(normalized)
             base = max(end, now)
-        except ValueError:
+        except (ValueError, TypeError):
             base = now
     else:
         base = now
@@ -1547,7 +1561,7 @@ async def extend_subscription(user_id: int, days: int, plan: str | None = None) 
             row = await cur.fetchone()
         if not row:
             return None
-        new_iso = _add_days_subscription(row[0] if row[0] else None, days)
+        new_iso = _add_days_subscription(row[0], days)
         stored = normalize_subscription_ends_at_value(new_iso)
         if not stored:
             return None
@@ -1561,9 +1575,15 @@ async def extend_subscription(user_id: int, days: int, plan: str | None = None) 
                 (stored, plan, user_id),
             )
         else:
+            # Без явного тарифа: сохраняем уже записанный; если NULL — как при оплате Universe (полный доступ к моделям).
             await db.execute(
-                "UPDATE users SET subscription_ends_at = ? WHERE user_id = ?",
-                (stored, user_id),
+                """
+                UPDATE users
+                SET subscription_ends_at = ?,
+                    subscription_plan = COALESCE(subscription_plan, ?)
+                WHERE user_id = ?
+                """,
+                (stored, "universe", user_id),
             )
         await db.commit()
     return stored
