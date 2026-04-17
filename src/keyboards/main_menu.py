@@ -36,27 +36,53 @@ def start_menu_keyboard(balance: int | None = None) -> InlineKeyboardMarkup:
         else ""
     )
     support_button = (
-        InlineKeyboardButton(text="💬 Поддержка", url=support_url, style=BTN_PRIMARY)
+        InlineKeyboardButton(
+            text="Поддержка",
+            url=support_url,
+            style=BTN_PRIMARY,
+            icon_custom_emoji_id="5443038326535759644",
+        )
         if support_url
-        else InlineKeyboardButton(text="💬 Поддержка", callback_data=CB_MENU_SUPPORT, style=BTN_PRIMARY)
+        else InlineKeyboardButton(
+            text="Поддержка",
+            callback_data=CB_MENU_SUPPORT,
+            style=BTN_PRIMARY,
+            icon_custom_emoji_id="5443038326535759644",
+        )
     )
     # Большое главное меню на стартовом экране.
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="💡 Готовые идеи", callback_data=CB_READY_IDEAS, style=BTN_DANGER
+                    text="Готовые идеи",
+                    callback_data=CB_READY_IDEAS,
+                    style=BTN_DANGER,
+                    icon_custom_emoji_id="5422439311196834318",
                 ),
             ],
             [
-                InlineKeyboardButton(text="🛒 Оплатить", callback_data=CB_MENU_PAY, style=BTN_SUCCESS),
+                InlineKeyboardButton(
+                    text="Оплатить",
+                    callback_data=CB_MENU_PAY,
+                    style=BTN_SUCCESS,
+                    icon_custom_emoji_id="5312361253610475399",
+                ),
             ],
             [
                 support_button,
             ],
             [
-                InlineKeyboardButton(text="🫂 Реферальная система", callback_data=CB_MENU_REF),
-                InlineKeyboardButton(text="🌟 Что умеет бот", callback_data=CB_MENU_ABOUT),
+                InlineKeyboardButton(
+                    text="Реферальная система",
+                    callback_data=CB_MENU_REF,
+                    icon_custom_emoji_id="5391320026869408028",
+                ),
+                InlineKeyboardButton(
+                    text="Что умеет бот",
+                    callback_data=CB_MENU_ABOUT,
+                    icon_custom_emoji_id="5330522514231684724",
+                ),
             ],
             [
                 InlineKeyboardButton(
@@ -79,27 +105,62 @@ def menu_hub_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="💡 Готовые идеи", callback_data=CB_READY_IDEAS_HUB, style=BTN_DANGER
+                    text="Готовые идеи",
+                    callback_data=CB_READY_IDEAS_HUB,
+                    style=BTN_DANGER,
+                    icon_custom_emoji_id="5422439311196834318",
                 )
             ],
             [
-                InlineKeyboardButton(text="🛒 Подписки", callback_data=CB_MENU_PAY_HUB, style=BTN_SUCCESS),
+                InlineKeyboardButton(
+                    text="Подписки",
+                    callback_data=CB_MENU_PAY_HUB,
+                    style=BTN_SUCCESS,
+                    icon_custom_emoji_id="5312361253610475399",
+                ),
                 channel_button,
             ],
             [
-                InlineKeyboardButton(text="💬 Поддержка", callback_data=CB_MENU_SUPPORT_HUB, style=BTN_PRIMARY),
-                InlineKeyboardButton(text="👤 Профиль", callback_data=CB_MENU_PROFILE_HUB, style=BTN_PRIMARY),
+                InlineKeyboardButton(
+                    text="Поддержка",
+                    callback_data=CB_MENU_SUPPORT_HUB,
+                    style=BTN_PRIMARY,
+                    icon_custom_emoji_id="5443038326535759644",
+                ),
+                InlineKeyboardButton(
+                    text="Профиль",
+                    callback_data=CB_MENU_PROFILE_HUB,
+                    style=BTN_PRIMARY,
+                    icon_custom_emoji_id="5325971446625758812",
+                ),
                 InlineKeyboardButton(
                     text="🎨 Создать картинку", callback_data=CB_CREATE_IMAGE_HUB, style=BTN_PRIMARY
                 ),
             ],
             [
-                InlineKeyboardButton(text="🐷 Баланс", callback_data=CB_MENU_PROFILE_HUB, style=BTN_PRIMARY),
+                InlineKeyboardButton(
+                    text="Баланс",
+                    callback_data=CB_MENU_PROFILE_HUB,
+                    style=BTN_PRIMARY,
+                    icon_custom_emoji_id="5312123810638483121",
+                ),
             ],
             [
-                InlineKeyboardButton(text="🫂 Реф. система", callback_data=CB_MENU_REF_HUB),
-                InlineKeyboardButton(text="🌟 Что умею", callback_data=CB_MENU_ABOUT_HUB),
-                InlineKeyboardButton(text="❓ FAQ", callback_data=CB_MENU_FAQ_HUB),
+                InlineKeyboardButton(
+                    text="Реф. система",
+                    callback_data=CB_MENU_REF_HUB,
+                    icon_custom_emoji_id="5391320026869408028",
+                ),
+                InlineKeyboardButton(
+                    text="Что умею",
+                    callback_data=CB_MENU_ABOUT_HUB,
+                    icon_custom_emoji_id="5330522514231684724",
+                ),
+                InlineKeyboardButton(
+                    text="FAQ",
+                    callback_data=CB_MENU_FAQ_HUB,
+                    icon_custom_emoji_id="5314504236132747481",
+                ),
             ],
             [
                 InlineKeyboardButton(text="📊 История бюджета", callback_data=CB_MENU_BUDGET_HUB),
