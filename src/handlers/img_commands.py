@@ -9,6 +9,7 @@ import json
 import logging
 import random
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 
@@ -46,6 +47,7 @@ from src.config import (
 )
 from src.database import (
     ImageChargeMeta,
+    LastImageContext,
     add_credits_with_reason,
     add_idea_tokens,
     ensure_user,
@@ -53,7 +55,9 @@ from src.database import (
     get_daily_image_generation_usage,
     get_last_image_context,
     get_nonsub_image_quota_status,
+    get_redo_half_price_utc_date,
     get_user_admin_profile,
+    mark_redo_half_price_used_today,
     release_daily_image_generation,
     release_nonsub_image_quota_slot,
     release_nonsub_ready_idea_slot,
@@ -66,6 +70,7 @@ from src.database import (
     try_reserve_nonsub_ready_idea_slot,
 )
 from src.formatting import HTML, esc
+from src.image_gen_gate import image_generation_slot
 from src.handlers.commands import edit_or_send_nav_message, restore_main_menu_message
 from src.keyboards.main_menu import start_menu_keyboard
 from src.keyboards.callback_data import (
@@ -85,7 +90,9 @@ from src.keyboards.callback_data import (
     CB_READY_IDEAS_HUB,
     CB_READY_NAV_PREFIX,
     CB_READY_PHOTO_BACK,
+    CB_BACK_TO_READY_IDEAS,
     CB_REGEN,
+    CB_REGEN_READY_REDO,
 )
 from src.keyboards.styles import BTN_DANGER, BTN_PRIMARY, BTN_SUCCESS
 from src.openrouter_image import (
@@ -226,6 +233,8 @@ _SUPERHERO_POOL: tuple[tuple[str, str], ...] = (
     ("The Boys", "Queen Maeve"),
     ("The Boys", "Black Noir"),
 )
+# Последний (universe, hero) для идеи «Mirror superhero» — чтобы не повторять костюм два раза подряд.
+_SUPERHERO_LAST_BY_USER: dict[int, tuple[str, str]] = {}
 
 
 def _ready_idea_needs_headline_input(title: str) -> bool:
@@ -269,9 +278,21 @@ def _pick_luxury_cover_vars() -> tuple[str, str, str, str, str]:
     return brand, country, color_name, color_tone, text
 
 
-def _pick_superhero_vars() -> tuple[str, str]:
-    """Random universe and hero for superhero mirror look."""
-    return random.choice(_SUPERHERO_POOL)
+def _pick_superhero_vars(user_id: int) -> tuple[str, str]:
+    """Случайная пара вселенная + герой; тот же костюм не два раза подряд (3-й запуск может снова попасть в прошлого героя)."""
+    pool = list(_SUPERHERO_POOL)
+    if not pool:
+        return ("Marvel", "Spider-Man")
+    prev = _SUPERHERO_LAST_BY_USER.get(int(user_id))
+    if prev is not None and len(pool) > 1:
+        candidates = [p for p in pool if p != prev]
+        if not candidates:
+            candidates = pool
+    else:
+        candidates = pool
+    picked = random.choice(candidates)
+    _SUPERHERO_LAST_BY_USER[int(user_id)] = picked
+    return picked
 
 
 def _ready_idea_requirement_line(*, title: str, photos_required: int) -> str:
@@ -909,34 +930,37 @@ async def _notify_image_generation_failure(
 async def _await_generation_with_progress(
     wait_msg: Message,
     gen: Callable[[], Awaitable[tuple[bytes, bool]]],
+    *,
+    priority: bool = False,
 ) -> tuple[bytes, bool]:
     """Пока ждём API — полоска до 90%; после успеха — дожим до 100%, затем «готово» и фото."""
-    task = asyncio.create_task(gen())
-    p = 0
-    while not task.done():
-        try:
-            await asyncio.wait_for(asyncio.shield(task), timeout=_GEN_PROGRESS_INTERVAL_SEC)
-            break
-        except asyncio.TimeoutError:
-            p = min(p + _GEN_PROGRESS_STEP, _GEN_PROGRESS_MAX_SIM)
+    async with image_generation_slot(priority=priority):
+        task = asyncio.create_task(gen())
+        p = 0
+        while not task.done():
             try:
-                await _edit_message_progress_text(wait_msg, _gen_progress_caption(p))
+                await asyncio.wait_for(asyncio.shield(task), timeout=_GEN_PROGRESS_INTERVAL_SEC)
+                break
+            except asyncio.TimeoutError:
+                p = min(p + _GEN_PROGRESS_STEP, _GEN_PROGRESS_MAX_SIM)
+                try:
+                    await _edit_message_progress_text(wait_msg, _gen_progress_caption(p))
+                except Exception:
+                    logging.debug("gen progress edit failed", exc_info=True)
+        result = await task
+        if not isinstance(result, tuple) or len(result) != 2:
+            raise RuntimeError("invalid generation result")
+        image_bytes, from_cache = result
+        cur = p
+        while cur < 100:
+            cur = min(cur + _GEN_PROGRESS_STEP, 100)
+            try:
+                await _edit_message_progress_text(wait_msg, _gen_progress_caption(cur))
             except Exception:
-                logging.debug("gen progress edit failed", exc_info=True)
-    result = await task
-    if not isinstance(result, tuple) or len(result) != 2:
-        raise RuntimeError("invalid generation result")
-    image_bytes, from_cache = result
-    cur = p
-    while cur < 100:
-        cur = min(cur + _GEN_PROGRESS_STEP, 100)
-        try:
-            await _edit_message_progress_text(wait_msg, _gen_progress_caption(cur))
-        except Exception:
-            logging.debug("gen progress finish edit failed", exc_info=True)
-        await asyncio.sleep(_GEN_PROGRESS_FINISH_STEP_SEC)
-    await asyncio.sleep(0.22)
-    return image_bytes, from_cache
+                logging.debug("gen progress finish edit failed", exc_info=True)
+            await asyncio.sleep(_GEN_PROGRESS_FINISH_STEP_SEC)
+        await asyncio.sleep(0.22)
+        return image_bytes, from_cache
 
 
 async def _finalize_generation_status_message(wait_msg: Message) -> None:
@@ -1344,8 +1368,14 @@ def _ready_category_caption() -> str:
     return (
         "<b>💡 Готовые идеи</b>\n"
         "<blockquote><i>Выбери направление и вариант. Под описанием каждой идеи указано, что нужно: "
-        "одно или два фото, только текст, или фото и текст. Дальше — «Выбрать», загрузка и подтверждение.</i></blockquote>"
+        "одно или два фото, только текст, или фото и текст. Дальше — «Выбрать», загрузка и подтверждение. "
+        f"Стоимость одной генерации — {esc(OPENROUTER_IMAGE_COST_CREDITS)} кр.</i></blockquote>"
     )
+
+
+def _ready_generation_cost_html() -> str:
+    """Совпадает со списанием кредитов при генерации (см. OPENROUTER_IMAGE_COST_CREDITS)."""
+    return f"<blockquote><i>Стоимость генерации: {esc(OPENROUTER_IMAGE_COST_CREDITS)} кр.</i></blockquote>"
 
 
 def _ready_idea_caption(*, category_title: str, title: str, preview: str, index: int, total: int, photos_required: int) -> str:
@@ -1357,6 +1387,7 @@ def _ready_idea_caption(*, category_title: str, title: str, preview: str, index:
         f"<blockquote><i>{esc(index + 1)}/{esc(total)}</i></blockquote>\n"
         f"<b>{esc(title)}</b>\n"
         f"<blockquote><i>{esc(preview)}</i></blockquote>\n"
+        f"{_ready_generation_cost_html()}\n"
         f"<b>{esc(req)}</b>"
         f"{recommendation_part}"
     )
@@ -1469,12 +1500,137 @@ def _has_cyrillic(s: str) -> bool:
     return any("\u0400" <= c <= "\u04ff" for c in (s or ""))
 
 
+def _utc_today_iso() -> str:
+    return datetime.now(timezone.utc).date().isoformat()
+
+
+async def _user_eligible_redo_half_price(user_id: int) -> bool:
+    prof = await get_user_admin_profile(user_id)
+    if not prof or not subscription_is_active(prof.subscription_ends_at):
+        return False
+    plan = (prof.subscription_plan or "").strip().lower()
+    if plan not in ("galaxy", "universe"):
+        return False
+    last = await get_redo_half_price_utc_date(user_id)
+    return (last or "") != _utc_today_iso()
+
+
+async def _image_gen_priority_from_user_id(user_id: int) -> bool:
+    if user_id in ADMIN_IDS:
+        return True
+    prof = await get_user_admin_profile(user_id)
+    if not prof or not subscription_is_active(prof.subscription_ends_at):
+        return False
+    plan = (prof.subscription_plan or "").strip().lower()
+    return plan in ("galaxy", "universe")
+
+
+async def _redo_more_button_label(user_id: int, base_cost: int) -> str:
+    if await _user_eligible_redo_half_price(user_id):
+        half = max(1, int(base_cost) // 2)
+        return f"🔄 Ещё раз (−50% · {half} кр.)"
+    return "🔄 Ещё раз"
+
+
+async def _start_ready_redo_flow(
+    message: Message,
+    state: FSMContext,
+    user_id: int,
+    username: str | None,
+    ctx: LastImageContext,
+) -> None:
+    """Повтор той же готовой идеи: новые фото, тот же промпт; скидка Galaxy/Universe — см. _user_eligible_redo_half_price."""
+    if ctx.kind != "text" or ctx.usage_kind != "ready":
+        await message.answer("Повтор недоступен. Открой нужный раздел в меню.")
+        return
+    if not ctx.refs_file_ids:
+        await message.answer("Нет данных о фото. Запусти идею из «Готовых идей» заново.")
+        return
+    if (ctx.ready_idea_title or "").strip() == _MELLSTROY_PHOTO_TITLE:
+        await _send_ready_ideas_screen(message, state, user_id, username, edit=False)
+        return
+    base = int(ctx.cost)
+    elig = await _user_eligible_redo_half_price(user_id)
+    effective = max(1, base // 2) if elig else base
+    consume = bool(elig)
+    await state.clear()
+    await state.update_data(
+        _ready_redo_prompt=ctx.prompt,
+        _ready_redo_model=ctx.model,
+        _ready_redo_charge=effective,
+        _ready_redo_consume_half=consume,
+        _ready_redo_title=(ctx.ready_idea_title or "").strip(),
+        _ready_photos=[],
+        _ready_need=len(ctx.refs_file_ids),
+        _ready_back_cb=CB_MENU_BACK_START,
+    )
+    await state.set_state(ImageGenState.ready_waiting_photos)
+    disc = ""
+    if consume:
+        disc = (
+            "\n<blockquote><i>Galaxy / Universe: <b>−50%</b> на этот повтор — не чаще "
+            "<b>одного раза в сутки</b> (UTC).</i></blockquote>"
+        )
+    await message.answer(
+        "<b>Повтор готовой идеи</b>\n"
+        f"<blockquote><i>Пришли снова <b>{len(ctx.refs_file_ids)}</b> фото "
+        "(в том же порядке, что и в прошлый раз).</i></blockquote>"
+        f"{disc}"
+        f"<blockquote><i>К списанию: <b>{effective}</b> кр.</i></blockquote>",
+        parse_mode=HTML,
+    )
+
+
 def _regen_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
                     text="✅ Ок", callback_data=CB_IMG_OK, style=BTN_SUCCESS
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🔄 Ещё раз", callback_data=CB_REGEN, style=BTN_PRIMARY
+                ),
+            ],
+        ],
+    )
+
+
+def _ready_idea_result_keyboard(*, redo_label: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Ок", callback_data=CB_IMG_OK, style=BTN_SUCCESS
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=redo_label[:64],
+                    callback_data=CB_REGEN_READY_REDO,
+                    style=BTN_PRIMARY,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="💡 К готовым идеям",
+                    callback_data=CB_BACK_TO_READY_IDEAS,
+                    style=BTN_PRIMARY,
+                ),
+            ],
+        ],
+    )
+
+
+def _mellstroy_result_keyboard() -> InlineKeyboardMarkup:
+    """Для скрытой идеи с Меллстроем: только назад в меню и повтор сценария."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="⬅️ Назад", callback_data=CB_IMG_OK, style=BTN_SUCCESS
                 ),
             ],
             [
@@ -1513,6 +1669,9 @@ async def _send_result_photo_with_regen(
     deducted_credits: bool,
     served_from_cache: bool = False,
     usage_kind: str = "self",
+    refs_file_ids: list[str] | None = None,
+    ready_idea_title: str | None = None,
+    mark_redo_half_after_success: bool = False,
 ) -> None:
     await save_last_image_context(
         user_id,
@@ -1523,6 +1682,8 @@ async def _send_result_photo_with_regen(
         _IMAGE_CONTEXT_LABEL,
         None,
         usage_kind=usage_kind,
+        refs_file_ids=refs_file_ids,
+        ready_idea_title=ready_idea_title,
     )
     if is_admin:
         day_note = ""
@@ -1557,12 +1718,22 @@ async def _send_result_photo_with_regen(
             f"{spent}"
             f"<blockquote><i>💰 Баланс:</i> <b>{esc(balance)}</b></blockquote>{day_note}"
         )
+    mellstroy = (ready_idea_title or "").strip() == _MELLSTROY_PHOTO_TITLE
+    if usage_kind == "ready" and mellstroy and refs_file_ids:
+        regen_markup = _mellstroy_result_keyboard()
+    elif usage_kind == "ready" and (not mellstroy) and refs_file_ids:
+        redo_lbl = await _redo_more_button_label(user_id, cost)
+        regen_markup = _ready_idea_result_keyboard(redo_label=redo_lbl)
+    else:
+        regen_markup = _regen_keyboard()
     await message.answer_photo(
         photo=BufferedInputFile(image_bytes, filename=filename),
         caption=caption,
-        reply_markup=_regen_keyboard(),
+        reply_markup=regen_markup,
         parse_mode=HTML,
     )
+    if mark_redo_half_after_success:
+        await mark_redo_half_price_used_today(user_id)
     if state is not None:
         await state.clear()
 
@@ -1603,6 +1774,7 @@ async def _execute_text_generation(
         return
     wait_msg = await message.answer(_gen_progress_caption(0), parse_mode=HTML)
     try:
+        _prio = await _image_gen_priority_from_user_id(user_id)
 
         async def _gen_text() -> tuple[bytes, bool]:
             if is_polza_image_model(model):
@@ -1614,7 +1786,9 @@ async def _execute_text_generation(
                 prompt, model=model, use_cache=use_image_cache
             )
 
-        image_bytes, from_cache = await _await_generation_with_progress(wait_msg, _gen_text)
+        image_bytes, from_cache = await _await_generation_with_progress(
+            wait_msg, _gen_text, priority=_prio
+        )
     except Exception as exc:
         if isinstance(exc, OpenRouterApiError):
             logging.warning(
@@ -1744,6 +1918,8 @@ async def _execute_ready_with_refs_generation(
     extra_refs: list[bytes] | None = None,
     extra_refs_first: bool = False,
     strict_refs: bool = False,
+    ready_idea_title: str | None = None,
+    mark_redo_half_after_success: bool = False,
 ) -> None:
     await ensure_user(user_id, username)
     is_admin = user_id in ADMIN_IDS
@@ -1777,6 +1953,7 @@ async def _execute_ready_with_refs_generation(
     if wait_msg is None:
         wait_msg = await message.bot.send_message(chat_id, _gen_progress_caption(0), parse_mode=HTML)
     try:
+        _prio = await _image_gen_priority_from_user_id(user_id)
 
         async def _gen_ready() -> tuple[bytes, bool]:
             user_refs: list[bytes] = []
@@ -1817,7 +1994,9 @@ async def _execute_ready_with_refs_generation(
                     raise
             return img, False
 
-        image_bytes, from_cache = await _await_generation_with_progress(wait_msg, _gen_ready)
+        image_bytes, from_cache = await _await_generation_with_progress(
+            wait_msg, _gen_ready, priority=_prio
+        )
     except Exception as exc:
         if isinstance(exc, OpenRouterApiError):
             logging.warning(
@@ -1857,6 +2036,9 @@ async def _execute_ready_with_refs_generation(
         deducted_credits=meta.credit_charged,
         served_from_cache=from_cache,
         usage_kind="ready",
+        refs_file_ids=list(refs_file_ids) if refs_file_ids else None,
+        ready_idea_title=ready_idea_title,
+        mark_redo_half_after_success=mark_redo_half_after_success,
     )
 
 
@@ -2235,6 +2417,7 @@ async def open_mellstroy_prompt(callback: CallbackQuery, state: FSMContext) -> N
         callback.message,
         caption=(
             f"<b>Выбрано:</b> {esc(title)}\n"
+            f"{_ready_generation_cost_html()}\n"
             f"{first_hint}\n"
             "<blockquote><i>Попал на скрытую тусовку к Мелу.</i></blockquote>"
         ),
@@ -2399,6 +2582,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
                 callback.message,
                 caption=(
                     f"<b>Выбрано:</b> {esc(title)}\n"
+                    f"{_ready_generation_cost_html()}\n"
                     f"<b>{esc(req0)}</b>\n"
                     "<blockquote><i>Пришли <b>текст заголовка</b> для игрового логотипа — "
                     f"латиница или кириллица, до {_FANTASY_HEADLINE_MAX_LEN} символов "
@@ -2420,6 +2604,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
             callback.message,
             caption=(
                 f"<b>Выбрано:</b> {esc(title)}\n"
+                f"{_ready_generation_cost_html()}\n"
                 f"{first_hint}\n"
                 "<blockquote><i>После загрузки появится кнопка подтверждения.</i></blockquote>"
             ),
@@ -2454,6 +2639,7 @@ async def ready_photo_back(callback: CallbackQuery, state: FSMContext) -> None:
             callback.message,
             caption=(
                 f"<b>Выбрано:</b> {esc(title)}\n"
+                f"{_ready_generation_cost_html()}\n"
                 f"{hint}\n"
                 "<blockquote><i>Попал на скрытую тусовку к Мелу.</i></blockquote>"
             ),
@@ -2525,6 +2711,17 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
             parse_mode=HTML,
         )
         return
+    data = await state.get_data()
+    if str(data.get("_ready_redo_prompt") or "").strip():
+        await state.set_state(ImageGenState.ready_waiting_confirm)
+        charge_show = int(data.get("_ready_redo_charge") or 0)
+        await message.answer(
+            "<b>Фото приняты.</b>\n"
+            f"<blockquote><i>К списанию: <b>{charge_show}</b> кр. Нажми «Подтвердить», чтобы запустить тот же сценарий.</i></blockquote>",
+            reply_markup=_ready_confirm_keyboard(),
+            parse_mode=HTML,
+        )
+        return
     category = str(data.get("_ready_category") or "").strip().lower()
     idx = int(data.get("_ready_index") or 0)
     include_hidden = bool(data.get("_ready_include_hidden_start_only"))
@@ -2581,6 +2778,7 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
             (
                 f"{_ready_photo_upload_hint(category=category, need=need, received=len(photos), idea_title=title)}\n"
                 "<b>Фото зафиксированы.</b>\n"
+                f"{_ready_generation_cost_html()}\n"
                 f"{head_hint}"
             ),
             reply_markup=_ready_wait_photo_keyboard(),
@@ -2592,6 +2790,7 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
         (
             f"{_ready_photo_upload_hint(category=category, need=need, received=len(photos), idea_title=title)}\n"
             f"<b>Фото зафиксированы:</b> <b>{esc(len(photos))}</b>\n"
+            f"{_ready_generation_cost_html()}\n"
             "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
         ),
         reply_markup=_ready_confirm_keyboard(),
@@ -2645,6 +2844,7 @@ async def ready_collect_poster_text(message: Message, state: FSMContext) -> None
     await message.answer(
         (
             f"<b>{esc(label)}:</b> <code>{esc(raw)}</code>\n"
+            f"{_ready_generation_cost_html()}\n"
             "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
         ),
         reply_markup=_ready_confirm_keyboard(),
@@ -2723,6 +2923,7 @@ async def ready_collect_fantasy_color(message: Message, state: FSMContext) -> No
         (
             f"<b>Заголовок:</b> <code>{esc(headline)}</code>\n"
             f"<b>Цвет:</b> <code>{esc(color)}</code>\n"
+            f"{_ready_generation_cost_html()}\n"
             "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
         ),
         reply_markup=_ready_confirm_keyboard(),
@@ -2745,6 +2946,7 @@ async def ready_collect_minecraft_nick(message: Message, state: FSMContext) -> N
     await message.answer(
         (
             f"<b>Ник сохранён:</b> <code>@{esc(nick)}</code>\n"
+            f"{_ready_generation_cost_html()}\n"
             "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
         ),
         reply_markup=_ready_confirm_keyboard(),
@@ -2774,6 +2976,7 @@ async def ready_pick_beard_size(callback: CallbackQuery, state: FSMContext) -> N
         callback.message,
         caption=(
             f"<b>Размер бороды:</b> <code>{esc(label)}</code>\n"
+            f"{_ready_generation_cost_html()}\n"
             "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
         ),
         reply_markup=_ready_confirm_keyboard(),
@@ -2856,6 +3059,37 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             return
         data = await state.get_data()
         back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
+        redo_prompt = str(data.get("_ready_redo_prompt") or "").strip()
+        if redo_prompt:
+            photos_redo = list(data.get("_ready_photos") or [])
+            need_r = int(data.get("_ready_need") or 0)
+            model_r = str(data.get("_ready_redo_model") or "").strip()
+            charge_r = int(data.get("_ready_redo_charge") or 0)
+            consume_half = bool(data.get("_ready_redo_consume_half"))
+            title_r = str(data.get("_ready_redo_title") or "").strip()
+            if len(photos_redo) < need_r or need_r <= 0:
+                await callback.answer("Сначала загрузи нужное число фото.", show_alert=True)
+                return
+            await state.clear()
+            uid = callback.from_user.id
+            await ensure_user(uid, callback.from_user.username)
+            await _execute_ready_with_refs_generation(
+                callback.message,
+                state,
+                user_id=uid,
+                username=callback.from_user.username,
+                prompt=redo_prompt,
+                cost=charge_r,
+                refs_file_ids=photos_redo,
+                model_override=model_r if model_r else None,
+                overlay_nick=None,
+                extra_refs=None,
+                extra_refs_first=False,
+                strict_refs=False,
+                ready_idea_title=title_r,
+                mark_redo_half_after_success=consume_half,
+            )
+            return
         category = str(data.get("_ready_category") or "").strip().lower()
         include_hidden = bool(data.get("_ready_include_hidden_start_only"))
         idx_raw = data.get("_ready_index")
@@ -2935,7 +3169,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
         if (title or "").strip() == _LUXURY_TORN_COVER_TITLE:
             luxury_cover_pick = _pick_luxury_cover_vars()
         if (title or "").strip() == _SUPERHERO_MIRROR_TITLE:
-            superhero_pick = _pick_superhero_vars()
+            superhero_pick = _pick_superhero_vars(callback.from_user.id)
         # Для Minecraft-идеи ник берём из шага ввода и передаём в prompt как точный текст над головой.
         include_nick = False
         overlay_nick = None
@@ -3164,6 +3398,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             extra_refs=extra_refs,
             extra_refs_first=False,
             strict_refs=strict_refs,
+            ready_idea_title=title,
         )
     except Exception:
         logging.exception("ready_confirm_and_generate failed")
@@ -3306,7 +3541,7 @@ async def result_ok_to_main_menu(callback: CallbackQuery, state: FSMContext) -> 
 
 @router.callback_query(F.data == CB_REGEN)
 async def regenerate_new_prompt(callback: CallbackQuery, state: FSMContext) -> None:
-    """Та же модель и цена — пользователь вводит новый промпт."""
+    """Та же модель и цена — пользователь вводит новый промпт; готовые идеи — повтор сценария или список идей."""
     if not callback.from_user or not callback.message:
         await callback.answer()
         return
@@ -3326,6 +3561,15 @@ async def regenerate_new_prompt(callback: CallbackQuery, state: FSMContext) -> N
     if uk not in ("ready", "self"):
         uk = "self"
     if uk == "ready":
+        if (ctx.ready_idea_title or "").strip() != _MELLSTROY_PHOTO_TITLE and ctx.refs_file_ids:
+            await _start_ready_redo_flow(
+                callback.message,
+                state,
+                user_id,
+                callback.from_user.username,
+                ctx,
+            )
+            return
         await _send_ready_ideas_screen(
             callback.message,
             state,
@@ -3345,5 +3589,44 @@ async def regenerate_new_prompt(callback: CallbackQuery, state: FSMContext) -> N
         "<blockquote><i>Будут использованы та же модель и стоимость. Опиши <b>новую</b> картинку.</i></blockquote>",
         reply_markup=_waiting_prompt_keyboard(),
         parse_mode=HTML,
+    )
+
+
+@router.callback_query(F.data == CB_REGEN_READY_REDO)
+async def ready_redo_from_button(callback: CallbackQuery, state: FSMContext) -> None:
+    if not callback.from_user or not callback.message:
+        await callback.answer()
+        return
+    await callback.answer()
+    ctx = await get_last_image_context(callback.from_user.id)
+    if not ctx or ctx.usage_kind != "ready":
+        await callback.message.answer("Нет данных для повтора. Открой «Готовые идеи» в меню.")
+        return
+    await _start_ready_redo_flow(
+        callback.message,
+        state,
+        callback.from_user.id,
+        callback.from_user.username,
+        ctx,
+    )
+
+
+@router.callback_query(F.data == CB_BACK_TO_READY_IDEAS)
+async def back_to_ready_ideas_from_result(callback: CallbackQuery, state: FSMContext) -> None:
+    if not callback.from_user or not callback.message:
+        await callback.answer()
+        return
+    await callback.answer()
+    await state.clear()
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        logging.debug("back_ready_ideas: strip kb failed", exc_info=True)
+    await _send_ready_ideas_screen(
+        callback.message,
+        state,
+        callback.from_user.id,
+        callback.from_user.username,
+        edit=False,
     )
 

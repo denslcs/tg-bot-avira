@@ -4,7 +4,8 @@ from __future__ import annotations
 Подписки, бонус-пакеты, Stars и внешние способы оплаты (callback + pre_checkout).
 
 Автоматическая запись подписки в БД — только при успешной оплате Telegram Stars
-(SUCCESSFUL_PAYMENT): reset_subscription_days + кредиты. Оплата по внешним ссылкам
+(SUCCESSFUL_PAYMENT): срок подписки + кредиты; при активной подписке — продление срока
+(extend) и бонус к кредитам за раннее продление. Оплата по внешним ссылкам
 (карта РФ/INTL, крипта) в этом боте только ведёт на кассу; продление в users делается
 вручную или отдельным процессом на стороне платежки.
 """
@@ -45,9 +46,11 @@ from src.database import (
     add_credits_with_reason,
     add_budget_history_event,
     ensure_user,
+    queue_subscription_bonus_credits,
     get_user_admin_profile,
     mark_starter_trial_purchased,
     record_subscription_purchase_now,
+    extend_subscription,
     reset_subscription_days,
     release_star_payment_claim,
     subscription_can_purchase_plan,
@@ -150,6 +153,33 @@ async def _can_buy_plan(user_id: int, plan_id: str) -> tuple[bool, str | None]:
     return await subscription_can_purchase_plan(user_id, plan_id)
 
 
+async def _has_active_universe(user_id: int) -> bool:
+    prof = await get_user_admin_profile(user_id)
+    if not prof or not subscription_is_active(prof.subscription_ends_at):
+        return False
+    return (prof.subscription_plan or "").strip().lower() == "universe"
+
+
+def _discount_pack_values(pack_id: str, *, apply_universe_discount: bool) -> tuple[int, float, int, bool]:
+    """Цена пакета с учётом перка Universe: -15% на бонус-паки."""
+    p = BONUS_PACKS[pack_id]
+    if not apply_universe_discount:
+        return p.price_rub, p.price_usd, p.stars, False
+    rub = max(1, int(round(p.price_rub * 0.85)))
+    usd = round(float(p.price_usd) * 0.85, 2)
+    stars = max(1, int(round(p.stars * 0.85)))
+    return rub, usd, stars, True
+
+
+def _repeat_plan_bonus_extra_credits(*, plan_id: str, base_credits: int, early_renewal: bool) -> int:
+    """Бонус за повторную покупку того же тарифа: обычно +5%; Universe при раннем продлении +10%."""
+    if base_credits <= 0:
+        return 0
+    if early_renewal and plan_id == "universe":
+        return int(base_credits * 0.10)
+    return int(base_credits * 0.05)
+
+
 def _subscriptions_pricing_image_path() -> Path | None:
     p = PROJECT_ROOT / "assets" / "pay" / "subscriptions_pricing.png"
     return p if p.is_file() else None
@@ -162,9 +192,12 @@ def _plans_menu_caption() -> str:
         f"<blockquote><b>Starter</b> — пробный пакет на <b>{esc(st.period_days)}</b> дн., все модели как у Universe, "
         f"<b>одна покупка на аккаунт</b> (повторно недоступен). Остальные тарифы — <b>{esc(SUBSCRIPTION_PERIOD_DAYS)}</b> дн.</blockquote>\n"
         "Ограничений на число генераций по подписке нет — списываются кредиты.\n\n"
+        "<blockquote><i>У полных тарифов чем выше пакет — тем <b>ниже цена одного кредита</b> на балансе "
+        "(крупный объём выгоднее).</i></blockquote>\n\n"
         f"<blockquote><i>Полные тарифы:</i> не чаще <b>одного раза в {esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дней "
-        f"между покупками. При активной подписке сменить тариф нельзя до окончания срока. "
-        f"<i>Starter в эту паузу не входит.</i></blockquote>\n\n"
+        f"после <b>окончания</b> подписки. Пока подписка активна — заранее продлевается только текущий тариф: дни суммируются, "
+        f"бонус за повтор того же тарифа +5% (для Universe при раннем продлении +10%). "
+        f"<i>Starter в паузу между полными тарифами не входит.</i></blockquote>\n\n"
         f"<blockquote><i>Без подписки:</i> до <b>{esc(NONSUB_IMAGE_WINDOW_MAX)}</b> картинок за цикл; после полного исчерпания "
         f"новый цикл через <b>{esc(NONSUB_IMAGE_WINDOW_DAYS)}</b> суток от момента исчерпания (UTC). "
         "Кредиты лимит не обходят.</blockquote>"
@@ -201,12 +234,21 @@ def _plans_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _methods_keyboard(item_id: str, *, is_pack: bool, back_callback_data: str = CB_PAY_MENU) -> InlineKeyboardMarkup:
+def _methods_keyboard(
+    item_id: str,
+    *,
+    is_pack: bool,
+    back_callback_data: str = CB_PAY_MENU,
+    pack_price_override: tuple[int, float, int] | None = None,
+) -> InlineKeyboardMarkup:
     if is_pack:
-        pack = BONUS_PACKS[item_id]
-        stars = pack.stars
-        usd = pack.price_usd
-        rub = pack.price_rub
+        if pack_price_override is None:
+            pack = BONUS_PACKS[item_id]
+            stars = pack.stars
+            usd = pack.price_usd
+            rub = pack.price_rub
+        else:
+            rub, usd, stars = pack_price_override
     else:
         p = PLANS[item_id]
         stars = p.stars
@@ -253,8 +295,10 @@ def _pay_methods_text(plan_id: str) -> str:
     days = p.period_days
     starter_block = ""
     cooldown_block = (
-        f"<blockquote><i>Оплата полного тарифа не чаще одного раза в {esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)} дней</i> "
-        f"(после последней такой покупки). Оплата ⭐ учитывается автоматически.</blockquote>\n"
+        f"<blockquote><i>Полный тариф после окончания подписки — не чаще одного раза в {esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)} дней</i> "
+        f"с прошлой покупки. Пока подписка ещё идёт — можно продлить только этот же тариф "
+        f"(дни добавятся; бонус только за повтор того же тарифа). "
+        f"Оплата ⭐ учитывается автоматически.</blockquote>\n"
     )
     if plan_id == "starter":
         starter_block = (
@@ -282,33 +326,58 @@ def _pay_methods_text(plan_id: str) -> str:
     )
 
 
-def _pack_methods_text(pack_id: str) -> str:
+def _pack_methods_text(
+    pack_id: str,
+    *,
+    discounted: bool = False,
+    discount_price_rub: int | None = None,
+) -> str:
     p = BONUS_PACKS[pack_id]
+    discount_block = ""
+    if discounted and discount_price_rub is not None:
+        discount_block = (
+            f"<blockquote><i>Персональная скидка Universe: <b>-15%</b> "
+            f"(вместо {esc(p.price_rub)} ₽ → <b>{esc(discount_price_rub)} ₽</b>).</i></blockquote>\n"
+        )
     return (
         "<b>💳 Выбери способ оплаты</b>\n\n"
         f"🎁 <b>Пакет бонусов:</b> <b>{esc(p.title)}</b>\n"
         f"<i>Начисление на баланс:</i> <b>+{esc(p.credits)}</b> кредитов\n"
-        "<blockquote><i>Пакет не продлевает подписку — только кредиты на баланс.</i></blockquote>\n\n"
+        "<blockquote><i>Пакет не продлевает подписку — только кредиты на баланс.</i></blockquote>\n"
+        f"{discount_block}\n"
         "<i>Оформляя оплату, ты соглашаешься с условиями сервиса и политикой возврата "
         "(подробности — в поддержке или на странице оплаты).</i>"
     )
 
 
-def _bonus_packs_caption() -> str:
+def _bonus_packs_caption(*, universe_discount: bool = False) -> str:
     lines = [
         "<b>🎁 Пакеты бонусов</b>\n"
         "<blockquote><i>Докупка кредитов без продления подписки.</i></blockquote>",
     ]
+    if universe_discount:
+        lines.append(
+            "<blockquote><i>Для активной <b>Universe</b> действует персональная скидка "
+            "<b>-15%</b> на все бонус-пакеты.</i></blockquote>"
+        )
     for pid in BONUS_PACKS_ORDER:
         p = BONUS_PACKS[pid]
+        rub, usd, _stars, discounted = _discount_pack_values(pid, apply_universe_discount=universe_discount)
+        price_line = f"💰 Цена: {esc(rub)} ₽, ${usd:g}"
+        if discounted:
+            price_line += f" <i>(было {esc(p.price_rub)} ₽)</i>"
         lines.append(
             f"<b>{esc(p.credits)} кредитов</b>\n"
-            f"💰 Цена: {esc(p.price_rub)} ₽, ${p.price_usd:g}"
+            f"{price_line}"
         )
     return "\n\n".join(lines)
 
 
-def _bonus_packs_keyboard(*, pay_menu_callback: str = CB_PAY_MENU) -> InlineKeyboardMarkup:
+def _bonus_packs_keyboard(
+    *,
+    pay_menu_callback: str = CB_PAY_MENU,
+    universe_discount: bool = False,
+) -> InlineKeyboardMarkup:
     """Сверху зелёные (два младших пакета в ряд), ниже синий крупный, внизу нейтральный «Назад»."""
     rows: list[list[InlineKeyboardButton]] = []
     order = list(BONUS_PACKS_ORDER)
@@ -317,10 +386,11 @@ def _bonus_packs_keyboard(*, pay_menu_callback: str = CB_PAY_MENU) -> InlineKeyb
         return InlineKeyboardMarkup(inline_keyboard=rows)
     if len(order) == 1:
         b = BONUS_PACKS[order[0]]
+        rub, _usd, _stars, _disc = _discount_pack_values(order[0], apply_universe_discount=universe_discount)
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"🎁 {b.credits} кр. · {b.price_rub} ₽",
+                    text=f"🎁 {b.credits} кр. · {rub} ₽",
                     callback_data=f"{CB_PAY_PACK_PREFIX}{order[0]}",
                     style=BTN_PRIMARY,
                 )
@@ -329,15 +399,17 @@ def _bonus_packs_keyboard(*, pay_menu_callback: str = CB_PAY_MENU) -> InlineKeyb
     else:
         b0 = BONUS_PACKS[order[0]]
         b1 = BONUS_PACKS[order[1]]
+        rub0, _usd0, _stars0, _disc0 = _discount_pack_values(order[0], apply_universe_discount=universe_discount)
+        rub1, _usd1, _stars1, _disc1 = _discount_pack_values(order[1], apply_universe_discount=universe_discount)
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"🎁 {b0.credits} кр. · {b0.price_rub} ₽",
+                    text=f"🎁 {b0.credits} кр. · {rub0} ₽",
                     callback_data=f"{CB_PAY_PACK_PREFIX}{order[0]}",
                     style=BTN_SUCCESS,
                 ),
                 InlineKeyboardButton(
-                    text=f"🎁 {b1.credits} кр. · {b1.price_rub} ₽",
+                    text=f"🎁 {b1.credits} кр. · {rub1} ₽",
                     callback_data=f"{CB_PAY_PACK_PREFIX}{order[1]}",
                     style=BTN_SUCCESS,
                 ),
@@ -345,10 +417,11 @@ def _bonus_packs_keyboard(*, pay_menu_callback: str = CB_PAY_MENU) -> InlineKeyb
         )
         for bid in order[2:]:
             b = BONUS_PACKS[bid]
+            rub, _usd, _stars, _disc = _discount_pack_values(bid, apply_universe_discount=universe_discount)
             rows.append(
                 [
                     InlineKeyboardButton(
-                        text=f"⭐ {b.credits} кр. · {b.price_rub} ₽",
+                        text=f"⭐ {b.credits} кр. · {rub} ₽",
                         callback_data=f"{CB_PAY_PACK_PREFIX}{bid}",
                         style=BTN_PRIMARY,
                     )
@@ -493,10 +566,14 @@ async def pay_bonus_menu(callback: CallbackQuery) -> None:
         return
     await callback.answer()
     is_hub = callback.data == CB_PAY_BONUS_MENU_HUB
+    universe_discount = await _has_active_universe(callback.from_user.id) if callback.from_user else False
     await edit_or_send_nav_message(
         callback.message,
-        text=_bonus_packs_caption(),
-        reply_markup=_bonus_packs_keyboard(pay_menu_callback=(CB_PAY_MENU_HUB if is_hub else CB_PAY_MENU)),
+        text=_bonus_packs_caption(universe_discount=universe_discount),
+        reply_markup=_bonus_packs_keyboard(
+            pay_menu_callback=(CB_PAY_MENU_HUB if is_hub else CB_PAY_MENU),
+            universe_discount=universe_discount,
+        ),
         parse_mode=HTML,
     )
 
@@ -511,6 +588,8 @@ async def pay_pick_pack(callback: CallbackQuery) -> None:
         await callback.answer("Неизвестный пакет", show_alert=True)
         return
     await callback.answer()
+    universe_discount = await _has_active_universe(callback.from_user.id) if callback.from_user else False
+    rub, usd, stars, discounted = _discount_pack_values(pack_id, apply_universe_discount=universe_discount)
     back_to_bonus_callback = CB_PAY_BONUS_MENU
     if callback.message and callback.message.reply_markup:
         for row in callback.message.reply_markup.inline_keyboard:
@@ -524,22 +603,40 @@ async def pay_pick_pack(callback: CallbackQuery) -> None:
                     break
     await edit_or_send_nav_message(
         callback.message,
-        text=_pack_methods_text(pack_id),
-        reply_markup=_methods_keyboard(pack_id, is_pack=True, back_callback_data=back_to_bonus_callback),
+        text=_pack_methods_text(
+            pack_id,
+            discounted=discounted,
+            discount_price_rub=(rub if discounted else None),
+        ),
+        reply_markup=_methods_keyboard(
+            pack_id,
+            is_pack=True,
+            back_callback_data=back_to_bonus_callback,
+            pack_price_override=(rub, usd, stars),
+        ),
         parse_mode=HTML,
     )
 
 
-def _pay_item_info(item_id: str) -> tuple[str, int]:
+def _pay_item_info(item_id: str, *, pack_rub_override: int | None = None) -> tuple[str, int]:
     if item_id in PLANS:
         p = PLANS[item_id]
         return p.title, p.price_rub
     b = BONUS_PACKS[item_id]
+    if pack_rub_override is not None:
+        return b.title, int(pack_rub_override)
     return b.title, b.price_rub
 
 
-async def _external_pay_hint(callback: CallbackQuery, item_id: str, label: str, url: str | None) -> None:
-    title, price_rub = _pay_item_info(item_id)
+async def _external_pay_hint(
+    callback: CallbackQuery,
+    item_id: str,
+    label: str,
+    url: str | None,
+    *,
+    pack_rub_override: int | None = None,
+) -> None:
+    title, price_rub = _pay_item_info(item_id, pack_rub_override=pack_rub_override)
     if url:
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -601,7 +698,18 @@ async def pay_rub(callback: CallbackQuery) -> None:
         if not allowed:
             await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
             return
-    await _external_pay_hint(callback, item_id, "карта РФ", PAY_URL_CARD_RU or None)
+    pack_rub_override = None
+    if item_id in BONUS_PACKS and callback.from_user and await _has_active_universe(callback.from_user.id):
+        pack_rub_override, _usd, _stars, _disc = _discount_pack_values(
+            item_id, apply_universe_discount=True
+        )
+    await _external_pay_hint(
+        callback,
+        item_id,
+        "карта РФ",
+        PAY_URL_CARD_RU or None,
+        pack_rub_override=pack_rub_override,
+    )
 
 
 @router.callback_query(F.data.startswith(CB_PAY_INTL_PREFIX))
@@ -618,7 +726,18 @@ async def pay_intl(callback: CallbackQuery) -> None:
         if not allowed:
             await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
             return
-    await _external_pay_hint(callback, item_id, "карта другой страны", PAY_URL_CARD_INTL or None)
+    pack_rub_override = None
+    if item_id in BONUS_PACKS and callback.from_user and await _has_active_universe(callback.from_user.id):
+        pack_rub_override, _usd, _stars, _disc = _discount_pack_values(
+            item_id, apply_universe_discount=True
+        )
+    await _external_pay_hint(
+        callback,
+        item_id,
+        "карта другой страны",
+        PAY_URL_CARD_INTL or None,
+        pack_rub_override=pack_rub_override,
+    )
 
 
 @router.callback_query(F.data.startswith(CB_PAY_CRYPTO_PREFIX))
@@ -635,7 +754,18 @@ async def pay_crypto(callback: CallbackQuery) -> None:
         if not allowed:
             await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
             return
-    await _external_pay_hint(callback, item_id, "крипта", PAY_URL_CRYPTO or None)
+    pack_rub_override = None
+    if item_id in BONUS_PACKS and callback.from_user and await _has_active_universe(callback.from_user.id):
+        pack_rub_override, _usd, _stars, _disc = _discount_pack_values(
+            item_id, apply_universe_discount=True
+        )
+    await _external_pay_hint(
+        callback,
+        item_id,
+        "крипта",
+        PAY_URL_CRYPTO or None,
+        pack_rub_override=pack_rub_override,
+    )
 
 
 @router.callback_query(F.data.startswith(CB_PAY_STARS_PREFIX))
@@ -667,14 +797,24 @@ async def pay_stars_invoice(callback: CallbackQuery) -> None:
         )
     elif item_id in BONUS_PACKS:
         b = BONUS_PACKS[item_id]
+        universe_discount = await _has_active_universe(callback.from_user.id)
+        rub, _usd, stars, discounted = _discount_pack_values(
+            item_id, apply_universe_discount=universe_discount
+        )
         payload = f"pack:{callback.from_user.id}:{item_id}"
+        title = f"Shard Creator — бонус-пакет {b.credits} кредитов"
+        if discounted:
+            title += " (Universe -15%)"
         await callback.message.bot.send_invoice(
             chat_id=callback.message.chat.id,
-            title=f"Shard Creator — бонус-пакет {b.credits} кредитов",
-            description=(f"Пакет бонусов: +{b.credits} кредитов на баланс (без продления подписки)."),
+            title=title,
+            description=(
+                f"Пакет бонусов: +{b.credits} кредитов на баланс (без продления подписки). "
+                + (f"Цена для Universe: {rub} ₽ / {stars} ⭐." if discounted else "")
+            ),
             payload=payload,
             currency="XTR",
-            prices=[LabeledPrice(label=f"{b.credits} кредитов", amount=b.stars)],
+            prices=[LabeledPrice(label=f"{b.credits} кредитов", amount=stars)],
             provider_token="",
         )
     else:
@@ -712,7 +852,11 @@ async def pre_checkout(q: PreCheckoutQuery) -> None:
         if item_id not in BONUS_PACKS:
             await q.answer(ok=False, error_message="Неизвестный пакет. Запроси новый счёт.")
             return
-        amount_expected = BONUS_PACKS[item_id].stars
+        universe_discount = await _has_active_universe(q.from_user.id)
+        _rub, _usd, stars, _disc = _discount_pack_values(
+            item_id, apply_universe_discount=universe_discount
+        )
+        amount_expected = stars
     if (q.currency or "").upper() != "XTR" or int(q.total_amount or 0) != amount_expected:
         await q.answer(ok=False, error_message="Сумма или валюта счёта не совпадают. Запроси новый счёт.")
         return
@@ -758,7 +902,31 @@ async def successful_payment(message: Message) -> None:
             )
             return
         p = PLANS[item_id]
-        new_end = await reset_subscription_days(message.from_user.id, p.period_days, item_id)
+        prof_before = await get_user_admin_profile(message.from_user.id)
+        prev_plan_id = (prof_before.subscription_plan or "").strip().lower() if prof_before else ""
+        same_plan_repeat = bool(prev_plan_id and prev_plan_id == item_id)
+        had_active_renewal = bool(
+            prof_before
+            and subscription_is_active(prof_before.subscription_ends_at)
+            and item_id != "starter"
+        )
+        renewal_extra = (
+            _repeat_plan_bonus_extra_credits(
+                plan_id=item_id,
+                base_credits=p.bonus_credits,
+                early_renewal=had_active_renewal,
+            )
+            if (item_id != "starter" and same_plan_repeat)
+            else 0
+        )
+        renewal_release_at: str | None = None
+        if item_id == "starter":
+            new_end = await reset_subscription_days(message.from_user.id, p.period_days, item_id)
+        elif had_active_renewal:
+            renewal_release_at = str(prof_before.subscription_ends_at or "").strip() or None
+            new_end = await extend_subscription(message.from_user.id, p.period_days, item_id)
+        else:
+            new_end = await reset_subscription_days(message.from_user.id, p.period_days, item_id)
         if not new_end:
             await release_star_payment_claim(charge_id)
             await message.answer(
@@ -769,6 +937,7 @@ async def successful_payment(message: Message) -> None:
             await mark_starter_trial_purchased(message.from_user.id)
         else:
             await record_subscription_purchase_now(message.from_user.id)
+        total_bonus_credits = p.bonus_credits + renewal_extra
         prof_verify = await get_user_admin_profile(message.from_user.id)
         sub_active_ok = bool(
             prof_verify and subscription_is_active(prof_verify.subscription_ends_at)
@@ -780,12 +949,20 @@ async def successful_payment(message: Message) -> None:
                 new_end,
                 getattr(prof_verify, "subscription_ends_at", None),
             )
-        credited = await add_credits_with_reason(
-            message.from_user.id,
-            p.bonus_credits,
-            source="subscription_bonus",
-            details=f"plan {item_id}",
-        )
+        if had_active_renewal and renewal_release_at:
+            credited = await queue_subscription_bonus_credits(
+                message.from_user.id,
+                total_bonus_credits,
+                release_at_utc=renewal_release_at,
+                details=f"plan {item_id} renewal bonus",
+            )
+        else:
+            credited = await add_credits_with_reason(
+                message.from_user.id,
+                total_bonus_credits,
+                source="subscription_bonus",
+                details=f"plan {item_id}" + (" renewal" if renewal_extra else ""),
+            )
         await add_budget_history_event(
             message.from_user.id,
             source="subscription_purchase",
@@ -796,13 +973,33 @@ async def successful_payment(message: Message) -> None:
         q_lines = [
             f"<i>Срок:</i> <b>{esc(p.period_days)}</b> дн.; действует до <b>{esc(end_h)}</b>",
         ]
+        if had_active_renewal and item_id != "starter":
+            q_lines.append(
+                "<blockquote><i>Подписка продлена заранее — к текущему сроку добавлены дни тарифа.</i></blockquote>"
+            )
+            if renewal_release_at:
+                q_lines.append(
+                    "<blockquote><i>Кредиты по этому продлению начислятся после окончания текущего периода подписки.</i></blockquote>"
+                )
+        if renewal_extra > 0:
+            q_lines.append(
+                f"<i>Бонус за повтор этого же тарифа:</i> <b>+{esc(renewal_extra)}</b> кредитов"
+            )
+        elif item_id != "starter" and (not same_plan_repeat):
+            q_lines.append(
+                "<i>Смена тарифа: бонус за продление не применяется.</i>"
+            )
         if credited:
             q_lines.append(
-                f"<i>Бонус по тарифу на баланс:</i> <b>+{esc(p.bonus_credits)}</b> кредитов"
+                (
+                    f"<i>{'Запланировано к начислению' if had_active_renewal else 'Начислено на баланс'} "
+                    f"(тариф{(' + продление' if renewal_extra else '')}):</i> "
+                    f"<b>+{esc(total_bonus_credits)}</b> кредитов"
+                )
             )
         else:
             q_lines.append(
-                f"<i>Бонус +{esc(p.bonus_credits)} не начислен — напиши в поддержку.</i>"
+                f"<i>Бонус +{esc(total_bonus_credits)} не начислен — напиши в поддержку.</i>"
             )
         quote_inner = "\n".join(q_lines)
         starter_tail = ""
@@ -827,14 +1024,20 @@ async def successful_payment(message: Message) -> None:
         )
         stars_amt = int(sp.total_amount or 0)
         cur = (sp.currency or "XTR").upper()
-        credit_ok = "да" if credited else "нет (проверить вручную)"
+        credit_ok = (
+            "запланировано после окончания текущего срока"
+            if (had_active_renewal and credited)
+            else ("да" if credited else "нет (проверить вручную)")
+        )
         pay_kind = _payment_type_label(sp)
         admin_txt = (
             "<b>Подписка оплачена</b>\n"
             f"<b>Тип оплаты:</b> {pay_kind}\n"
             f"Тариф: {esc(p.title)} · <code>{esc(item_id)}</code>\n"
             f"Пользователь: {_user_line_html(message.from_user)}\n"
-            f"Кредиты по тарифу: <b>+{esc(p.bonus_credits)}</b> · начислено: <i>{esc(credit_ok)}</i>\n"
+            f"Кредиты: <b>+{esc(total_bonus_credits)}</b>"
+            f"{(' (в т.ч. продление +' + str(renewal_extra) + ')' if renewal_extra else '')}"
+            f" · начислено: <i>{esc(credit_ok)}</i>\n"
             f"До (UTC): <code>{esc(end_h)}</code>\n"
             f"Сумма: <b>{esc(stars_amt)}</b> {esc(cur)}\n"
             f"charge: <code>{esc(charge_id)}</code>"
@@ -850,6 +1053,17 @@ async def successful_payment(message: Message) -> None:
         await message.answer("Оплата получена, но пакет не найден. Напиши в поддержку.")
         return
     b = BONUS_PACKS[item_id]
+    universe_discount = await _has_active_universe(message.from_user.id)
+    _rub, _usd, stars_expected, discounted = _discount_pack_values(
+        item_id, apply_universe_discount=universe_discount
+    )
+    if (sp.currency or "").upper() != "XTR" or int(sp.total_amount or 0) != stars_expected:
+        await release_star_payment_claim(charge_id)
+        await message.answer(
+            "Оплата получена, но сумма пакета не совпала с текущими условиями. "
+            "Напиши в поддержку — проверим и зачислим вручную."
+        )
+        return
     credited = await add_credits_with_reason(
         message.from_user.id,
         b.credits,
@@ -869,7 +1083,8 @@ async def successful_payment(message: Message) -> None:
         admin_txt = (
             "<b>Пакет бонусов оплачен</b>\n"
             f"<b>Тип оплаты:</b> {pay_kind}\n"
-            f"Пакет: {esc(b.title)} · <code>{esc(item_id)}</code> · <b>+{esc(b.credits)}</b> кр.\n"
+            f"Пакет: {esc(b.title)} · <code>{esc(item_id)}</code> · <b>+{esc(b.credits)}</b> кр."
+            f"{' · Universe -15%' if discounted else ''}\n"
             f"Пользователь: {_user_line_html(message.from_user)}\n"
             f"Сумма: <b>{esc(stars_amt)}</b> {esc(cur)}\n"
             f"charge: <code>{esc(charge_id)}</code>"

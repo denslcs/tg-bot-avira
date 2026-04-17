@@ -7,8 +7,10 @@ NONSUB_IMAGE_WINDOW_DAYS суток от момента исчерпания (UT
 
 Звёзды (XTR): round(usd / 2.99 * 225) — та же шкала, что раньше (опорная точка Nova $2.99 → 225 ⭐).
 
-Цены ₽ / $ / ⭐ по тарифам — как до объединения; на баланс при оплате: Starter 250 кр. (3 дня),
-Nova 480, Supernova 900, Galaxy 1700, Universe 3400.
+Ориентир маржи (переменные затраты): типичный промпт = 30 кр., ~11 ₽ себестоимости;
+при полном расходе бонусных кр. на такие промпты: затраты = (bonus_credits / 30) * 11 ₽.
+Целевое соотношение выручка / эти затраты ≈ 1,5–1,7× (баланс с объёмом кредитов для пользователя).
+Пакеты бонусов — без изменений.
 """
 
 from __future__ import annotations
@@ -84,43 +86,44 @@ PLANS: dict[str, SubscriptionPlan] = {
     "starter": SubscriptionPlan(
         id="starter",
         title="🚀 Starter",
-        price_rub=159,
-        price_usd=1.99,
-        stars=_stars_from_usd(1.99),
-        bonus_credits=250,
+        price_rub=149,
+        price_usd=1.86,
+        stars=_stars_from_usd(1.86),
+        bonus_credits=240,
         period_days=3,
     ),
     "nova": SubscriptionPlan(
         id="nova",
         title="✨ Nova",
-        price_rub=239,
-        price_usd=2.99,
-        stars=_stars_from_usd(2.99),
-        bonus_credits=480,
+        price_rub=279,
+        price_usd=3.48,
+        stars=_stars_from_usd(3.48),
+        bonus_credits=450,
     ),
     "supernova": SubscriptionPlan(
         id="supernova",
         title="🌟 SuperNova",
-        price_rub=399,
-        price_usd=4.99,
-        stars=_stars_from_usd(4.99),
-        bonus_credits=900,
+        price_rub=499,
+        price_usd=6.22,
+        stars=_stars_from_usd(6.22),
+        bonus_credits=820,
     ),
     "galaxy": SubscriptionPlan(
         id="galaxy",
         title="🌌 Galaxy",
-        price_rub=799,
-        price_usd=9.99,
-        stars=_stars_from_usd(9.99),
-        bonus_credits=1700,
+        price_rub=929,
+        price_usd=11.58,
+        stars=_stars_from_usd(11.58),
+        bonus_credits=1550,
     ),
     "universe": SubscriptionPlan(
         id="universe",
         title="🌍 Universe",
-        price_rub=1599,
-        price_usd=19.99,
-        stars=_stars_from_usd(19.99),
-        bonus_credits=3400,
+        # Верхний тариф: приоритет очереди, −50% на повтор «готовой идеи», бонус при раннем продлении.
+        price_rub=1699,
+        price_usd=21.18,
+        stars=_stars_from_usd(21.18),
+        bonus_credits=2850,
     ),
 }
 

@@ -66,7 +66,9 @@ from src.keyboards.callback_data import (
     CB_MENU_REF_LEGACY,
     CB_MENU_SUPPORT,
     CB_MENU_SUPPORT_HUB,
+    CB_BACK_TO_READY_IDEAS,
     CB_REGEN,
+    CB_REGEN_READY_REDO,
 )
 from src.keyboards.main_menu import back_to_main_menu_keyboard, menu_hub_keyboard, start_menu_keyboard
 from src.keyboards.reply_panel import quick_panel_keyboard
@@ -163,7 +165,7 @@ def _is_generated_image_result_message(message: Message) -> bool:
         for row in kb.inline_keyboard:
             for btn in row:
                 cd = getattr(btn, "callback_data", None)
-                if cd in (CB_REGEN, CB_IMG_OK, "img:save"):
+                if cd in (CB_REGEN, CB_REGEN_READY_REDO, CB_BACK_TO_READY_IDEAS, CB_IMG_OK, "img:save"):
                     return True
     return False
 
@@ -822,15 +824,29 @@ async def _profile_card_html(
     ready_bonus_uses = int(profile.idea_tokens or 0)
     ru, rlim = await get_daily_image_generation_usage(user_id, "ready")
     username = f"@{profile.username}" if profile.username else "—"
-    active_sub = subscription_is_active(profile.subscription_ends_at)
-    if active_sub:
+    is_admin = user_id in ADMIN_IDS
+    active_sub_real = subscription_is_active(profile.subscription_ends_at)
+    # Админу доступен безлимит всегда, но оплаченный срок показываем отдельно.
+    active_sub = active_sub_real or is_admin
+    priority_note = ""
+    if active_sub_real:
         sub_status = "активна"
         sub_till = format_subscription_ends_at(profile.subscription_ends_at)
-        if profile.subscription_plan and profile.subscription_plan in PLANS:
+        if is_admin:
+            plan_name = PLANS["universe"].title
+        elif profile.subscription_plan and profile.subscription_plan in PLANS:
             plan_name = PLANS[profile.subscription_plan].title
         else:
             # В БД мог не быть записан тариф (старые выдачи / только срок); доступ как у Universe.
             plan_name = PLANS["universe"].title
+        pid = "universe" if is_admin else (profile.subscription_plan or "").strip().lower()
+        if pid in ("galaxy", "universe"):
+            priority_note = "\n<i>⚡ Приоритет очереди генераций и скидка на повтор «готовой идеи» (см. подсказки после картинки).</i>"
+    elif is_admin:
+        sub_status = "админ-безлимит"
+        sub_till = "—"
+        plan_name = PLANS["universe"].title
+        priority_note = "\n<i>⚡ Приоритет очереди генераций и скидка на повтор «готовой идеи» доступны как у Universe.</i>"
     else:
         sub_status = "не активна"
         sub_till = (
@@ -854,7 +870,7 @@ async def _profile_card_html(
         f"<i>🎯 Готовые идеи:</i> <b>{esc(ready_cycle)}</b>\n"
         f"<i>🧾 Картинки:</i> <b>{esc(img_cycle)}</b>\n"
         f"<i>🎁 Бонусные запуски (реф):</i> <b>{esc(ready_bonus_uses)}</b>\n"
-        f"<i>Подписка:</i> <b>{esc(sub_status)}</b> · <i>{esc(plan_name)}</i>\n"
+        f"<i>Подписка:</i> <b>{esc(sub_status)}</b> · <i>{esc(plan_name)}</i>{priority_note}\n"
         f"<i>Действует до:</i> <b>{esc(sub_till)}</b>\n"
         f"<i>Сгенерировано изображений:</i> <b>{esc(gen_total)}</b>\n"
         "</blockquote>"

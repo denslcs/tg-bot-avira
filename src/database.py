@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import math
 import sqlite3
@@ -11,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 import aiosqlite
 
-from src.config import DB_PATH, START_CREDITS
+from src.config import ADMIN_IDS, DB_PATH, START_CREDITS
 from src.subscription_catalog import (
     NONSUB_IMAGE_WINDOW_DAYS,
     NONSUB_IMAGE_WINDOW_MAX,
@@ -99,6 +100,9 @@ class LastImageContext:
     model_name: str
     photo_file_id: str | None
     usage_kind: str = "self"
+    # Для готовых идей с референсами: file_id фото и название сценария (Меллстрой — отдельная клавиатура).
+    refs_file_ids: list[str] | None = None
+    ready_idea_title: str | None = None
 
 
 @dataclass
@@ -188,6 +192,22 @@ async def _migrate_last_image_context_usage_kind(db: aiosqlite.Connection) -> No
         await db.execute(
             "ALTER TABLE user_last_image_context ADD COLUMN usage_kind TEXT NOT NULL DEFAULT 'self'"
         )
+
+
+async def _migrate_last_image_context_redo_fields(db: aiosqlite.Connection) -> None:
+    async with db.execute("PRAGMA table_info(user_last_image_context)") as cur:
+        cols = {row[1] for row in await cur.fetchall()}
+    if "refs_file_ids_json" not in cols:
+        await db.execute("ALTER TABLE user_last_image_context ADD COLUMN refs_file_ids_json TEXT")
+    if "ready_idea_title" not in cols:
+        await db.execute("ALTER TABLE user_last_image_context ADD COLUMN ready_idea_title TEXT")
+
+
+async def _migrate_redo_half_price_date(db: aiosqlite.Connection) -> None:
+    async with db.execute("PRAGMA table_info(users)") as cur:
+        cols = {row[1] for row in await cur.fetchall()}
+    if "redo_half_price_utc_date" not in cols:
+        await db.execute("ALTER TABLE users ADD COLUMN redo_half_price_utc_date TEXT")
 
 
 async def _migrate_nonsub_quota_exhaustion_semantics(db: aiosqlite.Connection) -> None:
@@ -354,6 +374,22 @@ async def init_db() -> None:
             """
         )
         await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS subscription_bonus_pending (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                credits INTEGER NOT NULL,
+                release_at_utc TEXT NOT NULL,
+                details TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_subscription_bonus_pending_user_release "
+            "ON subscription_bonus_pending (user_id, release_at_utc)"
+        )
+        await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_user_budget_history_user_time "
             "ON user_budget_history (user_id, created_at DESC)"
         )
@@ -366,6 +402,8 @@ async def init_db() -> None:
         await _migrate_starter_trial_used(db)
         await _migrate_idea_tokens_and_ready_window(db)
         await _migrate_last_image_context_usage_kind(db)
+        await _migrate_last_image_context_redo_fields(db)
+        await _migrate_redo_half_price_date(db)
         await _migrate_nonsub_quota_exhaustion_semantics(db)
         await _migrate_subscription_ends_at_canonical(db)
         await db.commit()
@@ -382,6 +420,12 @@ async def ensure_user(user_id: int, username: str | None) -> None:
             """,
             (user_id, username, START_CREDITS),
         )
+        if user_id in ADMIN_IDS:
+            # Для админов базовый тариф всегда Universe (даже без активного оплаченного срока).
+            await db.execute(
+                "UPDATE users SET subscription_plan = ? WHERE user_id = ?",
+                ("universe", user_id),
+            )
         await db.commit()
 
 
@@ -395,15 +439,21 @@ async def save_last_image_context(
     photo_file_id: str | None,
     *,
     usage_kind: str = "self",
+    refs_file_ids: list[str] | None = None,
+    ready_idea_title: str | None = None,
 ) -> None:
     uk = "ready" if usage_kind == "ready" else "self"
+    refs_json: str | None = None
+    if refs_file_ids:
+        refs_json = json.dumps(refs_file_ids, ensure_ascii=False)
     async with open_db() as db:
         await db.execute(
             """
             INSERT INTO user_last_image_context (
-                user_id, kind, prompt, model, cost, model_name, photo_file_id, usage_kind
+                user_id, kind, prompt, model, cost, model_name, photo_file_id, usage_kind,
+                refs_file_ids_json, ready_idea_title
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 kind=excluded.kind,
                 prompt=excluded.prompt,
@@ -411,9 +461,22 @@ async def save_last_image_context(
                 cost=excluded.cost,
                 model_name=excluded.model_name,
                 photo_file_id=excluded.photo_file_id,
-                usage_kind=excluded.usage_kind
+                usage_kind=excluded.usage_kind,
+                refs_file_ids_json=excluded.refs_file_ids_json,
+                ready_idea_title=excluded.ready_idea_title
             """,
-            (user_id, kind, prompt, model, cost, model_name, photo_file_id, uk),
+            (
+                user_id,
+                kind,
+                prompt,
+                model,
+                cost,
+                model_name,
+                photo_file_id,
+                uk,
+                refs_json,
+                (ready_idea_title or "").strip() or None,
+            ),
         )
         await db.commit()
 
@@ -422,7 +485,8 @@ async def get_last_image_context(user_id: int) -> LastImageContext | None:
     async with open_db() as db:
         async with db.execute(
             """
-            SELECT kind, prompt, model, cost, model_name, photo_file_id, usage_kind
+            SELECT kind, prompt, model, cost, model_name, photo_file_id, usage_kind,
+                   refs_file_ids_json, ready_idea_title
             FROM user_last_image_context
             WHERE user_id = ?
             """,
@@ -434,6 +498,15 @@ async def get_last_image_context(user_id: int) -> LastImageContext | None:
     uk = str(row[6] or "self") if len(row) > 6 else "self"
     if uk not in ("ready", "self"):
         uk = "self"
+    refs_ids: list[str] | None = None
+    if len(row) > 7 and row[7]:
+        try:
+            raw = json.loads(str(row[7]))
+            if isinstance(raw, list):
+                refs_ids = [str(x) for x in raw if x is not None]
+        except (json.JSONDecodeError, TypeError):
+            refs_ids = None
+    rtitle = str(row[8]).strip() if len(row) > 8 and row[8] else None
     return LastImageContext(
         kind=str(row[0]),
         prompt=str(row[1]),
@@ -442,10 +515,113 @@ async def get_last_image_context(user_id: int) -> LastImageContext | None:
         model_name=str(row[4]),
         photo_file_id=str(row[5]) if row[5] else None,
         usage_kind=uk,
+        refs_file_ids=refs_ids,
+        ready_idea_title=rtitle,
     )
 
 
+async def get_redo_half_price_utc_date(user_id: int) -> str | None:
+    async with open_db() as db:
+        async with db.execute(
+            "SELECT redo_half_price_utc_date FROM users WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row or row[0] is None:
+        return None
+    s = str(row[0]).strip()
+    return s or None
+
+
+async def mark_redo_half_price_used_today(user_id: int) -> None:
+    d = datetime.now(timezone.utc).date().isoformat()
+    async with open_db() as db:
+        await db.execute(
+            "UPDATE users SET redo_half_price_utc_date = ? WHERE user_id = ?",
+            (d, user_id),
+        )
+        await db.commit()
+
+
+async def queue_subscription_bonus_credits(
+    user_id: int,
+    credits: int,
+    *,
+    release_at_utc: str,
+    details: str = "",
+) -> bool:
+    """Отложить начисление бонусных кредитов до указанного момента (UTC)."""
+    amount = int(credits)
+    if amount <= 0:
+        return False
+    rel = normalize_subscription_ends_at_value(release_at_utc)
+    if not rel:
+        return False
+    async with open_db() as db:
+        await db.execute(
+            """
+            INSERT INTO subscription_bonus_pending (user_id, credits, release_at_utc, details)
+            VALUES (?, ?, ?, ?)
+            """,
+            (user_id, amount, rel, (details or "").strip()),
+        )
+        await db.commit()
+    return True
+
+
+async def _release_due_subscription_bonus_credits(user_id: int) -> None:
+    """Начислить все отложенные бонусы, чей release_at_utc уже наступил."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    async with open_db() as db:
+        async with db.execute(
+            """
+            SELECT id, credits, details
+            FROM subscription_bonus_pending
+            WHERE user_id = ? AND release_at_utc <= ?
+            ORDER BY release_at_utc, id
+            """,
+            (user_id, now_iso),
+        ) as cur:
+            rows = await cur.fetchall()
+        if not rows:
+            return
+        total = 0
+        ids: list[int] = []
+        details_list: list[str] = []
+        for row in rows:
+            ids.append(int(row[0]))
+            total += int(row[1] or 0)
+            d = str(row[2] or "").strip()
+            if d:
+                details_list.append(d)
+        if total <= 0:
+            await db.execute(
+                f"DELETE FROM subscription_bonus_pending WHERE id IN ({','.join('?' for _ in ids)})",
+                tuple(ids),
+            )
+            await db.commit()
+            return
+        await db.execute(
+            "UPDATE users SET credits = credits + ? WHERE user_id = ?",
+            (total, user_id),
+        )
+        details = "; ".join(details_list)[:350] if details_list else "scheduled subscription bonus release"
+        await db.execute(
+            """
+            INSERT INTO user_budget_history (user_id, delta, source, details)
+            VALUES (?, ?, ?, ?)
+            """,
+            (user_id, total, "subscription_bonus_scheduled", details),
+        )
+        await db.execute(
+            f"DELETE FROM subscription_bonus_pending WHERE id IN ({','.join('?' for _ in ids)})",
+            tuple(ids),
+        )
+        await db.commit()
+
+
 async def get_credits(user_id: int) -> int:
+    await _release_due_subscription_bonus_credits(user_id)
     async with open_db() as db:
         async with db.execute(
             "SELECT credits FROM users WHERE user_id = ?",
@@ -1823,6 +1999,7 @@ async def count_generated_images_total(user_id: int) -> int:
 
 
 async def get_user_admin_profile(user_id: int) -> UserAdminProfile | None:
+    await _release_due_subscription_bonus_credits(user_id)
     async with open_db() as db:
         async with db.execute(
             """
@@ -1853,21 +2030,37 @@ async def get_user_admin_profile(user_id: int) -> UserAdminProfile | None:
 
 
 async def subscription_can_purchase_plan(user_id: int, plan_id: str) -> tuple[bool, str | None]:
-    """Перед оплатой тарифа: активная подписка; Starter — один раз; остальные — кулдаун между покупками."""
+    """Перед оплатой тарифа: Starter — один раз; полные тарифы — кулдаун после окончания; при активной подписке можно продлить заранее."""
     if plan_id not in PLANS:
         return False, "Неизвестный тариф."
     profile = await get_user_admin_profile(user_id)
     if not profile:
         return True, None
-    if subscription_is_active(profile.subscription_ends_at):
-        return False, "Подписка уже активна. Продлить можно после окончания срока."
+    active = subscription_is_active(profile.subscription_ends_at)
+
     if plan_id == "starter":
         if profile.starter_trial_used:
             return False, (
                 "Вы уже оформляли пробную подписку Starter — купить её снова нельзя. "
                 "Выбери полный тариф: Nova, SuperNova, Galaxy или Universe."
             )
+        if active:
+            return False, (
+                "Пока действует подписка, пробный Starter недоступен. Выбери полный тариф "
+                "или оформи Starter после окончания текущего срока."
+            )
         return True, None
+
+    # Полные тарифы: при активной подписке можно продлить заранее только тот же план.
+    if active:
+        current_plan = (profile.subscription_plan or "").strip().lower()
+        if current_plan and current_plan != plan_id:
+            return False, (
+                "Пока подписка активна, заранее можно продлить только текущий тариф. "
+                "Сменить тариф можно после окончания срока."
+            )
+        return True, None
+
     rem = subscription_cooldown_days_remaining(profile.subscription_last_purchase_at)
     if rem > 0:
         return False, (
@@ -1883,7 +2076,7 @@ async def subscription_can_purchase_new_plan(user_id: int) -> tuple[bool, str | 
     if not profile:
         return True, None
     if subscription_is_active(profile.subscription_ends_at):
-        return False, "Подписка уже активна. Продлить можно после окончания срока."
+        return True, None
     rem = subscription_cooldown_days_remaining(profile.subscription_last_purchase_at)
     if rem > 0:
         return False, (
