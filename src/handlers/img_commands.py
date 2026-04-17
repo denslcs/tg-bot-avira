@@ -122,21 +122,69 @@ except Exception:  # pragma: no cover - pillow is optional at runtime
 router = Router(name="img_commands")
 
 READY_IDEA_CATEGORIES: list[tuple[str, str]] = [
-    ("memes", "😂 Мемы"),
-    ("appearance", "🧔 Внешность"),
-    ("outfits", "👕 Одежда"),
-    ("locations", "🏝 Локации"),
-    ("celebrities", "🌟 Знаменитости"),
-    ("for_two", "💞 Для двоих"),
-    ("texts", "📝 Тексты"),
-    ("movies", "🎬 Фильмы / Сериалы"),
-    ("superheroes", "🦸 Супергерои"),
-    ("games", "🎮 Игры"),
-    ("colors", "🎨 Цвета"),
-    ("art_styles", "🖌 Арт-стили"),
-    ("horror", "🌑 Хоррор"),
-    ("add_photo", "📥 Добавить фото"),
+    ("memes", "Мемы"),
+    ("appearance", "Внешность"),
+    ("outfits", "Одежда"),
+    ("locations", "Локации"),
+    ("celebrities", "Знаменитости"),
+    ("for_two", "Для двоих"),
+    ("texts", "Тексты"),
+    ("movies", "Фильмы / Сериалы"),
+    ("superheroes", "Супергерои"),
+    ("games", "Игры"),
+    ("colors", "Цвета"),
+    ("art_styles", "Арт-стили"),
+    ("horror", "Хоррор"),
+    ("add_photo", "Добавить фото"),
 ]
+
+# document_id премиум-эмодзи для кнопок и подписей категорий «Готовые идеи».
+_READY_CATEGORY_PREMIUM_IDS: dict[str, str] = {
+    "memes": "5415631414370510984",
+    "outfits": "5434003076849610368",
+    "celebrities": "5217822164362739968",
+    "texts": "5235814241927181048",
+    "superheroes": "5292113682560458323",
+    "colors": "5220195193923328112",
+    "horror": "5332696592317160796",
+    "appearance": "5348510803634960850",
+    "locations": "5391032818111363540",
+    "for_two": "5280816565657300091",
+    "movies": "5893413965903434288",
+    "games": "5319247469165433798",
+    "art_styles": "5429619972529736627",
+    "add_photo": "5440671202555215608",
+}
+
+# Символ-заглушка внутри <tg-emoji> (как в старых Unicode-подписях кнопок).
+_READY_CATEGORY_EMOJI_FALLBACK: dict[str, str] = {
+    "memes": "😂",
+    "appearance": "🧔",
+    "outfits": "👕",
+    "locations": "🏝",
+    "celebrities": "🌟",
+    "for_two": "💞",
+    "texts": "📝",
+    "movies": "🎬",
+    "superheroes": "🦸",
+    "games": "🎮",
+    "colors": "🎨",
+    "art_styles": "🖌",
+    "horror": "🌑",
+    "add_photo": "📥",
+}
+
+
+def _ready_category_title_html(slug: str) -> str:
+    """Премиум-эмодзи + название категории для HTML (подписи к превью идей)."""
+    s = (slug or "").strip().lower()
+    title = dict(READY_IDEA_CATEGORIES).get(s) or (slug or "—")
+    eid = _READY_CATEGORY_PREMIUM_IDS.get(s)
+    if not eid:
+        return f"<b>{esc(title)}</b>"
+    fb = _READY_CATEGORY_EMOJI_FALLBACK.get(s, "⭐")
+    # Жирным только название; <tg-emoji> снаружи — так клиенты корректнее рисуют custom emoji в caption.
+    return f'<tg-emoji emoji-id="{eid}">{fb}</tg-emoji> <b>{esc(title)}</b>'
 
 _POSTER_TEXT_READY_TITLE = "Постер с текстом"
 _FLUFFY_LETTERS_TITLE = "Пушистые буквы 3D"
@@ -179,7 +227,7 @@ _MMORPG_ALLOWED_CLASSES: tuple[str, ...] = (
     "Hunter (Archer)",
 )
 _MMORPG_LAST_BUILD_BY_USER: dict[int, tuple[str, str]] = {}
-# Название идеи в боте: категория «📥 Добавить фото» → карточка с этим заголовком.
+# Название идеи в боте: категория «Добавить фото» → карточка с этим заголовком.
 _OBJECT_IN_SCENE_TITLE = "Перемещение объекта"
 _LUXURY_COVER_BRANDS: tuple[str, ...] = (
     "Gucci",
@@ -1318,13 +1366,15 @@ def _ready_categories_keyboard(back_callback: str = CB_MENU_BACK_START) -> Inlin
     rows: list[list[InlineKeyboardButton]] = []
     pair: list[InlineKeyboardButton] = []
     for slug, title in READY_IDEA_CATEGORIES:
-        pair.append(
-            InlineKeyboardButton(
-                text=title[:64],
-                callback_data=f"{CB_READY_CAT_PREFIX}{slug}",
-                style=BTN_PRIMARY,
-            )
-        )
+        icon_id = _READY_CATEGORY_PREMIUM_IDS.get(slug)
+        btn_kw: dict = {
+            "text": title[:64],
+            "callback_data": f"{CB_READY_CAT_PREFIX}{slug}",
+            "style": BTN_PRIMARY,
+        }
+        if icon_id:
+            btn_kw["icon_custom_emoji_id"] = icon_id
+        pair.append(InlineKeyboardButton(**btn_kw))
         if len(pair) == 2:
             rows.append(pair)
             pair = []
@@ -1358,9 +1408,20 @@ def _ready_browser_keyboard(
     index: int,
     total: int,
     back_callback: str = CB_MENU_BACK_START,
+    *,
+    category_slug: str | None = None,
 ) -> InlineKeyboardMarkup:
     prev_i = (index - 1) % total
     next_i = (index + 1) % total
+    cs = (category_slug or "").strip().lower()
+    cat_icon = _READY_CATEGORY_PREMIUM_IDS.get(cs)
+    cats_btn: dict = {
+        "text": "Категории",
+        "callback_data": f"{CB_READY_NAV_PREFIX}back_cats",
+        "style": BTN_PRIMARY,
+    }
+    if cat_icon:
+        cats_btn["icon_custom_emoji_id"] = cat_icon
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -1383,12 +1444,7 @@ def _ready_browser_keyboard(
                     icon_custom_emoji_id="5260450573768990626",
                 ),
             ],
-            [
-                InlineKeyboardButton(
-                    text="↩️ Категории",
-                    callback_data=f"{CB_READY_NAV_PREFIX}back_cats",
-                )
-            ],
+            [InlineKeyboardButton(**cats_btn)],
             [
                 InlineKeyboardButton(
                     text="Назад",
@@ -1504,12 +1560,12 @@ def _ready_generation_cost_html() -> str:
     return f'<tg-emoji emoji-id="5330320040883411678">🗺</tg-emoji> Стоимость генерации: <b>{esc(OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS)} кр.</b>'
 
 
-def _ready_idea_caption(*, category_title: str, title: str, preview: str, index: int, total: int, photos_required: int) -> str:
+def _ready_idea_caption(*, category: str, title: str, preview: str, index: int, total: int, photos_required: int) -> str:
     req = _ready_idea_requirement_line(title=title, photos_required=photos_required)
     recommendation = _ready_idea_recommendation_line(title=title, photos_required=photos_required)
     recommendation_part = f"\n{recommendation}" if recommendation else ""
     return (
-        f"<b>{esc(category_title)}</b>\n"
+        f"{_ready_category_title_html(category)}\n"
         f'<tg-emoji emoji-id="5397782960512444700">📌</tg-emoji> Вариант: <b>{esc(index + 1)}/{esc(total)}</b>\n'
         f"<b>{esc(title)}</b>\n"
         f"{esc(preview)}\n"
@@ -2655,9 +2711,8 @@ async def _open_ready_card(
     total = len(ideas)
     idx = index % total
     title, preview, _prompt, photos_required = ideas[idx]
-    cat_title = dict(READY_IDEA_CATEGORIES).get(category, category)
     cap = _ready_idea_caption(
-        category_title=cat_title,
+        category=category,
         title=title,
         preview=preview,
         index=idx,
@@ -2666,7 +2721,7 @@ async def _open_ready_card(
     )
     await state.update_data(_ready_category=category, _ready_index=idx)
     await state.set_state(ImageGenState.ready_browsing_idea)
-    kb = _ready_browser_keyboard(idx, total, back_callback=back_callback)
+    kb = _ready_browser_keyboard(idx, total, back_callback=back_callback, category_slug=category)
     photo_path = _ready_idea_listing_photo_path(title)
 
     if edit and photo_path is not None and not message.photo:
