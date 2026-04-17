@@ -18,6 +18,8 @@ def esc(value: str | int | float) -> str:
 def format_subscription_ends_at(iso_str: str | None, *, default: str = "—") -> str:
     """Дата окончания подписки для людей: ДД.ММ.ГГГГ ЧЧ:ММ UTC."""
     text = (iso_str or "").strip()
+    if text.lower() in ("none", "null"):
+        return default
     if not text:
         return default
     dt: datetime | None = None

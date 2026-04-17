@@ -339,9 +339,20 @@ async def cmd_setsub(message: Message) -> None:
             f"Тариф в профиле без изменений: {PLANS[stored].title} (<code>{esc(stored)}</code>)"
         )
     plan_block = ("\n" + "\n".join(plan_lines)) if plan_lines else ""
+    is_active_now = bool(
+        profile_after and subscription_is_active(profile_after.subscription_ends_at)
+    )
+    active_line = (
+        f"\n<i>Проверка бота:</i> подписка сейчас <b>{'активна' if is_active_now else 'не активна'}</b> "
+        f"(как в <code>/profile</code> у пользователя и в <code>/user {uid}</code>)."
+    )
+    if not is_active_now:
+        active_line += (
+            "\n⚠️ Ожидалось «активна» — проверь значение <code>subscription_ends_at</code> в БД или перезапусти бота."
+        )
     await message.answer(
         f"Подписка пользователя <code>{uid}</code> продлена на <b>{days}</b> д.\n"
-        f"Окончание: <b>{esc(end_h)}</b>{plan_block}\n\n"
+        f"Окончание: <b>{esc(end_h)}</b>{plan_block}{active_line}\n\n"
         "<blockquote><i>Бонусные кредиты по тарифу при /setsub не начисляются (только при оплате).</i></blockquote>",
         parse_mode=HTML,
     )

@@ -923,12 +923,28 @@ def _parse_dt_utc(raw: str) -> datetime:
     return dt
 
 
-def subscription_is_active(ends_at: str | None) -> bool:
-    if not ends_at:
+def normalize_subscription_ends_at_value(raw: object | None) -> str | None:
+    """Значение subscription_ends_at из БД: в единый ISO UTC str или None (пробелы, datetime, пустые)."""
+    if raw is None:
+        return None
+    if isinstance(raw, datetime):
+        dt = raw
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+        return dt.isoformat()
+    s = str(raw).strip()
+    return s if s else None
+
+
+def subscription_is_active(ends_at: object | None) -> bool:
+    normalized = normalize_subscription_ends_at_value(ends_at)
+    if not normalized:
         return False
     try:
-        return _parse_dt_utc(ends_at) > datetime.now(timezone.utc)
-    except ValueError:
+        return _parse_dt_utc(normalized) > datetime.now(timezone.utc)
+    except (ValueError, TypeError):
         return False
 
 
@@ -1205,7 +1221,7 @@ async def get_nonsub_ready_quota_status(user_id: int) -> tuple[int, int] | None:
             row = await cur.fetchone()
     if not row:
         return (0, NONSUB_READY_IDEA_WINDOW_MAX)
-    if subscription_is_active(str(row[0]) if row[0] else None):
+    if subscription_is_active(row[0]):
         return None
     start_s, count_raw = row[1], row[2]
     count = int(count_raw or 0)
@@ -1234,7 +1250,7 @@ async def get_nonsub_image_quota_status(user_id: int) -> tuple[int, int] | None:
             row = await cur.fetchone()
     if not row:
         return (0, NONSUB_IMAGE_WINDOW_MAX)
-    if subscription_is_active(str(row[0]) if row[0] else None):
+    if subscription_is_active(row[0]):
         return None
     start_s, count_raw = row[1], row[2]
     count = int(count_raw or 0)
@@ -1488,6 +1504,9 @@ async def extend_subscription(user_id: int, days: int, plan: str | None = None) 
         if not row:
             return None
         new_iso = _add_days_subscription(row[0] if row[0] else None, days)
+        stored = normalize_subscription_ends_at_value(new_iso)
+        if not stored:
+            return None
         if plan is not None:
             await db.execute(
                 """
@@ -1495,15 +1514,15 @@ async def extend_subscription(user_id: int, days: int, plan: str | None = None) 
                 SET subscription_ends_at = ?, subscription_plan = ?
                 WHERE user_id = ?
                 """,
-                (new_iso, plan, user_id),
+                (stored, plan, user_id),
             )
         else:
             await db.execute(
                 "UPDATE users SET subscription_ends_at = ? WHERE user_id = ?",
-                (new_iso, user_id),
+                (stored, user_id),
             )
         await db.commit()
-    return new_iso
+    return stored
 
 
 async def add_subscription_days(user_id: int, days: int) -> str | None:
@@ -1525,6 +1544,9 @@ async def reset_subscription_days(user_id: int, days: int, plan: str | None = No
         if not row:
             return None
         new_iso = _add_days_from_now(days)
+        stored = normalize_subscription_ends_at_value(new_iso)
+        if not stored:
+            return None
         if plan is not None:
             await db.execute(
                 """
@@ -1532,15 +1554,15 @@ async def reset_subscription_days(user_id: int, days: int, plan: str | None = No
                 SET subscription_ends_at = ?, subscription_plan = ?
                 WHERE user_id = ?
                 """,
-                (new_iso, plan, user_id),
+                (stored, plan, user_id),
             )
         else:
             await db.execute(
                 "UPDATE users SET subscription_ends_at = ? WHERE user_id = ?",
-                (new_iso, user_id),
+                (stored, user_id),
             )
         await db.commit()
-    return new_iso
+    return stored
 
 
 async def clear_subscription(user_id: int) -> None:
@@ -1579,7 +1601,7 @@ async def count_users_active_subscription() -> int:
             rows = await cur.fetchall()
     n = 0
     for (ends,) in rows:
-        if subscription_is_active(str(ends) if ends else None):
+        if subscription_is_active(ends):
             n += 1
     return n
 
@@ -1758,7 +1780,7 @@ async def get_user_admin_profile(user_id: int) -> UserAdminProfile | None:
         username=row[1],
         credits=int(row[2]),
         created_at=str(row[3]),
-        subscription_ends_at=row[4] if row[4] else None,
+        subscription_ends_at=normalize_subscription_ends_at_value(row[4]),
         subscription_plan=row[5] if row[5] else None,
         subscription_last_purchase_at=row[6] if row[6] else None,
         starter_trial_used=starter_used,

@@ -2,6 +2,11 @@ from __future__ import annotations
 
 """
 Подписки, бонус-пакеты, Stars и внешние способы оплаты (callback + pre_checkout).
+
+Автоматическая запись подписки в БД — только при успешной оплате Telegram Stars
+(SUCCESSFUL_PAYMENT): reset_subscription_days + кредиты. Оплата по внешним ссылкам
+(карта РФ/INTL, крипта) в этом боте только ведёт на кассу; продление в users делается
+вручную или отдельным процессом на стороне платежки.
 """
 
 import logging
@@ -46,6 +51,7 @@ from src.database import (
     reset_subscription_days,
     release_star_payment_claim,
     subscription_can_purchase_plan,
+    subscription_is_active,
     try_claim_star_payment,
 )
 from src.formatting import HTML, esc, format_subscription_ends_at
@@ -763,6 +769,17 @@ async def successful_payment(message: Message) -> None:
             await mark_starter_trial_purchased(message.from_user.id)
         else:
             await record_subscription_purchase_now(message.from_user.id)
+        prof_verify = await get_user_admin_profile(message.from_user.id)
+        sub_active_ok = bool(
+            prof_verify and subscription_is_active(prof_verify.subscription_ends_at)
+        )
+        if not sub_active_ok:
+            logger.error(
+                "Stars plan purchase: subscription still inactive after DB write uid=%s new_end=%s profile_end=%s",
+                message.from_user.id,
+                new_end,
+                getattr(prof_verify, "subscription_ends_at", None),
+            )
         credited = await add_credits_with_reason(
             message.from_user.id,
             p.bonus_credits,
@@ -794,12 +811,18 @@ async def successful_payment(message: Message) -> None:
                 "\n\n<blockquote><i>После окончания Starter оформи полный тариф в</i> "
                 "<code>/start</code> <i>→</i> <b>Оплатить</b><i>. Повторно Starter купить нельзя.</i></blockquote>"
             )
+        verify_tail = ""
+        if not sub_active_ok:
+            verify_tail = (
+                "\n\n<blockquote><i>Если в</i> <code>/profile</code> <i>подписка всё ещё «не активна», "
+                "обнови меню или напиши в поддержку — проверим запись.</i></blockquote>"
+            )
         await message.answer(
             "<b>Спасибо за покупку!</b>\n"
             f"Вы приобрели подписку <b>{esc(p.title)}</b>.\n\n"
             f"<blockquote>{quote_inner}</blockquote>\n\n"
             "<i>Можно снова открыть «Создать картинку» в</i> <code>/start</code>."
-            f"{starter_tail}",
+            f"{starter_tail}{verify_tail}",
             parse_mode=HTML,
         )
         stars_amt = int(sp.total_amount or 0)

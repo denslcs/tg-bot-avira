@@ -809,7 +809,7 @@ async def _profile_card_html(
     *,
     back_callback: str = CB_MENU_BACK_START,
 ) -> tuple[str, InlineKeyboardMarkup]:
-    """Текст профиля и клавиатура «Назад» (не вызывать для админов — у них отдельный экран)."""
+    """Текст профиля и клавиатура «Назад»."""
     await ensure_user(user_id, username_raw)
     profile = await get_user_admin_profile(user_id)
     if not profile:
@@ -867,15 +867,12 @@ async def send_profile_card(
     edit_existing: bool = False,
     back_callback: str = CB_MENU_BACK_START,
 ) -> None:
-    if user_id in ADMIN_IDS:
-        text = "<blockquote><b>Режим админа</b> — безлимит по кредитам.</blockquote>"
-        kb = back_to_main_menu_keyboard(back_callback)
-        if edit_existing:
-            await edit_or_send_nav_message(message, text=text, reply_markup=kb, parse_mode=HTML)
-        else:
-            await message.answer(text, reply_markup=kb, parse_mode=HTML)
-        return
     text, kb = await _profile_card_html(user_id, username_raw, back_callback=back_callback)
+    if user_id in ADMIN_IDS:
+        text = (
+            "<blockquote><b>Режим администратора</b> — кредиты за генерацию изображений не списываются.</blockquote>\n"
+            + text
+        )
     if edit_existing:
         await edit_or_send_nav_message(message, text=text, reply_markup=kb, parse_mode=HTML)
     else:
