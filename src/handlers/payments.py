@@ -328,7 +328,7 @@ def _pay_methods_text(plan_id: str) -> str:
     return (
         "<b>💳 Выбери способ оплаты</b>\n\n"
         f'<tg-emoji emoji-id="5203996991054432397">🎁</tg-emoji> <b>Подписка:</b> {title}\n'
-        f'<i><tg-emoji emoji-id="5305699699204837855">🍀</tg-emoji> Кредиты на баланс:</i> <b>+{esc(p.bonus_credits)}</b>\n'
+        f'<i><tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты на баланс:</i> <b>+{esc(p.bonus_credits)}</b>\n'
         f"Срок: <b>{esc(days)}</b> дн.\n"
         f"{starter_block}"
         "<blockquote><i>Картинки по своему описанию</i> — без дневного лимита по числу запросов (с кредитами). "
@@ -1055,7 +1055,7 @@ async def successful_payment(message: Message) -> None:
             f"<b>Тип оплаты:</b> {pay_kind}\n"
             f"Тариф: {_plan_title_html(item_id)} · <code>{esc(item_id)}</code>\n"
             f"Пользователь: {_user_line_html(message.from_user)}\n"
-            f'<tg-emoji emoji-id="5305699699204837855">🍀</tg-emoji> Кредиты: <b>+{esc(total_bonus_credits)}</b>'
+            f'<tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты: <b>+{esc(total_bonus_credits)}</b>'
             f"{(' (в т.ч. продление +' + str(renewal_extra) + ')' if renewal_extra else '')}"
             f" · начислено: <i>{esc(credit_ok)}</i>\n"
             f"До (UTC): <code>{esc(end_h)}</code>\n"

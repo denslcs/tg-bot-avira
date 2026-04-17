@@ -177,6 +177,8 @@ def _is_generated_image_result_message(message: Message) -> bool:
     cap = message.caption or ""
     if "Картинка сохранена" in cap:
         return True
+    if "Made in Shard Creator" in cap or "Shard Creator" in cap:
+        return True
     if "Готово" in cap and "✔️" in cap:
         return True
     if "Списано:" in cap and "Баланс" in cap:
@@ -648,7 +650,7 @@ async def menu_channel(callback: CallbackQuery) -> None:
         return
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Открыть канал", url=CHANNEL_URL, style=BTN_PRIMARY)],
+            [InlineKeyboardButton(text="📢 Открыть канал", url=CHANNEL_URL, style=BTN_PRIMARY)],
             _back_row(back_callback),
         ]
     )
@@ -681,7 +683,7 @@ async def menu_support(callback: CallbackQuery) -> None:
     support_url = f"https://t.me/{SUPPORT_BOT_USERNAME}?start=from_shard_creator"
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Открыть поддержку", url=support_url)],
+            [InlineKeyboardButton(text="💬 Открыть поддержку", url=support_url)],
             _back_row(back_callback),
         ]
     )
@@ -741,7 +743,7 @@ async def _build_referral_message(
         "<blockquote>"
         f'<i><tg-emoji emoji-id="5325971446625758812">👤</tg-emoji> Профиль</i> {uname_html}\n'
         f'<i><tg-emoji emoji-id="5841276284155467413">🔤</tg-emoji> ID</i> <code>{esc(user_id)}</code>\n'
-        f'<i><tg-emoji emoji-id="5305699699204837855">🍀</tg-emoji> Кредиты:</i> <b>{esc(balance)}</b>\n'
+        f'<i><tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты:</i> <b>{esc(balance)}</b>\n'
         f'<i><tg-emoji emoji-id="5452155223550223362">💎</tg-emoji> Бонусных запусков «Готовых идей»:</i> <b>{esc(ready_bonus_uses)}</b>\n'
         f'<i><tg-emoji emoji-id="5472239203590888751">📩</tg-emoji> Приглашения:</i> <b>{esc(invited)}</b>'
         "</blockquote>\n\n"
@@ -917,7 +919,7 @@ async def _profile_card_html(
         '<b><tg-emoji emoji-id="5325971446625758812">👤</tg-emoji> Профиль</b>\n'
         "<blockquote>"
         f"<i>Ник:</i> <b>{esc(username)}</b>\n"
-        f'<i><tg-emoji emoji-id="5305699699204837855">🍀</tg-emoji> Кредиты:</i> <b>{esc(balance)}</b>\n'
+        f'<i><tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты:</i> <b>{esc(balance)}</b>\n'
         f'<i><tg-emoji emoji-id="5257974976094412956">🖼</tg-emoji> Примерно доступно генераций:</i> <b>{esc(approx_images)}</b>\n'
         f"<i>🎯 Готовые идеи:</i> <b>{esc(ready_cycle)}</b>\n"
         f'<i><tg-emoji emoji-id="5258254475386167466">🖼</tg-emoji> Картинки:</i> <b>{esc(img_cycle)}</b>\n'
@@ -980,7 +982,7 @@ async def cmd_resolved_main(message: Message) -> None:
     support_url = f"https://t.me/{SUPPORT_BOT_USERNAME}"
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Открыть поддержку и закрыть тикет", url=support_url)],
+            [InlineKeyboardButton(text="💬 Открыть поддержку и закрыть тикет", url=support_url)],
             _BACK_TO_MENU_ROW,
         ]
     )
@@ -1005,7 +1007,7 @@ async def cmd_support(message: Message) -> None:
     support_url = f"https://t.me/{SUPPORT_BOT_USERNAME}?start=from_shard_creator"
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Открыть чат поддержки", url=support_url, style=BTN_PRIMARY)],
+            [InlineKeyboardButton(text="💬 Открыть чат поддержки", url=support_url, style=BTN_PRIMARY)],
             _BACK_TO_MENU_ROW,
         ]
     )

@@ -401,7 +401,7 @@ async def cmd_user_lookup(message: Message) -> None:
         "<blockquote>"
         f"<i>Telegram ID:</i> <code>{esc(uid)}</code>\n"
         f"<i>Username в БД:</i> <b>{un_html}</b>\n"
-        f'<i><tg-emoji emoji-id="5305699699204837855">🍀</tg-emoji> Кредиты:</i> <b>{esc(profile.credits)}</b>\n'
+        f'<i><tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты:</i> <b>{esc(profile.credits)}</b>\n'
         f"<i>В боте с:</i> <code>{esc(profile.created_at)}</code>\n"
         f"<i>Сообщений в диалоге:</i> <b>{esc(msgs)}</b>\n"
         "</blockquote>\n"

@@ -113,8 +113,8 @@ def _resolution_keyboard(ticket_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="Да", callback_data=f"ticket_res:{ticket_id}:yes"),
-                InlineKeyboardButton(text="Нет", callback_data=f"ticket_res:{ticket_id}:no"),
+                InlineKeyboardButton(text="✅ Да", callback_data=f"ticket_res:{ticket_id}:yes"),
+                InlineKeyboardButton(text="❌ Нет", callback_data=f"ticket_res:{ticket_id}:no"),
             ]
         ]
     )
@@ -130,7 +130,7 @@ def _rating_keyboard(ticket_id: int) -> InlineKeyboardMarkup:
                 for i in range(1, 6)
             ],
             [
-                InlineKeyboardButton(text="В другой раз", callback_data=f"rate_later:{ticket_id}"),
+                InlineKeyboardButton(text="⏳ В другой раз", callback_data=f"rate_later:{ticket_id}"),
             ],
         ]
     )
@@ -158,11 +158,11 @@ def _feedback_confirm_keyboard(ticket_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="Отправить", callback_data=f"fb_send:{ticket_id}"),
-                InlineKeyboardButton(text="Изменить", callback_data=f"fb_edit:{ticket_id}"),
+                InlineKeyboardButton(text="📤 Отправить", callback_data=f"fb_send:{ticket_id}"),
+                InlineKeyboardButton(text="✏️ Изменить", callback_data=f"fb_edit:{ticket_id}"),
             ],
             [
-                InlineKeyboardButton(text="Отмена", callback_data=f"fb_cancel:{ticket_id}"),
+                InlineKeyboardButton(text="❌ Отмена", callback_data=f"fb_cancel:{ticket_id}"),
             ],
         ]
     )
