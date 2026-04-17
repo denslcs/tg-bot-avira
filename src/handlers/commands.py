@@ -49,6 +49,7 @@ from src.database import (
 )
 from src.subscription_catalog import PLANS
 from src.formatting import (
+    CREDITS_COIN_TG_HTML,
     HTML,
     all_plans_premium_line_html,
     esc,
@@ -136,7 +137,8 @@ def _main_screen_text(balance: int, bonus_note: str = "") -> str:
         "<i>Создание и изменение фото в пару кликов.</i>\n\n"
         '<b><tg-emoji emoji-id="5258203794772085854">⚡️</tg-emoji> Быстрый старт:</b>\n'
         '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Открой <b>«<tg-emoji emoji-id="5282843764451195532">🖥</tg-emoji> Меню»</b> — там все разделы: идеи, подписки, FAQ и рефералка.\n'
-        '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Нажми <b>«<tg-emoji emoji-id="5312123810638483121">🐷</tg-emoji> Баланс»</b> — увидишь кредиты, статистику и лимиты.\n'
+        '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Нажми <b>«<tg-emoji emoji-id="5312123810638483121">🐷</tg-emoji> Баланс»</b> — увидишь '
+        f"{CREDITS_COIN_TG_HTML} кредиты, статистику и лимиты.\n"
         '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Загляни в <b>«<tg-emoji emoji-id="5330522514231684724">🌟</tg-emoji> Что умеет бот»</b> — там коротко и понятно, как использовать все возможности.\n\n'
         '<blockquote><b><tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> Подсказка:</b> <i>чем точнее задача в одном сообщении, тем лучше и быстрее итоговая генерация.</i></blockquote>\n\n'
         "<blockquote><i>Продолжая работу с ботом, ты подтверждаешь согласие на обработку персональных данных.</i>"
@@ -743,7 +745,7 @@ async def _build_referral_message(
     text = (
         '<b><tg-emoji emoji-id="5391320026869408028">🫂</tg-emoji> Реферальная программа</b>\n\n'
         "<blockquote>"
-        f'<i><tg-emoji emoji-id="5325971446625758812">👤</tg-emoji> Профиль</i> {uname_html}\n'
+        f'<i><tg-emoji emoji-id="5260399854500191689">👤</tg-emoji> Профиль</i> {uname_html}\n'
         f'<i><tg-emoji emoji-id="5841276284155467413">🔤</tg-emoji> ID</i> <code>{esc(user_id)}</code>\n'
         f'<i><tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты:</i> <b>{esc(balance)}</b>\n'
         f'<i><tg-emoji emoji-id="5452155223550223362">💎</tg-emoji> Бонусных запусков «Готовых идей»:</i> <b>{esc(ready_bonus_uses)}</b>\n'
@@ -924,7 +926,7 @@ async def _profile_card_html(
     ready_cycle = "без лимита" if active_sub else f"{ru}/{rlim}"
     img_cycle = "без лимита" if active_sub else f"{fu}/{flim}"
     body = (
-        '<b><tg-emoji emoji-id="5325971446625758812">👤</tg-emoji> Профиль</b>\n'
+        '<b><tg-emoji emoji-id="5260399854500191689">👤</tg-emoji> Профиль</b>\n'
         "<blockquote>"
         f"<i>Ник:</i> <b>{esc(username)}</b>\n"
         f'<i><tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты:</i> <b>{esc(balance)}</b>\n'
@@ -951,7 +953,8 @@ async def send_profile_card(
     text, kb = await _profile_card_html(user_id, username_raw, back_callback=back_callback)
     if user_id in ADMIN_IDS:
         text = (
-            "<blockquote><b>Режим администратора</b> — кредиты за генерацию изображений не списываются.</blockquote>\n"
+            "<blockquote><b>Режим администратора</b> — "
+            f"{CREDITS_COIN_TG_HTML} кредиты за генерацию изображений не списываются.</blockquote>\n"
             + text
         )
     if edit_existing:
@@ -1137,7 +1140,10 @@ async def cmd_addcredits(message: Message) -> None:
         details=f"/addcredits by {message.from_user.id}",
     )
     if not ok:
-        await message.answer("Не удалось начислить кредиты.")
+        await message.answer(
+            f"Не удалось начислить {CREDITS_COIN_TG_HTML} кредиты.",
+            parse_mode=HTML,
+        )
         return
 
     new_balance = await get_credits(target_user_id)
@@ -1185,7 +1191,10 @@ async def cmd_takecredits(message: Message) -> None:
         details=f"/takecredits by {message.from_user.id}",
     )
     if not ok:
-        await message.answer("Не удалось списать кредиты (попробуй ещё раз).")
+        await message.answer(
+            f"Не удалось списать {CREDITS_COIN_TG_HTML} кредиты (попробуй ещё раз).",
+            parse_mode=HTML,
+        )
         return
 
     new_balance = await get_credits(target_user_id)

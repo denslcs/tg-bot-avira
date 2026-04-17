@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import re
 from datetime import datetime, timezone
 
 from aiogram.enums import ParseMode
@@ -11,10 +12,22 @@ from src.subscription_catalog import PLANS, PLANS_ORDER, PLAN_PREMIUM_EMOJI_FALL
 
 HTML = ParseMode.HTML
 
+CREDITS_COIN_TG_HTML = '<tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji>'
+
 
 def esc(value: str | int | float) -> str:
     """Экранирование для вставки в HTML-сообщения."""
     return html.escape(str(value), quote=False)
+
+
+def html_escape_preserve_tg_emoji(text: str) -> str:
+    """Экранирует HTML, но оставляет теги <tg-emoji>...</tg-emoji> без изменений."""
+    if "<tg-emoji" not in text:
+        return esc(text)
+    pattern = re.compile(r"(<tg-emoji\b[^>]*>.*?</tg-emoji>)", re.DOTALL)
+    return "".join(
+        part if part.startswith("<tg-emoji") else esc(part) for part in pattern.split(text)
+    )
 
 
 def plan_subscription_title_html(plan_id: str) -> str:

@@ -142,7 +142,7 @@ def menu_hub_keyboard() -> InlineKeyboardMarkup:
                     text="Профиль",
                     callback_data=CB_MENU_PROFILE_HUB,
                     style=BTN_PRIMARY,
-                    icon_custom_emoji_id="5325971446625758812",
+                    icon_custom_emoji_id="5260399854500191689",
                 ),
                 InlineKeyboardButton(
                     text="Создать картинку",

@@ -28,6 +28,7 @@ from src.database import (
     sum_users_credits,
 )
 from src.formatting import (
+    CREDITS_COIN_TG_HTML,
     HTML,
     esc,
     format_subscription_ends_at,
@@ -55,14 +56,14 @@ def _admin_home_html() -> str:
         "<b>🛡️ Админ-панель · Shard Creator</b>\n\n"
         "<blockquote><i>Быстрые отчёты — кнопками ниже. Команды вводите в этот чат.</i></blockquote>\n\n"
         "<b>👤 Пользователь и баланс</b>\n"
-        "• <code>/user ID</code> — кредиты, подписка, тикет, число сообщений в диалоге\n"
+        f"• <code>/user ID</code> — {CREDITS_COIN_TG_HTML} кредиты, подписка, тикет, число сообщений в диалоге\n"
         "• <code>/addcredits ID сумма</code> · <code>/takecredits ID сумма</code>\n\n"
         "<b>📅 Подписка</b>\n"
         "• <code>/setsub ID дни</code> — продлить срок; в конце можно указать тариф\n"
         f"• Тарифы: <i>{tariffs}</i>\n"
         "• <code>/setplan ID тариф</code> — сменить тариф в БД <b>без</b> сдвига даты окончания\n"
         "• <code>/clearsub ID</code> — снять подписку (срок и тариф)\n"
-        "<blockquote><i>Бонусные кредиты по тарифу при ручной выдаче не начисляются — только при оплате Stars.</i></blockquote>\n\n"
+        f"<blockquote><i>Бонусные {CREDITS_COIN_TG_HTML} кредиты по тарифу при ручной выдаче не начисляются — только при оплате Stars.</i></blockquote>\n\n"
         "<b>🗑 Диалог и рассылка</b>\n"
         "• <code>/wipechat ID</code> — очистить историю диалога у пользователя\n"
         "• <code>/broadcast текст</code> — рассылка в ЛС всем из базы\n\n"
@@ -78,7 +79,7 @@ def _admin_help_html() -> str:
     return (
         "<b>📖 Справка по командам</b>\n\n"
         "<b>Обзор</b>\n"
-        "• <code>/stats</code> — пользователи, подписки, кредиты, объём диалогов\n"
+        f"• <code>/stats</code> — пользователи, подписки, {CREDITS_COIN_TG_HTML} кредиты, объём диалогов\n"
         "• <code>/user ID</code> — полная карточка пользователя\n\n"
         "<b>Кредиты</b>\n"
         "• <code>/addcredits ID сумма</code>\n"
@@ -465,7 +466,7 @@ async def cmd_setsub(message: Message) -> None:
     await message.answer(
         f"Подписка пользователя <code>{uid}</code> продлена на <b>{days}</b> д.\n"
         f"Окончание: <b>{esc(end_h)}</b>{plan_block}{active_line}\n\n"
-        "<blockquote><i>Бонусные кредиты по тарифу при /setsub не начисляются (только при оплате).</i></blockquote>",
+        f"<blockquote><i>Бонусные {CREDITS_COIN_TG_HTML} кредиты по тарифу при /setsub не начисляются (только при оплате).</i></blockquote>",
         parse_mode=HTML,
     )
     try:
@@ -481,7 +482,7 @@ async def cmd_setsub(message: Message) -> None:
             f"{title_line}"
             f"Добавлено дней: <b>{esc(days)}</b>\n"
             f"Действует до: <b>{esc(end_h)}</b>\n\n"
-            "<i>Бонусные кредиты по тарифу при выдаче админом не начисляются (они есть только при покупке).</i>",
+            f"<i>Бонусные {CREDITS_COIN_TG_HTML} кредиты по тарифу при выдаче админом не начисляются (они есть только при покупке).</i>",
             parse_mode=HTML,
         )
     except Exception:

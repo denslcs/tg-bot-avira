@@ -69,7 +69,7 @@ from src.database import (
     try_reserve_nonsub_image_quota_slot,
     try_reserve_nonsub_ready_idea_slot,
 )
-from src.formatting import HTML, esc, plans_premium_sequence_html
+from src.formatting import CREDITS_COIN_TG_HTML, HTML, esc, plans_premium_sequence_html
 from src.image_gen_gate import image_generation_slot
 from src.handlers.commands import edit_or_send_nav_message, restore_main_menu_message
 from src.keyboards.main_menu import start_menu_keyboard
@@ -1292,7 +1292,7 @@ async def _prepare_image_charge_and_daily_slot(
             if not ok:
                 balance = await get_credits(user_id)
                 extra = (
-                    "\n<blockquote><i>Подписка активна, но кредиты закончились.</i> "
+                    f"\n<blockquote><i>Подписка активна, но {CREDITS_COIN_TG_HTML} кредиты закончились.</i> "
                     "Можно пополнить в <code>/start</code> → <b>Оплатить</b> (пакеты бонусов) "
                     "или пригласить друзей по <code>/ref</code>.</blockquote>"
                 )
@@ -1335,7 +1335,7 @@ async def _prepare_image_charge_and_daily_slot(
         if not ok:
             balance = await get_credits(user_id)
             extra = (
-                "\n<blockquote><i>Подписка активна, но кредиты закончились.</i> "
+                f"\n<blockquote><i>Подписка активна, но {CREDITS_COIN_TG_HTML} кредиты закончились.</i> "
                 "Можно пополнить в <code>/start</code> → <b>Оплатить</b> (пакеты бонусов) "
                 "или пригласить друзей по <code>/ref</code>.</blockquote>"
             )
@@ -1916,7 +1916,7 @@ async def _send_result_photo_with_regen(
         caption = (
             "<b>Готово!</b>\n"
             "<i>сгенерировано при помощи Shard Creator</i>\n"
-            f"<i>Режим админа — кредиты не списывались.</i>{cache_note}"
+            f"<i>Режим админа — {CREDITS_COIN_TG_HTML} кредиты не списывались.</i>{cache_note}"
         )
     else:
         balance = await get_credits(user_id)
@@ -1941,7 +1941,7 @@ async def _send_result_photo_with_regen(
         )
         if is_admin:
             await message.answer(
-                "👑 Режим админа: кредиты не списывались.",
+                f"👑 Режим админа: {CREDITS_COIN_TG_HTML} кредиты не списывались.",
                 parse_mode=HTML,
             )
         elif charge and deducted_credits:

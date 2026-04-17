@@ -60,6 +60,7 @@ from src.database import (
     try_claim_star_payment,
 )
 from src.formatting import (
+    CREDITS_COIN_TG_HTML,
     HTML,
     esc,
     format_subscription_ends_at,
@@ -293,17 +294,17 @@ def _plans_menu_caption() -> str:
     st_h = plan_subscription_title_html("starter")
     u_h = plan_subscription_title_html("universe")
     return (
-        '<b>Тарифы</b> — при оплате на баланс начисляются <b><tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> кредиты</b>.\n'
+        f"<b>Тарифы</b> — при оплате на баланс начисляются <b>{CREDITS_COIN_TG_HTML} кредиты</b>.\n"
         f"<blockquote>{st_h} — пробный пакет на <b>{esc(st.period_days)}</b> дн., все модели как у {u_h}, "
         f"<b>одна покупка на аккаунт</b> (повторно недоступен). Остальные тарифы — <b>{esc(SUBSCRIPTION_PERIOD_DAYS)}</b> дн.</blockquote>\n"
-        'Ограничений на число генераций по подписке нет — списываются <tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> кредиты.\n\n'
+        f"Ограничений на число генераций по подписке нет — списываются {CREDITS_COIN_TG_HTML} кредиты.\n\n"
         f"<blockquote><i>Полные тарифы:</i> не чаще <b>одного раза в {esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дней "
         f"после <b>окончания</b> подписки. Пока подписка активна — заранее продлевается только текущий тариф: дни суммируются, "
         f"бонус за повтор того же тарифа +5% (для {u_h} при раннем продлении +10%). "
         f"<i>{st_h} в паузу между полными тарифами не входит.</i></blockquote>\n\n"
         f"<blockquote><i>Без подписки:</i> до <b>{esc(NONSUB_IMAGE_WINDOW_MAX)}</b> картинок за цикл; после полного исчерпания "
         f"новый цикл через <b>{esc(NONSUB_IMAGE_WINDOW_DAYS)}</b> суток от момента исчерпания (UTC). "
-        '<tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты лимит не обходят.</blockquote>'
+        f"{CREDITS_COIN_TG_HTML} Кредиты лимит не обходят.</blockquote>"
     )
 
 
@@ -469,7 +470,7 @@ def _pack_methods_text(
         "<b>💳 Выбери способ оплаты</b>\n\n"
         f'<tg-emoji emoji-id="5203996991054432397">🎁</tg-emoji> <b>Пакет бонусов:</b> <b>{esc(p.title)}</b>\n'
         f"<i>Начисление на баланс:</i> <b>+{esc(p.credits)}</b> кредитов\n"
-        "<blockquote><i>Пакет не продлевает подписку — только кредиты на баланс.</i></blockquote>\n"
+        f"<blockquote><i>Пакет не продлевает подписку — только {CREDITS_COIN_TG_HTML} кредиты на баланс.</i></blockquote>\n"
         f"{discount_block}\n"
         "<i>Оформляя оплату, ты соглашаешься с условиями сервиса и политикой возврата "
         "(подробности — в поддержке или на странице оплаты).</i>"
@@ -1124,7 +1125,8 @@ async def successful_payment(message: Message) -> None:
     charge_id = (sp.telegram_payment_charge_id or "").strip()
     if not await try_claim_star_payment(charge_id, message.from_user.id):
         await message.answer(
-            "Этот платёж уже учтён. Если подписка или кредиты не отображаются — напиши в поддержку."
+            f"Этот платёж уже учтён. Если подписка или {CREDITS_COIN_TG_HTML} кредиты не отображаются — напиши в поддержку.",
+            parse_mode=HTML,
         )
         return
     if kind == "plan":
@@ -1340,6 +1342,7 @@ async def successful_payment(message: Message) -> None:
     else:
         await release_star_payment_claim(charge_id)
         await message.answer(
-            "Оплата получена, но кредиты не удалось начислить автоматически. "
-            "Напиши в поддержку — начислим вручную."
+            f"Оплата получена, но {CREDITS_COIN_TG_HTML} кредиты не удалось начислить автоматически. "
+            "Напиши в поддержку — начислим вручную.",
+            parse_mode=HTML,
         )

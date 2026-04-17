@@ -1,14 +1,24 @@
+import re
+
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from src.config import OPENROUTER_IMAGE_COST_CREDITS, OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS
-from src.formatting import HTML, esc
+from src.formatting import CREDITS_COIN_TG_HTML, HTML, esc, html_escape_preserve_tg_emoji
 from src.handlers.commands import edit_or_send_nav_message
 from src.keyboards.callback_data import CB_MENU_BACK_START
 from src.keyboards.styles import BTN_PRIMARY
 
 router = Router(name="faq")
+
+_TG_EMOJI_TAG_RE = re.compile(r"<tg-emoji\b[^>]*>.*?</tg-emoji>", re.DOTALL)
+
+
+def _faq_button_label(title: str) -> str:
+    """Подпись кнопки без HTML: премиум-эмодзи заменяем на 🪙."""
+    return _TG_EMOJI_TAG_RE.sub("🪙", title)[:64]
+
 
 _READY_LIMITS_FAQ_BODY = (
     "«Готовые идеи» — отдельный режим от обычной генерации.\n"
@@ -22,14 +32,14 @@ _CREDITS_FAQ_BODY = (
     "Кредиты тратятся только на генерацию изображений.\n\n"
     f"• «Создать картинку» — {OPENROUTER_IMAGE_COST_CREDITS} кредитов за 1 генерацию.\n"
     f"• «Готовые идеи» — {OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS} кредитов за 1 генерацию.\n"
-    "• Обычные сообщения и навигация кредиты не списывают.\n\n"
+    f"• Обычные сообщения и навигация {CREDITS_COIN_TG_HTML} кредиты не списывают.\n\n"
     "Баланс и лимиты смотри в /profile."
 )
 
 _FAQ: list[tuple[str, str, str]] = [
     (
         "credits",
-        "Как работают кредиты?",
+        f"Как работают {CREDITS_COIN_TG_HTML} кредиты?",
         _CREDITS_FAQ_BODY,
     ),
     (
@@ -53,7 +63,7 @@ _FAQ: list[tuple[str, str, str]] = [
     (
         "sub",
         "Что за подписка?",
-        "Подписка действует 30 дней и даёт бонусные кредиты при покупке.\n"
+        f"Подписка действует 30 дней и даёт бонусные {CREDITS_COIN_TG_HTML} кредиты при покупке.\n"
         "Пока подписка активна, лимиты без подписки не применяются.\n"
         "Статус и срок — в /profile. Продление — через «Оплатить».",
     ),
@@ -65,7 +75,7 @@ def _faq_keyboard(back_callback: str = CB_MENU_BACK_START) -> InlineKeyboardMark
     row: list[InlineKeyboardButton] = []
     for i, (slug, title, _) in enumerate(_FAQ):
         row.append(
-            InlineKeyboardButton(text=title[:30], callback_data=f"faq:{i}", style=BTN_PRIMARY)
+            InlineKeyboardButton(text=_faq_button_label(title)[:30], callback_data=f"faq:{i}", style=BTN_PRIMARY)
         )
         if len(row) == 2:
             rows.append(row)
@@ -117,7 +127,10 @@ async def faq_callback(callback: CallbackQuery) -> None:
         await callback.answer("Нет такого раздела.", show_alert=True)
         return
     _, title, body = _FAQ[idx]
-    text = f"<b>{esc(title)}</b>\n\n<blockquote>{esc(body)}</blockquote>"
+    text = (
+        f"<b>{html_escape_preserve_tg_emoji(title)}</b>\n\n"
+        f"<blockquote>{html_escape_preserve_tg_emoji(body)}</blockquote>"
+    )
     await callback.answer()
     if callback.message:
         back_callback = _faq_back_callback_from_message(callback.message)
