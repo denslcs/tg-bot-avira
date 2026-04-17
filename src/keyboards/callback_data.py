@@ -62,6 +62,8 @@ CB_PAY_STARS_PREFIX = "pay:s:"
 CB_PAY_RUB_PREFIX = "pay:r:"
 CB_PAY_INTL_PREFIX = "pay:i:"
 CB_PAY_CRYPTO_PREFIX = "pay:c:"
+# Возврат к выбору способа оплаты после счёта Stars: pay:ib:p:nova:h | pay:ib:b:pack300:m
+CB_PAY_INVOICE_BACK_PREFIX = "pay:ib:"
 
 __all__ = [
     "CB_APPLY_READY_PREFIX",
@@ -99,6 +101,7 @@ __all__ = [
     "CB_PAY_BONUS_MENU",
     "CB_PAY_BONUS_MENU_HUB",
     "CB_PAY_CRYPTO_PREFIX",
+    "CB_PAY_INVOICE_BACK_PREFIX",
     "CB_PAY_INTL_PREFIX",
     "CB_PAY_MENU",
     "CB_PAY_MENU_HUB",

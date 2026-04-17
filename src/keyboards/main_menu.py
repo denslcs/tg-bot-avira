@@ -66,7 +66,7 @@ def start_menu_keyboard(balance: int | None = None) -> InlineKeyboardMarkup:
                     text="Оплатить",
                     callback_data=CB_MENU_PAY,
                     style=BTN_SUCCESS,
-                    icon_custom_emoji_id="5312361253610475399",
+                    icon_custom_emoji_id="5267300544094948794",
                 ),
             ],
             [
@@ -86,7 +86,7 @@ def start_menu_keyboard(balance: int | None = None) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="🔥 ФОТО С МЕЛЛСТРОЙНОСТЬЮ 🔥",
+                    text="ФОТО С МЕЛЛСТРОЙНОСТЬЮ",
                     callback_data=CB_MENU_MELLSTROY,
                     style=BTN_DANGER,
                     icon_custom_emoji_id="5389038097860144794",
@@ -127,7 +127,7 @@ def menu_hub_keyboard() -> InlineKeyboardMarkup:
                     text="Подписки",
                     callback_data=CB_MENU_PAY_HUB,
                     style=BTN_SUCCESS,
-                    icon_custom_emoji_id="5312361253610475399",
+                    icon_custom_emoji_id="5267300544094948794",
                 ),
                 channel_button,
             ],
@@ -145,7 +145,10 @@ def menu_hub_keyboard() -> InlineKeyboardMarkup:
                     icon_custom_emoji_id="5325971446625758812",
                 ),
                 InlineKeyboardButton(
-                    text="🎨 Создать картинку", callback_data=CB_CREATE_IMAGE_HUB, style=BTN_PRIMARY
+                    text="Создать картинку",
+                    callback_data=CB_CREATE_IMAGE_HUB,
+                    style=BTN_PRIMARY,
+                    icon_custom_emoji_id="5220195193923328112",
                 ),
             ],
             [
@@ -174,7 +177,11 @@ def menu_hub_keyboard() -> InlineKeyboardMarkup:
                 ),
             ],
             [
-                InlineKeyboardButton(text="📊 История бюджета", callback_data=CB_MENU_BUDGET_HUB),
+                InlineKeyboardButton(
+                    text="История бюджета",
+                    callback_data=CB_MENU_BUDGET_HUB,
+                    icon_custom_emoji_id="6057406808086023473",
+                ),
             ],
             [
                 InlineKeyboardButton(

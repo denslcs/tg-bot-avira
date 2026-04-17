@@ -798,20 +798,63 @@ async def _edit_ready_nav_message(
     """
     Для сообщений с фото меняем и изображение, и подпись — иначе при смене экрана
     «залипает» превью чужой игры (остаётся только edit_caption).
+
+    Если текущее сообщение без фото (текстовое меню), а нужно превью идеи — шлём новое фото
+    и удаляем старое сообщение, иначе подпись остаётся без картинки.
     """
-    if message.photo and listing_photo is not None and listing_photo.is_file():
+    if listing_photo is None or not listing_photo.is_file():
+        return await edit_or_send_nav_message(
+            message, text=caption, reply_markup=reply_markup, parse_mode=HTML
+        )
+
+    media = InputMediaPhoto(
+        media=FSInputFile(listing_photo),
+        caption=caption,
+        parse_mode=HTML,
+    )
+
+    if message.photo:
         try:
-            return await message.edit_media(
-                media=InputMediaPhoto(
-                    media=FSInputFile(listing_photo),
-                    caption=caption,
-                    parse_mode=HTML,
-                ),
-                reply_markup=reply_markup,
-            )
+            return await message.edit_media(media=media, reply_markup=reply_markup)
         except Exception:
             logging.warning("_edit_ready_nav_message: edit_media failed", exc_info=True)
-    return await edit_or_send_nav_message(message, text=caption, reply_markup=reply_markup, parse_mode=HTML)
+        try:
+            sent = await message.bot.send_photo(
+                message.chat.id,
+                photo=FSInputFile(listing_photo),
+                caption=caption,
+                reply_markup=reply_markup,
+                parse_mode=HTML,
+            )
+        except Exception:
+            logging.warning("_edit_ready_nav_message: send_photo after edit_media failed", exc_info=True)
+            return await edit_or_send_nav_message(
+                message, text=caption, reply_markup=reply_markup, parse_mode=HTML
+            )
+        try:
+            await message.delete()
+        except Exception:
+            logging.debug("_edit_ready_nav_message: delete old photo message failed", exc_info=True)
+        return sent
+
+    try:
+        sent = await message.bot.send_photo(
+            message.chat.id,
+            photo=FSInputFile(listing_photo),
+            caption=caption,
+            reply_markup=reply_markup,
+            parse_mode=HTML,
+        )
+    except Exception:
+        logging.warning("_edit_ready_nav_message: send_photo for listing failed", exc_info=True)
+        return await edit_or_send_nav_message(
+            message, text=caption, reply_markup=reply_markup, parse_mode=HTML
+        )
+    try:
+        await message.delete()
+    except Exception:
+        logging.debug("_edit_ready_nav_message: delete old text nav message failed", exc_info=True)
+    return sent
 
 
 def _ready_categories_listing_photo() -> Path | None:
@@ -986,10 +1029,10 @@ def _waiting_prompt_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="⛔️ Отмена",
+                    text="Отмена",
                     callback_data=CB_IMG_CANCEL,
                     style=BTN_DANGER,
-                    icon_custom_emoji_id="5247149163132493357",
+                    icon_custom_emoji_id="6302868067407890482",
                 ),
             ],
         ]
@@ -1322,7 +1365,7 @@ def _ready_browser_keyboard(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="⬅️",
+                    text="\u200b",
                     callback_data=f"{CB_READY_NAV_PREFIX}prev:{prev_i}",
                     style=BTN_PRIMARY,
                     icon_custom_emoji_id="5258236805890710909",
@@ -1334,7 +1377,7 @@ def _ready_browser_keyboard(
                     icon_custom_emoji_id="5206607081334906820",
                 ),
                 InlineKeyboardButton(
-                    text="➡️",
+                    text="\u200b",
                     callback_data=f"{CB_READY_NAV_PREFIX}next:{next_i}",
                     style=BTN_PRIMARY,
                     icon_custom_emoji_id="5260450573768990626",
@@ -1369,10 +1412,10 @@ def _ready_wait_photo_keyboard(
             [InlineKeyboardButton(text=back_text, callback_data=back_callback, **back_btn_kwargs)],
             [
                 InlineKeyboardButton(
-                    text="⛔️ Отмена",
+                    text="Отмена",
                     callback_data=CB_IMG_CANCEL,
                     style=BTN_DANGER,
-                    icon_custom_emoji_id="5247149163132493357",
+                    icon_custom_emoji_id="6302868067407890482",
                 )
             ],
         ]
@@ -1398,10 +1441,10 @@ def _ready_confirm_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="⛔️ Отмена",
+                    text="Отмена",
                     callback_data=CB_IMG_CANCEL,
                     style=BTN_DANGER,
-                    icon_custom_emoji_id="5247149163132493357",
+                    icon_custom_emoji_id="6302868067407890482",
                 )
             ],
         ]
@@ -1437,10 +1480,10 @@ def _ready_beard_size_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="⛔️ Отмена",
+                    text="Отмена",
                     callback_data=CB_IMG_CANCEL,
                     style=BTN_DANGER,
-                    icon_custom_emoji_id="5247149163132493357",
+                    icon_custom_emoji_id="6302868067407890482",
                 )
             ],
         ]
@@ -1660,10 +1703,10 @@ async def _start_ready_redo_flow(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text="⛔️ Отмена",
+                        text="Отмена",
                         callback_data=CB_BACK_TO_READY_IDEAS,
                         style=BTN_DANGER,
-                        icon_custom_emoji_id="5247149163132493357",
+                        icon_custom_emoji_id="6302868067407890482",
                     )
                 ]
             ]
@@ -2559,10 +2602,15 @@ async def open_mellstroy_prompt(callback: CallbackQuery, state: FSMContext) -> N
     )
     await state.set_state(ImageGenState.ready_waiting_photos)
     first_hint = _ready_photo_upload_hint(category=category, need=photos_required, received=0, idea_title=title)
+    mell_title = (
+        '<tg-emoji emoji-id="5389038097860144794">🔥</tg-emoji> '
+        "<b>ФОТО С МЕЛЛСТРОЙНОСТЬЮ</b> "
+        '<tg-emoji emoji-id="5389038097860144794">🔥</tg-emoji>'
+    )
     await _edit_ready_nav_message(
         callback.message,
         caption=(
-            f"<b>Выбрано:</b> {esc(title)}\n"
+            f"{mell_title}\n"
             f"{_ready_generation_cost_html()}\n"
             f"{first_hint}\n"
             "<blockquote><i>Попал на скрытую тусовку к Мелу.</i></blockquote>"
@@ -2701,7 +2749,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
     current_idx = int(data.get("_ready_index") or 0) % total
 
     if action in ("prev", "next"):
-        # При одном варианте ⬅️/➡️ ведут на тот же индекс — не дублировать сообщение (edit «не изменился»).
+        # При одном варианте стрелки ведут на тот же индекс — не дублировать сообщение (edit «не изменился»).
         if idx == current_idx:
             await callback.answer("В этой категории только один вариант.")
             return
@@ -3574,13 +3622,13 @@ async def ready_choose_category_hint(message: Message, state: FSMContext) -> Non
 
 @router.message(ImageGenState.ready_browsing_idea)
 async def ready_browse_hint(message: Message) -> None:
-    await message.answer("Листай идеи кнопками ⬅️/➡️ и нажми «Выбрать».")
+    await message.answer("Листай идеи стрелками и нажми «Выбрать».")
 
 
 @router.message(ImageGenState.ready_waiting_confirm)
 async def ready_waiting_confirm_hint(message: Message) -> None:
     await message.answer(
-        "Нажми «✔️ Подтвердить» для запуска или «⛔️ Отмена».",
+        "Нажми «✔️ Подтвердить» для запуска или «Отмена».",
         reply_markup=_ready_confirm_keyboard(),
     )
 

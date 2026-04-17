@@ -67,6 +67,7 @@ from src.keyboards.callback_data import (
     CB_PAY_BONUS_MENU,
     CB_PAY_BONUS_MENU_HUB,
     CB_PAY_CRYPTO_PREFIX,
+    CB_PAY_INVOICE_BACK_PREFIX,
     CB_PAY_INTL_PREFIX,
     CB_PAY_MENU,
     CB_PAY_MENU_HUB,
@@ -110,6 +111,101 @@ def _plan_title_html(plan_id: str) -> str:
         return esc(p.title)
     emoji_char = "🌙" if pid == "starter" else "🤩"
     return f'<tg-emoji emoji-id="{emoji_id}">{emoji_char}</tg-emoji> {esc(title_wo_emoji)}'
+
+
+def _plan_invoice_plain_texts(plan_id: str) -> tuple[str, str, str]:
+    """Заголовок / описание / label цены для send_invoice (plain text, как премиум-иконки в UI)."""
+    pid = (plan_id or "").strip().lower()
+    p = PLANS[pid]
+    name = p.title.split(" ", 1)[-1]
+    emoji_char = "🌙" if pid == "starter" else "🤩"
+    pd = p.period_days
+    title = f"Shard Creator — {emoji_char} {name}"[:32]
+    desc = (
+        f"Подписка {emoji_char} {name}: +{p.bonus_credits} кредитов, "
+        f"{pd} дн. Картинки и готовые идеи — по кредитам."
+    )[:255]
+    price_lbl = f"{emoji_char} {name} ({pd} дн.)"[:64]
+    return title, desc, price_lbl
+
+
+def _back_to_plans_from_pay_methods_message(message: Message | None) -> str:
+    if message and message.reply_markup:
+        for row in message.reply_markup.inline_keyboard:
+            for btn in row:
+                if (getattr(btn, "text", "") or "").strip() in ("Назад", "🔙 Назад", "⬅️ Назад") and getattr(
+                    btn, "callback_data", None
+                ):
+                    return (
+                        CB_PAY_MENU_HUB if str(btn.callback_data) == CB_MENU_HUB else CB_PAY_MENU
+                    )
+    return CB_PAY_MENU
+
+
+def _back_to_bonus_from_pay_methods_message(message: Message | None) -> str:
+    if message and message.reply_markup:
+        for row in message.reply_markup.inline_keyboard:
+            for btn in row:
+                if (getattr(btn, "text", "") or "").strip() in ("Назад", "🔙 Назад", "⬅️ Назад"):
+                    cd = str(getattr(btn, "callback_data", ""))
+                    if cd in (CB_PAY_BONUS_MENU_HUB, CB_PAY_BONUS_MENU):
+                        return cd
+    return CB_PAY_BONUS_MENU
+
+
+def _back_to_bonus_from_bonus_list_message(message: Message | None) -> str:
+    """С экрана списка бонус-пакетов (кнопка «Назад к тарифам»)."""
+    if message and message.reply_markup:
+        for row in message.reply_markup.inline_keyboard:
+            for btn in row:
+                if (getattr(btn, "text", "") or "").strip() in (
+                    "Назад к тарифам",
+                    "🔙 Назад к тарифам",
+                    "⬅️ Назад к тарифам",
+                ):
+                    return (
+                        CB_PAY_BONUS_MENU_HUB
+                        if str(getattr(btn, "callback_data", "")) == CB_PAY_MENU_HUB
+                        else CB_PAY_BONUS_MENU
+                    )
+    return CB_PAY_BONUS_MENU
+
+
+def _invoice_back_after_stars_data(
+    item_id: str,
+    *,
+    back_to_plans: str,
+    back_to_bonus: str,
+) -> str:
+    if item_id in PLANS:
+        ctx = "h" if back_to_plans == CB_PAY_MENU_HUB else "m"
+        return f"{CB_PAY_INVOICE_BACK_PREFIX}p:{item_id}:{ctx}"
+    ctx = "h" if back_to_bonus == CB_PAY_BONUS_MENU_HUB else "m"
+    return f"{CB_PAY_INVOICE_BACK_PREFIX}b:{item_id}:{ctx}"
+
+
+def _stars_invoice_keyboard(*, stars_amount: int, back_data: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=f"Заплатить · {stars_amount} ⭐", pay=True)],
+            [
+                InlineKeyboardButton(
+                    text="Назад",
+                    callback_data=back_data,
+                    icon_custom_emoji_id="5256247952564825322",
+                )
+            ],
+        ]
+    )
+
+
+async def _delete_message_soft(message: Message | None) -> None:
+    if message is None:
+        return
+    try:
+        await message.delete()
+    except Exception:
+        logger.debug("delete message failed (invoice/nav)", exc_info=True)
 
 
 def _admin_sales_thread_for_plan(plan_id: str) -> int:
@@ -606,15 +702,7 @@ async def pay_pick_plan(callback: CallbackQuery) -> None:
         await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
         return
     await callback.answer()
-    back_to_plans_callback = CB_PAY_MENU
-    if callback.message and callback.message.reply_markup:
-        for row in callback.message.reply_markup.inline_keyboard:
-            for btn in row:
-                if (getattr(btn, "text", "") or "").strip() in ("Назад", "🔙 Назад", "⬅️ Назад") and getattr(btn, "callback_data", None):
-                    back_to_plans_callback = (
-                        CB_PAY_MENU_HUB if str(btn.callback_data) == CB_MENU_HUB else CB_PAY_MENU
-                    )
-                    break
+    back_to_plans_callback = _back_to_plans_from_pay_methods_message(callback.message)
     await edit_or_send_nav_message(
         callback.message,
         text=_pay_methods_text(plan_id),
@@ -654,17 +742,7 @@ async def pay_pick_pack(callback: CallbackQuery) -> None:
     await callback.answer()
     universe_discount = await _has_active_starter_or_universe(callback.from_user.id) if callback.from_user else False
     rub, usd, stars, discounted = _discount_pack_values(pack_id, apply_universe_discount=universe_discount)
-    back_to_bonus_callback = CB_PAY_BONUS_MENU
-    if callback.message and callback.message.reply_markup:
-        for row in callback.message.reply_markup.inline_keyboard:
-            for btn in row:
-                if (getattr(btn, "text", "") or "").strip() in ("Назад к тарифам", "🔙 Назад к тарифам", "⬅️ Назад к тарифам"):
-                    back_to_bonus_callback = (
-                        CB_PAY_BONUS_MENU_HUB
-                        if str(getattr(btn, "callback_data", "")) == CB_PAY_MENU_HUB
-                        else CB_PAY_BONUS_MENU
-                    )
-                    break
+    back_to_bonus_callback = _back_to_bonus_from_bonus_list_message(callback.message)
     await edit_or_send_nav_message(
         callback.message,
         text=_pack_methods_text(
@@ -856,17 +934,22 @@ async def pay_stars_invoice(callback: CallbackQuery) -> None:
         p = PLANS[item_id]
         payload = f"plan:{callback.from_user.id}:{item_id}"
         pd = p.period_days
+        back_plans = _back_to_plans_from_pay_methods_message(callback.message)
+        back_cb = _invoice_back_after_stars_data(
+            item_id,
+            back_to_plans=back_plans,
+            back_to_bonus=CB_PAY_BONUS_MENU,
+        )
+        inv_title, inv_desc, price_lbl = _plan_invoice_plain_texts(item_id)
         await callback.message.bot.send_invoice(
             chat_id=callback.message.chat.id,
-            title=f"Shard Creator — {p.title}",
-            description=(
-                f"Подписка {p.title}: +{p.bonus_credits} кредитов, "
-                f"{pd} дн. Картинки и готовые идеи — по кредитам."
-            ),
+            title=inv_title,
+            description=inv_desc,
             payload=payload,
             currency="XTR",
-            prices=[LabeledPrice(label=f"{p.title} ({pd} дн.)", amount=p.stars)],
+            prices=[LabeledPrice(label=price_lbl, amount=p.stars)],
             provider_token="",
+            reply_markup=_stars_invoice_keyboard(stars_amount=p.stars, back_data=back_cb),
         )
     elif item_id in BONUS_PACKS:
         b = BONUS_PACKS[item_id]
@@ -878,22 +961,111 @@ async def pay_stars_invoice(callback: CallbackQuery) -> None:
         title = f"Shard Creator — бонус-пакет {b.credits} кредитов"
         if discounted:
             title += " (Universe -15%)"
+        if len(title) > 32:
+            title = title[:32]
+        desc = (
+            f"Пакет бонусов: +{b.credits} кредитов на баланс (без продления подписки). "
+            + (f"Цена для Universe: 🪙 {rub} / ⭐ {stars}." if discounted else "")
+        )[:255]
+        back_bonus = _back_to_bonus_from_pay_methods_message(callback.message)
+        back_cb = _invoice_back_after_stars_data(
+            item_id,
+            back_to_plans=CB_PAY_MENU,
+            back_to_bonus=back_bonus,
+        )
         await callback.message.bot.send_invoice(
             chat_id=callback.message.chat.id,
             title=title,
-            description=(
-                f"Пакет бонусов: +{b.credits} кредитов на баланс (без продления подписки). "
-                + (f"Цена для Universe: 🪙 {rub} / ⭐️ {stars}." if discounted else "")
-            ),
+            description=desc,
             payload=payload,
             currency="XTR",
             prices=[LabeledPrice(label=f"{b.credits} кредитов", amount=stars)],
             provider_token="",
+            reply_markup=_stars_invoice_keyboard(stars_amount=stars, back_data=back_cb),
         )
     else:
         await callback.answer("Неизвестный тариф/пакет", show_alert=True)
         return
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith(CB_PAY_INVOICE_BACK_PREFIX))
+async def pay_invoice_back_to_methods(callback: CallbackQuery) -> None:
+    """Со счёта Stars — вернуться к выбору способа оплаты (тот же hub/main, что был до счёта)."""
+    if callback.message is None or callback.from_user is None or not callback.data:
+        await callback.answer()
+        return
+    parts = callback.data.split(":")
+    if len(parts) != 5 or parts[2] not in ("p", "b"):
+        await callback.answer("Ошибка", show_alert=True)
+        return
+    kind, item_id, ctx = parts[2], parts[3], parts[4]
+    if ctx not in ("m", "h"):
+        await callback.answer("Ошибка", show_alert=True)
+        return
+    hub = ctx == "h"
+    if kind == "p":
+        if item_id not in PLANS:
+            await callback.answer("Ошибка", show_alert=True)
+            return
+        allowed, reason = await _can_buy_plan(callback.from_user.id, item_id)
+        if not allowed:
+            if item_id == "starter" and callback.from_user is not None:
+                prof = await get_user_admin_profile(callback.from_user.id)
+                if prof and prof.starter_trial_used:
+                    await callback.answer()
+                    await callback.message.answer(
+                        STARTER_ALREADY_PURCHASED_TEXT,
+                        parse_mode=HTML,
+                        reply_markup=InlineKeyboardMarkup(
+                            inline_keyboard=[
+                                [
+                                    InlineKeyboardButton(
+                                        text="🔙 К тарифам",
+                                        callback_data=CB_PAY_MENU,
+                                    )
+                                ]
+                            ]
+                        ),
+                    )
+                    return
+            await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
+            return
+        await callback.answer()
+        back_cb = CB_PAY_MENU_HUB if hub else CB_PAY_MENU
+        await _delete_message_soft(callback.message)
+        await callback.message.bot.send_message(
+            callback.message.chat.id,
+            _pay_methods_text(item_id),
+            reply_markup=_methods_keyboard(item_id, is_pack=False, back_callback_data=back_cb),
+            parse_mode=HTML,
+        )
+        return
+    if item_id not in BONUS_PACKS:
+        await callback.answer("Ошибка", show_alert=True)
+        return
+    universe_discount = await _has_active_starter_or_universe(callback.from_user.id)
+    rub, usd, stars, discounted = _discount_pack_values(
+        item_id, apply_universe_discount=universe_discount
+    )
+    back_bonus = CB_PAY_BONUS_MENU_HUB if hub else CB_PAY_BONUS_MENU
+    await callback.answer()
+    await _delete_message_soft(callback.message)
+    await callback.message.bot.send_message(
+        callback.message.chat.id,
+        _pack_methods_text(
+            item_id,
+            discounted=discounted,
+            discount_price_rub=(rub if discounted else None),
+        ),
+        reply_markup=_methods_keyboard(
+            item_id,
+            is_pack=True,
+            back_callback_data=back_bonus,
+            pack_price_override=(rub, usd, stars),
+        ),
+        parse_mode=HTML,
+    )
 
 
 @router.pre_checkout_query()

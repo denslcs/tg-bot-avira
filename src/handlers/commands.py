@@ -512,7 +512,7 @@ async def quick_panel_ref(message: Message) -> None:
     await deliver_referral_screen(message.bot, message.from_user.id, message.from_user.username, message)
 
 
-@router.message(F.text == "📊 История бюджета")
+@router.message((F.text == "История бюджета") | (F.text == "📊 История бюджета"))
 async def quick_panel_budget_history(message: Message) -> None:
     await _send_budget_history(message, back_callback=CB_MENU_BACK_START)
 
@@ -523,13 +523,16 @@ async def _send_budget_history(message: Message, *, back_callback: str) -> None:
     rows = await get_budget_history_recent(message.from_user.id, days=7, limit=20)
     if not rows:
         await message.answer(
-            "<b>📊 История бюджета (7 дней)</b>\n"
+            '<b><tg-emoji emoji-id="6057406808086023473">📉</tg-emoji> История бюджета (7 дней)</b>\n'
             "<blockquote><i>Пока нет записей за последнюю неделю.</i></blockquote>",
             parse_mode=HTML,
             reply_markup=back_to_main_menu_keyboard(back_callback),
         )
         return
-    lines = ["<b>📊 История бюджета (7 дней)</b>", "<blockquote>"]
+    lines = [
+        '<b><tg-emoji emoji-id="6057406808086023473">📉</tg-emoji> История бюджета (7 дней)</b>',
+        "<blockquote>",
+    ]
     for item in rows:
         sign = "+" if item.delta > 0 else ""
         delta_text = f"{sign}{item.delta}" if item.delta else "0"
