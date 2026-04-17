@@ -442,10 +442,10 @@ def _bonus_packs_keyboard(
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"{b.credits} кр. · {rub} ₽",
+                    text=f"{b.credits} кр. · {rub}",
                     callback_data=f"{CB_PAY_PACK_PREFIX}{order[0]}",
                     style=BTN_PRIMARY,
-                    icon_custom_emoji_id="5377746319601324795",
+                    icon_custom_emoji_id="5382164415019768638",
                 )
             ]
         )
@@ -457,16 +457,16 @@ def _bonus_packs_keyboard(
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"{b0.credits} кр. · {rub0} ₽",
+                    text=f"{b0.credits} кр. · {rub0}",
                     callback_data=f"{CB_PAY_PACK_PREFIX}{order[0]}",
                     style=BTN_SUCCESS,
-                    icon_custom_emoji_id="5377746319601324795",
+                    icon_custom_emoji_id="5382164415019768638",
                 ),
                 InlineKeyboardButton(
-                    text=f"{b1.credits} кр. · {rub1} ₽",
+                    text=f"{b1.credits} кр. · {rub1}",
                     callback_data=f"{CB_PAY_PACK_PREFIX}{order[1]}",
                     style=BTN_SUCCESS,
-                    icon_custom_emoji_id="5377746319601324795",
+                    icon_custom_emoji_id="5382164415019768638",
                 ),
             ]
         )
@@ -476,10 +476,10 @@ def _bonus_packs_keyboard(
             rows.append(
                 [
                     InlineKeyboardButton(
-                        text=f"{b.credits} кр. · {rub} ₽",
+                        text=f"{b.credits} кр. · {rub}",
                         callback_data=f"{CB_PAY_PACK_PREFIX}{bid}",
                         style=BTN_PRIMARY,
-                        icon_custom_emoji_id="5377746319601324795",
+                        icon_custom_emoji_id="5382164415019768638",
                     )
                 ]
             )

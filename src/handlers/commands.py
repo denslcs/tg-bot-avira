@@ -587,7 +587,7 @@ async def cmd_help(message: Message) -> None:
         "❓ <code>/help</code> — <i>этот список</i>\n"
         "💳 <code>/pay</code> — <i>подписка и оплата</i>\n"
         "👤 <code>/profile</code> — <i>статус аккаунта и подписки</i>\n"
-        "👥 <code>/ref</code> — <i>реферальная система</i>\n"
+        "🫂 <code>/ref</code> — <i>реферальная система</i>\n"
         '<tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> <code>/ideas</code> — <i>готовые идеи для картинок</i>\n'
         "📋 <code>/faq</code> — <i>частые вопросы</i>\n"
         "🔄 <code>/newchat</code> или <code>/clear</code> — <i>очистить память диалога</i>\n"
@@ -753,7 +753,7 @@ async def _build_referral_message(
     )
     uname_html = f"@{esc(username)}" if username else "<i>без username</i>"
     text = (
-        "<b>👥 Реферальная программа</b>\n\n"
+        '<b><tg-emoji emoji-id="5391320026869408028">🫂</tg-emoji> Реферальная программа</b>\n\n'
         "<blockquote>"
         f'<i><tg-emoji emoji-id="5325971446625758812">👤</tg-emoji> Профиль</i> {uname_html}\n'
         f'<i><tg-emoji emoji-id="5841276284155467413">🔤</tg-emoji> ID</i> <code>{esc(user_id)}</code>\n'
