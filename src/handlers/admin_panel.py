@@ -29,7 +29,7 @@ from src.database import (
 )
 from src.formatting import HTML, esc, format_subscription_ends_at
 from src.handlers.commands import edit_or_send_nav_message
-from src.keyboards.styles import BTN_PRIMARY
+from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 from src.subscription_catalog import PLANS, PLANS_ORDER
 
 router = Router(name="admin_panel")
@@ -39,29 +39,108 @@ def _plans_hint() -> str:
     return "|".join(PLANS_ORDER)
 
 
-def _main_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="Открытые тикеты", callback_data="adm:tickets", style=BTN_PRIMARY
-                ),
-                InlineKeyboardButton(
-                    text="Статистика бота", callback_data="adm:stats", style=BTN_PRIMARY
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Оценки поддержки", callback_data="adm:ratings", style=BTN_PRIMARY
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Справка по командам", callback_data="adm:help", style=BTN_PRIMARY
-                ),
-            ],
-        ]
+def _plans_readable() -> str:
+    return ", ".join(PLANS_ORDER)
+
+
+def _admin_home_html() -> str:
+    """Главный экран /admin: структура, короткие блоки, единый стиль."""
+    tariffs = esc(_plans_readable())
+    return (
+        "<b>🛡️ Админ-панель · Shard Creator</b>\n\n"
+        "<blockquote><i>Быстрые отчёты — кнопками ниже. Команды вводите в этот чат.</i></blockquote>\n\n"
+        "<b>👤 Пользователь и баланс</b>\n"
+        "• <code>/user ID</code> — кредиты, подписка, тикет, число сообщений в диалоге\n"
+        "• <code>/addcredits ID сумма</code> · <code>/takecredits ID сумма</code>\n\n"
+        "<b>📅 Подписка</b>\n"
+        "• <code>/setsub ID дни</code> — продлить срок; в конце можно указать тариф\n"
+        f"• Тарифы: <i>{tariffs}</i>\n"
+        "• <code>/setplan ID тариф</code> — сменить тариф в БД <b>без</b> сдвига даты окончания\n"
+        "• <code>/clearsub ID</code> — снять подписку (срок и тариф)\n"
+        "<blockquote><i>Бонусные кредиты по тарифу при ручной выдаче не начисляются — только при оплате Stars.</i></blockquote>\n\n"
+        "<b>🗑 Диалог и рассылка</b>\n"
+        "• <code>/wipechat ID</code> — очистить историю диалога у пользователя\n"
+        "• <code>/broadcast текст</code> — рассылка в ЛС всем из базы\n\n"
+        "<b>📎 Прочее</b>\n"
+        "• <code>/stats</code> — сводка (дублирует кнопку «Статистика»)\n"
+        "• <code>/faq</code> — шаблоны ответов · <code>/chatid</code> — ID чата в группе"
     )
+
+
+def _admin_help_html() -> str:
+    """Подробная шпаргалка (кнопка «Справка»)."""
+    p = esc(_plans_readable())
+    return (
+        "<b>📖 Справка по командам</b>\n\n"
+        "<b>Обзор</b>\n"
+        "• <code>/stats</code> — пользователи, подписки, кредиты, объём диалогов\n"
+        "• <code>/user ID</code> — полная карточка пользователя\n\n"
+        "<b>Кредиты</b>\n"
+        "• <code>/addcredits ID сумма</code>\n"
+        "• <code>/takecredits ID сумма</code>\n\n"
+        "<b>Подписка</b>\n"
+        "• <code>/setsub ID дни</code> — +дни к сроку; тариф в БД не меняется, если не указать\n"
+        f"• Пример с тарифом: <code>/setsub 123 30 nova</code> · доступно: <i>{p}</i>\n"
+        "• <code>/setplan ID тариф</code> — только тариф, дата окончания без изменений\n"
+        "• <code>/clearsub ID</code> — обнулить подписку\n\n"
+        "<b>Сервис</b>\n"
+        "• <code>/wipechat ID</code> — очистить <code>dialog_messages</code>\n"
+        "• <code>/broadcast текст</code> — рассылка в ЛС\n"
+        "• <code>/faq</code> — шаблоны для пользователей\n"
+        "• <code>/chatid</code> — ID чата (в группе)"
+    )
+
+
+def _main_kb_rows(*, with_home: bool) -> list[list[InlineKeyboardButton]]:
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text="🎫 Тикеты",
+                callback_data="adm:tickets",
+                style=BTN_PRIMARY,
+            ),
+            InlineKeyboardButton(
+                text="📊 Статистика",
+                callback_data="adm:stats",
+                style=BTN_SUCCESS,
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="⭐ Оценки поддержки",
+                callback_data="adm:ratings",
+                style=BTN_PRIMARY,
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="📋 Справка по командам",
+                callback_data="adm:help",
+                style=BTN_PRIMARY,
+            ),
+        ],
+    ]
+    if with_home:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="⬅️ К обзору",
+                    callback_data="adm:home",
+                    style=BTN_PRIMARY,
+                ),
+            ]
+        )
+    return rows
+
+
+def _main_kb() -> InlineKeyboardMarkup:
+    """Главный экран /admin — без лишней кнопки «назад»."""
+    return InlineKeyboardMarkup(inline_keyboard=_main_kb_rows(with_home=False))
+
+
+def _main_kb_nav() -> InlineKeyboardMarkup:
+    """Внутренние экраны панели — с возвратом к обзору."""
+    return InlineKeyboardMarkup(inline_keyboard=_main_kb_rows(with_home=True))
 
 
 @router.message(Command("admin"))
@@ -70,20 +149,25 @@ async def cmd_admin_panel(message: Message) -> None:
         await message.answer("Эта команда только для администраторов.")
         return
     await message.answer(
-        "Админ-панель Shard Creator\n\n"
-        "Быстрые кнопки ниже. Команды в чате:\n"
-        "• /user ID — профиль пользователя\n"
-        "• /addcredits ID сумма — начислить кредиты\n"
-        "• /takecredits ID сумма — списать кредиты\n"
-        f"• /setsub ID дни [{_plans_hint()}] — продлить подписку; бонусы по тарифу <b>не</b> начисляются (только при оплате)\n"
-        f"• /setplan ID [{_plans_hint()}] — сменить тариф в БД <b>без</b> продления срока\n"
-        "• /clearsub ID — снять подписку (срок и тариф)\n"
-        "• /wipechat ID — очистить историю диалога у пользователя\n"
-        "• /stats — сводка по пользователям, подпискам и кредитам\n"
-        "• /broadcast текст — разослать сообщение всем из базы (ЛС)",
+        _admin_home_html(),
         reply_markup=_main_kb(),
         parse_mode=HTML,
     )
+
+
+@router.callback_query(F.data == "adm:home")
+async def adm_home(callback: CallbackQuery) -> None:
+    if not callback.from_user or callback.from_user.id not in ADMIN_IDS:
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    if callback.message:
+        await edit_or_send_nav_message(
+            callback.message,
+            text=_admin_home_html(),
+            reply_markup=_main_kb(),
+            parse_mode=HTML,
+        )
+    await callback.answer()
 
 
 @router.callback_query(F.data == "adm:help")
@@ -91,27 +175,12 @@ async def adm_help(callback: CallbackQuery) -> None:
     if not callback.from_user or callback.from_user.id not in ADMIN_IDS:
         await callback.answer("Нет доступа.", show_alert=True)
         return
-    text = (
-        "Команды:\n"
-        "/stats — пользователи, подписки, кредиты, объём диалогов\n"
-        "/user 123 — кредиты, подписка, тикет, сообщения в диалоге\n"
-        "/addcredits 123 50\n"
-        "/takecredits 123 20\n"
-        "/setsub 123 30 — +30 дней (тариф в БД не трогаем); бонусы не начисляются\n"
-        "/setsub 123 30 nova — +30 дней и запись тарифа; бонусы не начисляются\n"
-        "/setplan 123 nova — только тариф, дата окончания без изменений\n"
-        "/clearsub 123 — обнулить подписку\n"
-        "/wipechat 123 — очистить dialog_messages\n"
-        "/broadcast текст — рассылка в ЛС всем из базы\n"
-        "/faq — шаблоны ответов для пользователей\n"
-        "/chatid — id чата (в группе)"
-    )
     if callback.message:
         await edit_or_send_nav_message(
             callback.message,
-            text=text,
-            reply_markup=_main_kb(),
-            parse_mode=None,
+            text=_admin_help_html(),
+            reply_markup=_main_kb_nav(),
+            parse_mode=HTML,
         )
     await callback.answer()
 
@@ -123,19 +192,26 @@ async def adm_tickets(callback: CallbackQuery) -> None:
         return
     n = await count_open_tickets()
     lines = await list_open_tickets_preview(limit=20)
-    body = "\n".join(lines) if lines else "(нет открытых)"
-    text = f"Открытых тикетов: {n}\n\n{body}"
+    if not lines:
+        body = "<i>Открытых обращений нет.</i>"
+    else:
+        body = "\n".join(f"• <code>{esc(line)}</code>" for line in lines)
+    text = (
+        "<b>🎫 Открытые тикеты</b>\n"
+        f"<blockquote><i>Всего открытых: <b>{esc(n)}</b></i></blockquote>\n\n"
+        f"{body}"
+    )
     if callback.message:
         await edit_or_send_nav_message(
             callback.message,
             text=text[:4000],
-            reply_markup=_main_kb(),
-            parse_mode=None,
+            reply_markup=_main_kb_nav(),
+            parse_mode=HTML,
         )
     await callback.answer()
 
 
-async def _main_bot_stats_text() -> str:
+async def _main_bot_stats_html() -> str:
     users_n = await count_users_total()
     new7 = await count_new_users_days(7)
     sub_n = await count_users_active_subscription()
@@ -143,17 +219,18 @@ async def _main_bot_stats_text() -> str:
     dialog_n = await count_dialog_messages_total()
     tickets_n = await count_open_tickets()
     return (
-        "📊 Статистика основного бота\n\n"
-        "Пользователи:\n"
-        f"• Всего в базе: {users_n}\n"
-        f"• Новых за 7 дней: {new7}\n"
-        f"• С активной подпиской сейчас: {sub_n}\n\n"
-        "Кредиты и диалоги:\n"
-        f"• Сумма кредитов у всех: {credits_sum}\n"
-        f"• Сообщений в историях диалогов (всего): {dialog_n}\n\n"
-        "Поддержка (срез):\n"
-        f"• Открытых тикетов сейчас: {tickets_n}\n\n"
-        "Оценки и SLA по тикетам — в чате support-бота: /report, /sla."
+        "<b>📊 Статистика бота</b>\n"
+        "<blockquote><i>Срез на сейчас</i></blockquote>\n\n"
+        "<b>Пользователи</b>\n"
+        f"• В базе: <b>{esc(users_n)}</b>\n"
+        f"• Новых за 7 дней: <b>{esc(new7)}</b>\n"
+        f"• С активной подпиской: <b>{esc(sub_n)}</b>\n\n"
+        "<b>Кредиты и диалоги</b>\n"
+        f"• Сумма кредитов (все пользователи): <b>{esc(credits_sum)}</b>\n"
+        f"• Сообщений в историях диалогов (всего): <b>{esc(dialog_n)}</b>\n\n"
+        "<b>Поддержка</b>\n"
+        f"• Открытых тикетов: <b>{esc(tickets_n)}</b>\n\n"
+        "<i>Подробные оценки и SLA — в support-боте:</i> <code>/report</code>, <code>/sla</code>"
     )
 
 
@@ -162,13 +239,13 @@ async def adm_stats(callback: CallbackQuery) -> None:
     if not callback.from_user or callback.from_user.id not in ADMIN_IDS:
         await callback.answer("Нет доступа.", show_alert=True)
         return
-    text = await _main_bot_stats_text()
+    text = await _main_bot_stats_html()
     if callback.message:
         await edit_or_send_nav_message(
             callback.message,
             text=text[:4000],
-            reply_markup=_main_kb(),
-            parse_mode=None,
+            reply_markup=_main_kb_nav(),
+            parse_mode=HTML,
         )
     await callback.answer()
 
@@ -178,7 +255,7 @@ async def cmd_stats(message: Message) -> None:
     if not message.from_user or message.from_user.id not in ADMIN_IDS:
         await message.answer("Только для администраторов.")
         return
-    await message.answer((await _main_bot_stats_text())[:4000])
+    await message.answer((await _main_bot_stats_html())[:4000], parse_mode=HTML)
 
 
 _BROADCAST_DELAY_SEC = 0.035
@@ -236,20 +313,22 @@ async def adm_ratings(callback: CallbackQuery) -> None:
         return
     avg, rate_n = await get_support_rating_rollups()
     if rate_n == 0:
-        text = "Пока нет оценок закрытых тикетов."
+        text = (
+            "<b>⭐ Оценки поддержки</b>\n\n"
+            "<i>Пока нет оценок по закрытым тикетам.</i>"
+        )
     else:
         text = (
-            f"Средняя оценка поддержки: {avg:.2f} / 5\n"
-            f"Всего ответов: {rate_n}\n\n"
-            "Оценки собираются после того, как пользователь нажимает "
-            "«вопрос решён» в чате поддержки — так мы видим качество ответов."
+            "<b>⭐ Оценки поддержки</b>\n"
+            f"<blockquote>Средняя оценка: <b>{avg:.2f}</b> из 5 · ответов с оценкой: <b>{esc(rate_n)}</b></blockquote>\n"
+            "<i>Оценка ставится, когда пользователь отмечает «вопрос решён» в чате поддержки.</i>"
         )
     if callback.message:
         await edit_or_send_nav_message(
             callback.message,
             text=text,
-            reply_markup=_main_kb(),
-            parse_mode=None,
+            reply_markup=_main_kb_nav(),
+            parse_mode=HTML,
         )
     await callback.answer()
 
@@ -261,33 +340,60 @@ async def cmd_user_lookup(message: Message) -> None:
         return
     parts = (message.text or "").split(maxsplit=1)
     if len(parts) < 2 or not parts[1].strip().isdigit():
-        await message.answer("Формат:\n/user 123456789")
+        await message.answer(
+            "<b>Формат</b>\n<code>/user ID</code>\n<i>Пример:</i> <code>/user 123456789</code>",
+            parse_mode=HTML,
+        )
         return
     uid = int(parts[1].strip())
     profile = await get_user_admin_profile(uid)
     if not profile:
         await message.answer("Пользователь не найден в базе (ни разу не писал боту).")
         return
-    sub = profile.subscription_ends_at or "—"
     active = subscription_is_active(profile.subscription_ends_at)
-    sub_human = "активна" if active else "не активна"
-    plan = profile.subscription_plan or "—"
-    last_buy = profile.subscription_last_purchase_at or "—"
-    sub_line = f"Подписка: {sub_human}, до: {sub}, тариф: {plan}\nПоследняя покупка подписки (UTC): {last_buy}"
-    ticket = await get_open_ticket_by_user(uid)
-    ticket_line = (
-        f"Открытый тикет: #{ticket.ticket_id}" if ticket else "Открытых тикетов нет"
+    sub_human = "активна ✅" if active else "не активна"
+    sub_till = (
+        format_subscription_ends_at(profile.subscription_ends_at)
+        if profile.subscription_ends_at
+        else "—"
     )
+    pr = profile.subscription_plan
+    if pr and pr in PLANS:
+        plan_line = f"{PLANS[pr].title} (<code>{esc(pr)}</code>)"
+    elif pr:
+        plan_line = esc(pr)
+    else:
+        plan_line = "—"
+    last_buy = (
+        format_subscription_ends_at(profile.subscription_last_purchase_at)
+        if profile.subscription_last_purchase_at
+        else "—"
+    )
+    ticket = await get_open_ticket_by_user(uid)
+    if ticket:
+        ticket_block = f"<i>Открыт тикет</i> <code>#{esc(ticket.ticket_id)}</code>"
+    else:
+        ticket_block = "<i>Открытых тикетов нет</i>"
     msgs = await count_dialog_messages(uid)
-    un = profile.username or "—"
+    un_html = f"@{esc(profile.username)}" if profile.username else "—"
     await message.answer(
-        f"Пользователь {uid}\n"
-        f"username в БД: {un}\n"
-        f"Кредиты: {profile.credits}\n"
-        f"{sub_line}\n"
-        f"Регистрация в боте: {profile.created_at}\n"
-        f"Сообщений в истории диалога: {msgs}\n"
-        f"{ticket_line}"
+        "<b>👤 Карточка пользователя</b>\n"
+        "<blockquote>"
+        f"<i>Telegram ID:</i> <code>{esc(uid)}</code>\n"
+        f"<i>Username в БД:</i> <b>{un_html}</b>\n"
+        f"<i>Кредиты:</i> <b>{esc(profile.credits)}</b>\n"
+        f"<i>В боте с:</i> <code>{esc(profile.created_at)}</code>\n"
+        f"<i>Сообщений в диалоге:</i> <b>{esc(msgs)}</b>\n"
+        "</blockquote>\n"
+        "<b>📅 Подписка</b>\n"
+        "<blockquote>"
+        f"<i>Статус:</i> <b>{esc(sub_human)}</b>\n"
+        f"<i>Действует до:</i> {esc(sub_till)}\n"
+        f"<i>Тариф:</i> {plan_line}\n"
+        f"<i>Последняя покупка подписки:</i> {esc(last_buy)}\n"
+        "</blockquote>\n"
+        f"<b>🎫 Поддержка</b>\n{ticket_block}",
+        parse_mode=HTML,
     )
 
 
