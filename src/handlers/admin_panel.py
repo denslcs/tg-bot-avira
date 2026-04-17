@@ -37,7 +37,7 @@ router = Router(name="admin_panel")
 _PLAN_PREMIUM_EMOJI_IDS: dict[str, str] = {
     "starter": "5287702390370242449",
     "nova": "5242331214848756985",
-    "supernova": "5242714407535939345",
+    "supernova": "5242505745139797503",
     "galaxy": "5242227706136924612",
     "universe": "5242285645245745392",
 }
@@ -476,7 +476,7 @@ async def cmd_setsub(message: Message) -> None:
     )
     if not is_active_now:
         active_line += (
-            "\n⚠️ Ожидалось «активна» — проверь значение <code>subscription_ends_at</code> в БД или перезапусти бота."
+            '\n<tg-emoji emoji-id="5447644880824181073">⚠️</tg-emoji> Ожидалось «активна» — проверь значение <code>subscription_ends_at</code> в БД или перезапусти бота.'
         )
     await message.answer(
         f"Подписка пользователя <code>{uid}</code> продлена на <b>{days}</b> д.\n"

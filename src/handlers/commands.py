@@ -80,16 +80,28 @@ router = Router(name="commands")
 _PLAN_PREMIUM_EMOJI_IDS: dict[str, str] = {
     "starter": "5287702390370242449",
     "nova": "5242331214848756985",
-    "supernova": "5242714407535939345",
+    "supernova": "5242505745139797503",
     "galaxy": "5242227706136924612",
     "universe": "5242285645245745392",
 }
 
-_BACK_TO_MENU_ROW = [InlineKeyboardButton(text="🔙 Назад", callback_data=CB_MENU_BACK_START)]
+_BACK_TO_MENU_ROW = [
+    InlineKeyboardButton(
+        text="Назад",
+        callback_data=CB_MENU_BACK_START,
+        icon_custom_emoji_id="5256247952564825322",
+    )
+]
 
 
 def _back_row(back_callback: str) -> list[InlineKeyboardButton]:
-    return [InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback)]
+    return [
+        InlineKeyboardButton(
+            text="Назад",
+            callback_data=back_callback,
+            icon_custom_emoji_id="5256247952564825322",
+        )
+    ]
 
 
 def _plan_title_html(plan_id: str) -> str:

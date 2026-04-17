@@ -95,7 +95,7 @@ logger = logging.getLogger(__name__)
 _PLAN_PREMIUM_EMOJI_IDS: dict[str, str] = {
     "starter": "5287702390370242449",
     "nova": "5242331214848756985",
-    "supernova": "5242714407535939345",
+    "supernova": "5242505745139797503",
     "galaxy": "5242227706136924612",
     "universe": "5242285645245745392",
 }
@@ -234,7 +234,7 @@ def _plans_keyboard(
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"{title_wo_emoji} — +{p.bonus_credits} кр. · 🪙 {p.price_rub}",
+                    text=f"{title_wo_emoji} — +{p.bonus_credits} кр. · {p.price_rub} ₽",
                     callback_data=f"{CB_PAY_PLAN_PREFIX}{pid}",
                     style=BTN_PRIMARY,
                     icon_custom_emoji_id=icon_id,
@@ -251,7 +251,15 @@ def _plans_keyboard(
             )
         ]
     )
-    rows.append([InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback)])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="Назад",
+                callback_data=back_callback,
+                icon_custom_emoji_id="5256247952564825322",
+            )
+        ]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -279,33 +287,43 @@ def _methods_keyboard(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=f"🪙 {rub} · картой РФ",
+                    text=f"{rub} ₽ · картой РФ",
                     callback_data=f"{CB_PAY_RUB_PREFIX}{item_id}",
                     style=BTN_PRIMARY,
+                    icon_custom_emoji_id="5377746319601324795",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=f"💵 {usd:g} · карта другой страны",
+                    text=f"{usd:g} $ · карта другой страны",
                     callback_data=f"{CB_PAY_INTL_PREFIX}{item_id}",
                     style=BTN_PRIMARY,
+                    icon_custom_emoji_id="5197434882321567830",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=f"⭐️ {stars} · Звёздами",
+                    text=f"{stars} · Звёздами",
                     callback_data=f"{CB_PAY_STARS_PREFIX}{item_id}",
                     style=BTN_SUCCESS,
+                    icon_custom_emoji_id="5267500801240092311",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=f"🪙 {usd:g} · криптовалютой",
+                    text=f"{usd:g} $ · криптовалютой",
                     callback_data=f"{CB_PAY_CRYPTO_PREFIX}{item_id}",
                     style=BTN_PRIMARY,
+                    icon_custom_emoji_id="5379773896352355687",
                 )
             ],
-            [InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback_data)],
+            [
+                InlineKeyboardButton(
+                    text="Назад",
+                    callback_data=back_callback_data,
+                    icon_custom_emoji_id="5256247952564825322",
+                )
+            ],
         ]
     )
 
@@ -408,7 +426,15 @@ def _bonus_packs_keyboard(
     rows: list[list[InlineKeyboardButton]] = []
     order = list(BONUS_PACKS_ORDER)
     if not order:
-        rows.append([InlineKeyboardButton(text="🔙 Назад к тарифам", callback_data=pay_menu_callback)])
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="Назад к тарифам",
+                    callback_data=pay_menu_callback,
+                    icon_custom_emoji_id="5256247952564825322",
+                )
+            ]
+        )
         return InlineKeyboardMarkup(inline_keyboard=rows)
     if len(order) == 1:
         b = BONUS_PACKS[order[0]]
@@ -416,9 +442,10 @@ def _bonus_packs_keyboard(
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"🎁 {b.credits} кр. · 🪙 {rub}",
+                    text=f"{b.credits} кр. · {rub} ₽",
                     callback_data=f"{CB_PAY_PACK_PREFIX}{order[0]}",
                     style=BTN_PRIMARY,
+                    icon_custom_emoji_id="5377746319601324795",
                 )
             ]
         )
@@ -430,14 +457,16 @@ def _bonus_packs_keyboard(
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"🎁 {b0.credits} кр. · 🪙 {rub0}",
+                    text=f"{b0.credits} кр. · {rub0} ₽",
                     callback_data=f"{CB_PAY_PACK_PREFIX}{order[0]}",
                     style=BTN_SUCCESS,
+                    icon_custom_emoji_id="5377746319601324795",
                 ),
                 InlineKeyboardButton(
-                    text=f"🎁 {b1.credits} кр. · 🪙 {rub1}",
+                    text=f"{b1.credits} кр. · {rub1} ₽",
                     callback_data=f"{CB_PAY_PACK_PREFIX}{order[1]}",
                     style=BTN_SUCCESS,
+                    icon_custom_emoji_id="5377746319601324795",
                 ),
             ]
         )
@@ -447,13 +476,22 @@ def _bonus_packs_keyboard(
             rows.append(
                 [
                     InlineKeyboardButton(
-                        text=f"⭐️ {b.credits} кр. · 🪙 {rub}",
+                        text=f"{b.credits} кр. · {rub} ₽",
                         callback_data=f"{CB_PAY_PACK_PREFIX}{bid}",
                         style=BTN_PRIMARY,
+                        icon_custom_emoji_id="5377746319601324795",
                     )
                 ]
             )
-    rows.append([InlineKeyboardButton(text="🔙 Назад к тарифам", callback_data=pay_menu_callback)])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="Назад к тарифам",
+                callback_data=pay_menu_callback,
+                icon_custom_emoji_id="5256247952564825322",
+            )
+        ]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -572,7 +610,7 @@ async def pay_pick_plan(callback: CallbackQuery) -> None:
     if callback.message and callback.message.reply_markup:
         for row in callback.message.reply_markup.inline_keyboard:
             for btn in row:
-                if (getattr(btn, "text", "") or "").strip() in ("🔙 Назад", "⬅️ Назад") and getattr(btn, "callback_data", None):
+                if (getattr(btn, "text", "") or "").strip() in ("Назад", "🔙 Назад", "⬅️ Назад") and getattr(btn, "callback_data", None):
                     back_to_plans_callback = (
                         CB_PAY_MENU_HUB if str(btn.callback_data) == CB_MENU_HUB else CB_PAY_MENU
                     )
@@ -620,7 +658,7 @@ async def pay_pick_pack(callback: CallbackQuery) -> None:
     if callback.message and callback.message.reply_markup:
         for row in callback.message.reply_markup.inline_keyboard:
             for btn in row:
-                if (getattr(btn, "text", "") or "").strip() in ("🔙 Назад к тарифам", "⬅️ Назад к тарифам"):
+                if (getattr(btn, "text", "") or "").strip() in ("Назад к тарифам", "🔙 Назад к тарифам", "⬅️ Назад к тарифам"):
                     back_to_bonus_callback = (
                         CB_PAY_BONUS_MENU_HUB
                         if str(getattr(btn, "callback_data", "")) == CB_PAY_MENU_HUB
@@ -669,10 +707,11 @@ async def _external_pay_hint(
                 [InlineKeyboardButton(text=f"Перейти к оплате ({label})", url=url, style=BTN_PRIMARY)],
                 [
                     InlineKeyboardButton(
-                        text="🔙 Назад",
+                        text="Назад",
                         callback_data=f"{CB_PAY_PLAN_PREFIX}{item_id}"
                         if item_id in PLANS
                         else f"{CB_PAY_PACK_PREFIX}{item_id}",
+                        icon_custom_emoji_id="5256247952564825322",
                     )
                 ],
             ]
@@ -696,7 +735,15 @@ async def _external_pay_hint(
     )
     if callback.message:
         kb = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data=CB_PAY_MENU)]]
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="Назад",
+                        callback_data=CB_PAY_MENU,
+                        icon_custom_emoji_id="5256247952564825322",
+                    )
+                ]
+            ]
         )
         await edit_or_send_nav_message(
             callback.message,

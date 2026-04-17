@@ -72,7 +72,15 @@ def _faq_keyboard(back_callback: str = CB_MENU_BACK_START) -> InlineKeyboardMark
             row = []
     if row:
         rows.append(row)
-    rows.append([InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback)])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="Назад",
+                callback_data=back_callback,
+                icon_custom_emoji_id="5256247952564825322",
+            )
+        ]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -81,7 +89,7 @@ def _faq_back_callback_from_message(message: Message | None) -> str:
         return CB_MENU_BACK_START
     for row in message.reply_markup.inline_keyboard:
         for btn in row:
-            if (getattr(btn, "text", "") or "").strip() == "⬅️ Назад" and getattr(btn, "callback_data", None):
+            if (getattr(btn, "text", "") or "").strip() in ("Назад", "🔙 Назад", "⬅️ Назад") and getattr(btn, "callback_data", None):
                 return str(btn.callback_data)
     return CB_MENU_BACK_START
 

@@ -86,7 +86,7 @@ def start_menu_keyboard(balance: int | None = None) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="ФОТО С МЕЛЛСТРОЙНОСТЬЮ",
+                    text="🔥 ФОТО С МЕЛЛСТРОЙНОСТЬЮ 🔥",
                     callback_data=CB_MENU_MELLSTROY,
                     style=BTN_DANGER,
                     icon_custom_emoji_id="5389038097860144794",
@@ -176,12 +176,26 @@ def menu_hub_keyboard() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text="📊 История бюджета", callback_data=CB_MENU_BUDGET_HUB),
             ],
-            [InlineKeyboardButton(text="🔙 Назад", callback_data=CB_MENU_BACK_START)],
+            [
+                InlineKeyboardButton(
+                    text="Назад",
+                    callback_data=CB_MENU_BACK_START,
+                    icon_custom_emoji_id="5256247952564825322",
+                )
+            ],
         ]
     )
 
 
 def back_to_main_menu_keyboard(back_callback: str = CB_MENU_BACK_START) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback)]]
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Назад",
+                    callback_data=back_callback,
+                    icon_custom_emoji_id="5256247952564825322",
+                )
+            ]
+        ]
     )

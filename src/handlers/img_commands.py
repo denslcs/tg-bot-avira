@@ -332,7 +332,7 @@ def _ready_idea_recommendation_line(*, title: str, photos_required: int) -> str:
     if int(photos_required) <= 0:
         return ""
     return (
-        "<blockquote><i>⚠️ Рекомендуется фото, где в кадре только один человек — "
+        '<blockquote><i><tg-emoji emoji-id="5447644880824181073">⚠️</tg-emoji> Рекомендуется фото, где в кадре только один человек — '
         "так результат обычно получается точнее и качественнее.</i></blockquote>"
     )
 
@@ -998,7 +998,15 @@ def _waiting_prompt_keyboard() -> InlineKeyboardMarkup:
 
 def _missing_config_kb(back_callback: str = CB_MENU_BACK_START) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback)]]
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Назад",
+                    callback_data=back_callback,
+                    icon_custom_emoji_id="5256247952564825322",
+                )
+            ]
+        ]
     )
 
 
@@ -1126,7 +1134,15 @@ def _subscriber_model_pick_keyboard(
                 )
             ]
         )
-    rows.append([InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback)])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="Назад",
+                callback_data=back_callback,
+                icon_custom_emoji_id="5256247952564825322",
+            )
+        ]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -1271,7 +1287,15 @@ def _ready_categories_keyboard(back_callback: str = CB_MENU_BACK_START) -> Inlin
             pair = []
     if pair:
         rows.append(pair)
-    rows.append([InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback)])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="Назад",
+                callback_data=back_callback,
+                icon_custom_emoji_id="5256247952564825322",
+            )
+        ]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -1301,16 +1325,19 @@ def _ready_browser_keyboard(
                     text="⬅️",
                     callback_data=f"{CB_READY_NAV_PREFIX}prev:{prev_i}",
                     style=BTN_PRIMARY,
+                    icon_custom_emoji_id="5258236805890710909",
                 ),
                 InlineKeyboardButton(
-                    text="✔️ Выбрать",
+                    text="Выбрать",
                     callback_data=f"{CB_READY_NAV_PREFIX}pick:{index}",
                     style=BTN_SUCCESS,
+                    icon_custom_emoji_id="5206607081334906820",
                 ),
                 InlineKeyboardButton(
                     text="➡️",
                     callback_data=f"{CB_READY_NAV_PREFIX}next:{next_i}",
                     style=BTN_PRIMARY,
+                    icon_custom_emoji_id="5260450573768990626",
                 ),
             ],
             [
@@ -1319,7 +1346,13 @@ def _ready_browser_keyboard(
                     callback_data=f"{CB_READY_NAV_PREFIX}back_cats",
                 )
             ],
-            [InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback)],
+            [
+                InlineKeyboardButton(
+                    text="Назад",
+                    callback_data=back_callback,
+                    icon_custom_emoji_id="5256247952564825322",
+                )
+            ],
         ]
     )
 
@@ -1328,9 +1361,12 @@ def _ready_wait_photo_keyboard(
     back_text: str = "↩️ К идеям",
     back_callback: str = CB_READY_PHOTO_BACK,
 ) -> InlineKeyboardMarkup:
+    back_btn_kwargs = {}
+    if "назад" in (back_text or "").lower():
+        back_btn_kwargs["icon_custom_emoji_id"] = "5256247952564825322"
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=back_text, callback_data=back_callback)],
+            [InlineKeyboardButton(text=back_text, callback_data=back_callback, **back_btn_kwargs)],
             [
                 InlineKeyboardButton(
                     text="⛔️ Отмена",
@@ -1345,7 +1381,7 @@ def _ready_wait_photo_keyboard(
 
 def _ready_wait_photo_keyboard_for_state(data: dict) -> InlineKeyboardMarkup:
     if bool(data.get("_ready_include_hidden_start_only")):
-        return _ready_wait_photo_keyboard(back_text="🔙 Назад", back_callback=CB_MENU_BACK_START)
+        return _ready_wait_photo_keyboard(back_text="Назад", back_callback=CB_MENU_BACK_START)
     return _ready_wait_photo_keyboard()
 
 
@@ -1353,7 +1389,13 @@ def _ready_confirm_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="✔️ Подтвердить", callback_data=CB_READY_CONFIRM, style=BTN_SUCCESS)],
-            [InlineKeyboardButton(text="🔙 Назад к фото", callback_data=CB_READY_PHOTO_BACK)],
+            [
+                InlineKeyboardButton(
+                    text="Назад к фото",
+                    callback_data=CB_READY_PHOTO_BACK,
+                    icon_custom_emoji_id="5256247952564825322",
+                )
+            ],
             [
                 InlineKeyboardButton(
                     text="⛔️ Отмена",
@@ -1386,7 +1428,13 @@ def _ready_beard_size_keyboard() -> InlineKeyboardMarkup:
                     style=BTN_PRIMARY,
                 ),
             ],
-            [InlineKeyboardButton(text="🔙 Назад к фото", callback_data=CB_READY_PHOTO_BACK)],
+            [
+                InlineKeyboardButton(
+                    text="Назад к фото",
+                    callback_data=CB_READY_PHOTO_BACK,
+                    icon_custom_emoji_id="5256247952564825322",
+                )
+            ],
             [
                 InlineKeyboardButton(
                     text="⛔️ Отмена",
@@ -1471,7 +1519,7 @@ def _ready_photo_upload_hint(
             return (
                 f"<b>{esc(req)}</b>\n"
                 '<tg-emoji emoji-id="5235837920081887219">📸</tg-emoji> Скинь фото мужчины.\n'
-                "⚠️ Порядок важен: сначала мужчина, потом женщина."
+                '<tg-emoji emoji-id="5447644880824181073">⚠️</tg-emoji> Порядок важен: сначала мужчина, потом женщина.'
             )
         if received == 1:
             return '<b>Фото получено: 1/2</b>\n<tg-emoji emoji-id="5235837920081887219">📸</tg-emoji> Теперь скинь фото женщины.'
@@ -1687,7 +1735,10 @@ def _mellstroy_result_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🔙 Назад", callback_data=CB_IMG_OK, style=BTN_SUCCESS
+                    text="Назад",
+                    callback_data=CB_IMG_OK,
+                    style=BTN_SUCCESS,
+                    icon_custom_emoji_id="5256247952564825322",
                 ),
             ],
             [
@@ -2517,7 +2568,7 @@ async def open_mellstroy_prompt(callback: CallbackQuery, state: FSMContext) -> N
             "<blockquote><i>Попал на скрытую тусовку к Мелу.</i></blockquote>"
         ),
         reply_markup=_ready_wait_photo_keyboard(
-            back_text="🔙 Назад",
+            back_text="Назад",
             back_callback=CB_MENU_BACK_START,
         ),
         listing_photo=_ready_idea_listing_photo_path(title) or _ready_categories_listing_photo(),
@@ -3523,7 +3574,7 @@ async def ready_choose_category_hint(message: Message, state: FSMContext) -> Non
 
 @router.message(ImageGenState.ready_browsing_idea)
 async def ready_browse_hint(message: Message) -> None:
-    await message.answer("Листай идеи кнопками ⬅️/➡️ и нажми «✔️ Выбрать».")
+    await message.answer("Листай идеи кнопками ⬅️/➡️ и нажми «Выбрать».")
 
 
 @router.message(ImageGenState.ready_waiting_confirm)
