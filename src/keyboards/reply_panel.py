@@ -3,14 +3,14 @@ from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 
 def quick_panel_keyboard(balance: int | None = None) -> ReplyKeyboardMarkup:
     bal_btn = (
-        f"💰 Баланс: {balance}"
+        f"🐷 Баланс: {balance}"
         if isinstance(balance, int) and balance >= 0
-        else "💰 Баланс"
+        else "🐷 Баланс"
     )
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text=bal_btn), KeyboardButton(text="📋 Меню")],
-            [KeyboardButton(text="👥 Реф. система")],
+            [KeyboardButton(text=bal_btn), KeyboardButton(text="🖥 Меню")],
+            [KeyboardButton(text="🫂 Реф. система")],
         ],
         resize_keyboard=True,
         is_persistent=True,

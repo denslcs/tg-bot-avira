@@ -155,7 +155,7 @@ async def any_message(message: Message, state: FSMContext) -> None:
         "• Запустить генерацию по своей идее\n"
         "• Выбрать готовый стиль и сцену\n"
         "• Посмотреть баланс и подписку\n\n"
-        "<blockquote><i>Нажми «📋 Меню», чтобы открыть все разделы, или отправь фото и запрос — начнем сразу.</i></blockquote>"
+        '<blockquote><i>Нажми «<tg-emoji emoji-id="5282843764451195532">🖥</tg-emoji> Меню», чтобы открыть все разделы, или отправь фото и запрос — начнем сразу.</i></blockquote>'
     )
     try:
         await add_dialog_message(user_id, "user", text)

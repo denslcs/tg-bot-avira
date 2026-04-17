@@ -92,6 +92,23 @@ router = Router(name="payments")
 
 logger = logging.getLogger(__name__)
 
+_PLAN_PREMIUM_EMOJI_IDS: dict[str, str] = {
+    "nova": "5242331214848756985",
+    "supernova": "5242714407535939345",
+    "galaxy": "5242227706136924612",
+    "universe": "5242285645245745392",
+}
+
+
+def _plan_title_html(plan_id: str) -> str:
+    pid = (plan_id or "").strip().lower()
+    p = PLANS[pid]
+    title_wo_emoji = p.title.split(" ", 1)[-1]
+    emoji_id = _PLAN_PREMIUM_EMOJI_IDS.get(pid)
+    if not emoji_id:
+        return esc(p.title)
+    return f'<tg-emoji emoji-id="{emoji_id}">🤩</tg-emoji> {esc(title_wo_emoji)}'
+
 
 def _admin_sales_thread_for_plan(plan_id: str) -> int:
     return {
@@ -107,11 +124,11 @@ def _payment_type_label(sp: SuccessfulPayment) -> str:
     """Канал оплаты для админ-уведомления (по валюте из Telegram Payments)."""
     cur = (sp.currency or "").strip().upper()
     if cur == "XTR":
-        return "⭐ Звёзды (Telegram Stars, XTR)"
+        return '<tg-emoji emoji-id="5267500801240092311">⭐️</tg-emoji> Звёзды (Telegram Stars, XTR)'
     if cur == "RUB":
-        return "₽ Рубли (RUB)"
+        return '<tg-emoji emoji-id="5377746319601324795">🪙</tg-emoji> Рубли (RUB)'
     if cur == "USD":
-        return "$ Доллары (USD)"
+        return '<tg-emoji emoji-id="5197434882321567830">💵</tg-emoji> Доллары (USD)'
     return f"Другое ({esc(cur)})" if cur else "Не указано"
 
 
@@ -213,7 +230,7 @@ def _plans_keyboard(
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"{p.title} — +{p.bonus_credits} кр. · {p.price_rub} ₽",
+                    text=f"{p.title} — +{p.bonus_credits} кр. · 🪙 {p.price_rub}",
                     callback_data=f"{CB_PAY_PLAN_PREFIX}{pid}",
                     style=BTN_PRIMARY,
                 )
@@ -256,28 +273,28 @@ def _methods_keyboard(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=f"{rub} ₽ · картой РФ",
+                    text=f"🪙 {rub} · картой РФ",
                     callback_data=f"{CB_PAY_RUB_PREFIX}{item_id}",
                     style=BTN_PRIMARY,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=f"${usd:g} · карта другой страны",
+                    text=f"💵 {usd:g} · карта другой страны",
                     callback_data=f"{CB_PAY_INTL_PREFIX}{item_id}",
                     style=BTN_PRIMARY,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=f"⭐ {stars} · Звёздами",
+                    text=f"⭐️ {stars} · Звёздами",
                     callback_data=f"{CB_PAY_STARS_PREFIX}{item_id}",
                     style=BTN_SUCCESS,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=f"${usd:g} · криптовалютой",
+                    text=f"🪙 {usd:g} · криптовалютой",
                     callback_data=f"{CB_PAY_CRYPTO_PREFIX}{item_id}",
                     style=BTN_PRIMARY,
                 )
@@ -289,14 +306,14 @@ def _methods_keyboard(
 
 def _pay_methods_text(plan_id: str) -> str:
     p = PLANS[plan_id]
-    title = esc(p.title)
+    title = _plan_title_html(plan_id)
     days = p.period_days
     starter_block = ""
     cooldown_block = (
         f"<blockquote><i>Полный тариф после окончания подписки — не чаще одного раза в {esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)} дней</i> "
         f"с прошлой покупки. Пока подписка ещё идёт — можно продлить только этот же тариф "
         f"(дни добавятся; бонус только за повтор того же тарифа). "
-        f"Оплата ⭐ учитывается автоматически.</blockquote>\n"
+        f'Оплата <tg-emoji emoji-id="5267500801240092311">⭐️</tg-emoji> учитывается автоматически.</blockquote>\n'
     )
     if plan_id == "starter":
         starter_block = (
@@ -310,8 +327,8 @@ def _pay_methods_text(plan_id: str) -> str:
         )
     return (
         "<b>💳 Выбери способ оплаты</b>\n\n"
-        f"🎁 <b>Подписка:</b> {title}\n"
-        f"<i>Кредиты на баланс:</i> <b>+{esc(p.bonus_credits)}</b>\n"
+        f'<tg-emoji emoji-id="5203996991054432397">🎁</tg-emoji> <b>Подписка:</b> {title}\n'
+        f'<i><tg-emoji emoji-id="5305699699204837855">🍀</tg-emoji> Кредиты на баланс:</i> <b>+{esc(p.bonus_credits)}</b>\n'
         f"Срок: <b>{esc(days)}</b> дн.\n"
         f"{starter_block}"
         "<blockquote><i>Картинки по своему описанию</i> — без дневного лимита по числу запросов (с кредитами). "
@@ -335,11 +352,11 @@ def _pack_methods_text(
     if discounted and discount_price_rub is not None:
         discount_block = (
             f"<blockquote><i>Персональная скидка Universe: <b>-15%</b> "
-            f"(вместо {esc(p.price_rub)} ₽ → <b>{esc(discount_price_rub)} ₽</b>).</i></blockquote>\n"
+            f'(<tg-emoji emoji-id="5377746319601324795">🪙</tg-emoji> {esc(p.price_rub)} → <b><tg-emoji emoji-id="5377746319601324795">🪙</tg-emoji> {esc(discount_price_rub)}</b>).</i></blockquote>\n'
         )
     return (
         "<b>💳 Выбери способ оплаты</b>\n\n"
-        f"🎁 <b>Пакет бонусов:</b> <b>{esc(p.title)}</b>\n"
+        f'<tg-emoji emoji-id="5203996991054432397">🎁</tg-emoji> <b>Пакет бонусов:</b> <b>{esc(p.title)}</b>\n'
         f"<i>Начисление на баланс:</i> <b>+{esc(p.credits)}</b> кредитов\n"
         "<blockquote><i>Пакет не продлевает подписку — только кредиты на баланс.</i></blockquote>\n"
         f"{discount_block}\n"
@@ -350,7 +367,7 @@ def _pack_methods_text(
 
 def _bonus_packs_caption(*, universe_discount: bool = False) -> str:
     lines = [
-        "<b>🎁 Пакеты бонусов</b>\n"
+        '<b><tg-emoji emoji-id="5203996991054432397">🎁</tg-emoji> Пакеты бонусов</b>\n'
         "<blockquote><i>Докупка кредитов без продления подписки.</i></blockquote>",
     ]
     if universe_discount:
@@ -361,9 +378,14 @@ def _bonus_packs_caption(*, universe_discount: bool = False) -> str:
     for pid in BONUS_PACKS_ORDER:
         p = BONUS_PACKS[pid]
         rub, usd, _stars, discounted = _discount_pack_values(pid, apply_universe_discount=universe_discount)
-        price_line = f"💰 Цена: {esc(rub)} ₽, ${usd:g}"
+        price_line = (
+            f'<tg-emoji emoji-id="5377746319601324795">🪙</tg-emoji> {esc(rub)}, '
+            f'<tg-emoji emoji-id="5197434882321567830">💵</tg-emoji> {usd:g}'
+        )
         if discounted:
-            price_line += f" <i>(было {esc(p.price_rub)} ₽)</i>"
+            price_line += (
+                f' <i>(было <tg-emoji emoji-id="5377746319601324795">🪙</tg-emoji> {esc(p.price_rub)})</i>'
+            )
         lines.append(
             f"<b>{esc(p.credits)} кредитов</b>\n"
             f"{price_line}"
@@ -388,7 +410,7 @@ def _bonus_packs_keyboard(
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"🎁 {b.credits} кр. · {rub} ₽",
+                    text=f"🎁 {b.credits} кр. · 🪙 {rub}",
                     callback_data=f"{CB_PAY_PACK_PREFIX}{order[0]}",
                     style=BTN_PRIMARY,
                 )
@@ -402,12 +424,12 @@ def _bonus_packs_keyboard(
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"🎁 {b0.credits} кр. · {rub0} ₽",
+                    text=f"🎁 {b0.credits} кр. · 🪙 {rub0}",
                     callback_data=f"{CB_PAY_PACK_PREFIX}{order[0]}",
                     style=BTN_SUCCESS,
                 ),
                 InlineKeyboardButton(
-                    text=f"🎁 {b1.credits} кр. · {rub1} ₽",
+                    text=f"🎁 {b1.credits} кр. · 🪙 {rub1}",
                     callback_data=f"{CB_PAY_PACK_PREFIX}{order[1]}",
                     style=BTN_SUCCESS,
                 ),
@@ -419,7 +441,7 @@ def _bonus_packs_keyboard(
             rows.append(
                 [
                     InlineKeyboardButton(
-                        text=f"⭐ {b.credits} кр. · {rub} ₽",
+                        text=f"⭐️ {b.credits} кр. · 🪙 {rub}",
                         callback_data=f"{CB_PAY_PACK_PREFIX}{bid}",
                         style=BTN_PRIMARY,
                     )
@@ -662,9 +684,9 @@ async def _external_pay_hint(
         await callback.answer()
         return
     support_line = (
-        f"Напиши в @{SUPPORT_BOT_USERNAME} с текстом «{title}» ({price_rub} ₽)."
+        f"Напиши в @{SUPPORT_BOT_USERNAME} с текстом «{title}» (🪙 {price_rub})."
         if SUPPORT_BOT_USERNAME
-        else f"Напиши в поддержку (бот в настройках проекта) с текстом «{title}» ({price_rub} ₽)."
+        else f"Напиши в поддержку (бот в настройках проекта) с текстом «{title}» (🪙 {price_rub})."
     )
     if callback.message:
         kb = InlineKeyboardMarkup(
@@ -808,7 +830,7 @@ async def pay_stars_invoice(callback: CallbackQuery) -> None:
             title=title,
             description=(
                 f"Пакет бонусов: +{b.credits} кредитов на баланс (без продления подписки). "
-                + (f"Цена для Universe: {rub} ₽ / {stars} ⭐." if discounted else "")
+                + (f"Цена для Universe: 🪙 {rub} / ⭐️ {stars}." if discounted else "")
             ),
             payload=payload,
             currency="XTR",
@@ -1014,7 +1036,7 @@ async def successful_payment(message: Message) -> None:
             )
         await message.answer(
             "<b>Спасибо за покупку!</b>\n"
-            f"Вы приобрели подписку <b>{esc(p.title)}</b>.\n\n"
+            f"Вы приобрели подписку <b>{_plan_title_html(item_id)}</b>.\n\n"
             f"<blockquote>{quote_inner}</blockquote>\n\n"
             "<i>Можно снова открыть «Создать картинку» в</i> <code>/start</code>."
             f"{starter_tail}{verify_tail}",
@@ -1031,9 +1053,9 @@ async def successful_payment(message: Message) -> None:
         admin_txt = (
             "<b>Подписка оплачена</b>\n"
             f"<b>Тип оплаты:</b> {pay_kind}\n"
-            f"Тариф: {esc(p.title)} · <code>{esc(item_id)}</code>\n"
+            f"Тариф: {_plan_title_html(item_id)} · <code>{esc(item_id)}</code>\n"
             f"Пользователь: {_user_line_html(message.from_user)}\n"
-            f"Кредиты: <b>+{esc(total_bonus_credits)}</b>"
+            f'<tg-emoji emoji-id="5305699699204837855">🍀</tg-emoji> Кредиты: <b>+{esc(total_bonus_credits)}</b>'
             f"{(' (в т.ч. продление +' + str(renewal_extra) + ')' if renewal_extra else '')}"
             f" · начислено: <i>{esc(credit_ok)}</i>\n"
             f"До (UTC): <code>{esc(end_h)}</code>\n"
@@ -1070,7 +1092,7 @@ async def successful_payment(message: Message) -> None:
     )
     if credited:
         await message.answer(
-            "<b>Оплата прошла ✅</b>\n"
+            '<b>Оплата прошла <tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji></b>\n'
             f"Пакет: <b>{esc(b.title)}</b>\n"
             f"<blockquote><i>Начислено:</i> +{esc(b.credits)} кредитов на баланс.</blockquote>",
             parse_mode=HTML,

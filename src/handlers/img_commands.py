@@ -862,7 +862,7 @@ _POLZA_MISSING_TEXT = (
 
 # После успешной генерации не удаляем служебное сообщение — только обновляем текст.
 _GEN_STATUS_DONE_TEXT = (
-    "<i>✅ Генерация завершена.</i> Результат — в следующем сообщении."
+    '<i><tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Генерация завершена.</i> Результат — в следующем сообщении.'
 )
 
 # Имитация прогресса: OpenRouter/Polza не отдают реальный %, только «пока ждём».
@@ -1296,7 +1296,7 @@ def _ready_browser_keyboard(
                     style=BTN_PRIMARY,
                 ),
                 InlineKeyboardButton(
-                    text="✅ Выбрать",
+                    text="✔️ Выбрать",
                     callback_data=f"{CB_READY_NAV_PREFIX}pick:{index}",
                     style=BTN_SUCCESS,
                 ),
@@ -1338,7 +1338,7 @@ def _ready_wait_photo_keyboard_for_state(data: dict) -> InlineKeyboardMarkup:
 def _ready_confirm_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="✅ Подтвердить", callback_data=CB_READY_CONFIRM, style=BTN_SUCCESS)],
+            [InlineKeyboardButton(text="✔️ Подтвердить", callback_data=CB_READY_CONFIRM, style=BTN_SUCCESS)],
             [InlineKeyboardButton(text="↩️ Назад к фото", callback_data=CB_READY_PHOTO_BACK)],
             [InlineKeyboardButton(text="❌ Отмена", callback_data=CB_IMG_CANCEL, style=BTN_DANGER)],
         ]
@@ -1373,16 +1373,16 @@ def _ready_beard_size_keyboard() -> InlineKeyboardMarkup:
 
 def _ready_category_caption() -> str:
     return (
-        "<b>💡 Готовые идеи</b>\n"
+        '<b><tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> Готовые идеи</b>\n'
         "Выбери категорию и идею, затем нажми «Выбрать».\n"
         "Дальше бот подскажет, что отправить: фото, текст или оба шага.\n"
-        f"💳 Стоимость одной генерации: <b>{esc(OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS)} кр.</b>"
+        f'<tg-emoji emoji-id="5330320040883411678">🗺</tg-emoji> Стоимость одной генерации: <b>{esc(OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS)} кр.</b>'
     )
 
 
 def _ready_generation_cost_html() -> str:
     """Совпадает со списанием кредитов при ready-генерации."""
-    return f"💳 Стоимость генерации: <b>{esc(OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS)} кр.</b>"
+    return f'<tg-emoji emoji-id="5330320040883411678">🗺</tg-emoji> Стоимость генерации: <b>{esc(OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS)} кр.</b>'
 
 
 def _ready_idea_caption(*, category_title: str, title: str, preview: str, index: int, total: int, photos_required: int) -> str:
@@ -1391,7 +1391,7 @@ def _ready_idea_caption(*, category_title: str, title: str, preview: str, index:
     recommendation_part = f"\n{recommendation}" if recommendation else ""
     return (
         f"<b>{esc(category_title)}</b>\n"
-        f"📌 Вариант: <b>{esc(index + 1)}/{esc(total)}</b>\n"
+        f'<tg-emoji emoji-id="5397782960512444700">📌</tg-emoji> Вариант: <b>{esc(index + 1)}/{esc(total)}</b>\n'
         f"<b>{esc(title)}</b>\n"
         f"{esc(preview)}\n"
         f"{_ready_generation_cost_html()}\n"
@@ -1442,22 +1442,22 @@ def _ready_photo_upload_hint(
         if received <= 0:
             return (
                 f"<b>{esc(req)}</b>\n"
-                "📸 Скинь фото мужчины.\n"
+                '<tg-emoji emoji-id="5235837920081887219">📸</tg-emoji> Скинь фото мужчины.\n'
                 "⚠️ Порядок важен: сначала мужчина, потом женщина."
             )
         if received == 1:
-            return "<b>Фото получено: 1/2</b>\n📸 Теперь скинь фото женщины."
+            return '<b>Фото получено: 1/2</b>\n<tg-emoji emoji-id="5235837920081887219">📸</tg-emoji> Теперь скинь фото женщины.'
         return "<b>Фото получено: 2/2</b>"
     if received <= 0:
         if t == "Minecraft":
             return (
                 f"<b>{esc(req)}</b>\n"
-                "📸 Сначала отправь фото, затем бот попросит <b>ник</b> для надписи."
+                '<tg-emoji emoji-id="5235837920081887219">📸</tg-emoji> Сначала отправь фото, затем бот попросит <b>ник</b> для надписи.'
             )
         if _ready_idea_needs_headline_input(t):
             return (
                 f"<b>{esc(req)}</b>\n"
-                "📸 Сначала отправь фото, затем бот попросит <b>текст</b> для надписи."
+                '<tg-emoji emoji-id="5235837920081887219">📸</tg-emoji> Сначала отправь фото, затем бот попросит <b>текст</b> для надписи.'
             )
         return f"<b>{esc(req)}</b>"
     if received < need:
@@ -1600,7 +1600,7 @@ def _regen_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="✅ Ок", callback_data=CB_IMG_OK, style=BTN_SUCCESS
+                    text="✔️ Ок", callback_data=CB_IMG_OK, style=BTN_SUCCESS
                 ),
             ],
             [
@@ -1731,12 +1731,12 @@ async def _send_result_photo_with_regen(
         spent = ""
         if charge and deducted_credits:
             cw = _credits_word(cost)
-            spent = f"Списано: <b>{esc(cost)}</b> {cw}.\n"
+            spent = f'<tg-emoji emoji-id="5444856076954520455">🧾</tg-emoji> Списано: <b>{esc(cost)}</b> {cw}.\n'
         caption = (
             "<b>Готово!</b>\n"
             "<i>сгенерировано при помощи Shard Creator</i>\n"
             f"{spent}"
-            f"<blockquote><i>💰 Баланс:</i> <b>{esc(balance)}</b></blockquote>{day_note}"
+            f'<blockquote><i><tg-emoji emoji-id="5312123810638483121">🐷</tg-emoji> Баланс:</i> <b>{esc(balance)}</b></blockquote>{day_note}'
         )
     mellstroy = (ready_idea_title or "").strip() == _MELLSTROY_PHOTO_TITLE
     # Для готовых идей: сначала отдельное фото с бренд-подписью, затем отдельное сообщение с действиями.
@@ -1756,15 +1756,15 @@ async def _send_result_photo_with_regen(
             balance_after = await get_credits(user_id)
             cw = _credits_word(cost)
             await message.answer(
-                f"💳 Списано: <b>{esc(cost)}</b> {cw}.\n"
-                f"💰 Баланс: <b>{esc(balance_after)}</b>.",
+                f'<tg-emoji emoji-id="5444856076954520455">🧾</tg-emoji> Списано: <b>{esc(cost)}</b> {cw}.\n'
+                f'<tg-emoji emoji-id="5312123810638483121">🐷</tg-emoji> Баланс: <b>{esc(balance_after)}</b>.',
                 parse_mode=HTML,
             )
         elif charge:
             balance_after = await get_credits(user_id)
             await message.answer(
                 "ℹ️ Кредиты за эту генерацию не списались.\n"
-                f"💰 Баланс: <b>{esc(balance_after)}</b>.",
+                f'<tg-emoji emoji-id="5312123810638483121">🐷</tg-emoji> Баланс: <b>{esc(balance_after)}</b>.',
                 parse_mode=HTML,
             )
         if mellstroy:
@@ -1776,7 +1776,7 @@ async def _send_result_photo_with_regen(
         else:
             redo_lbl = await _redo_more_button_label(user_id, cost)
             await message.answer(
-                "Готово ✅ Выбери действие:",
+                'Готово <tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Выбери действие:',
                 reply_markup=_ready_idea_result_keyboard(redo_label=redo_lbl),
                 parse_mode=HTML,
             )
@@ -2636,7 +2636,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
             await _edit_ready_nav_message(
                 callback.message,
                 caption=(
-                    f"✅ <b>{esc(title)}</b>\n"
+                    f'<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> <b>{esc(title)}</b>\n'
                     f"{_ready_generation_cost_html()}\n"
                     f"<b>{esc(req0)}</b>\n"
                     f"✍️ Пришли <b>текст заголовка</b> для логотипа (до {_FANTASY_HEADLINE_MAX_LEN} символов)."
@@ -2656,10 +2656,10 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
         await _edit_ready_nav_message(
             callback.message,
             caption=(
-                f"✅ <b>{esc(title)}</b>\n"
+                f'<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> <b>{esc(title)}</b>\n'
                 f"{_ready_generation_cost_html()}\n"
                 f"{first_hint}\n"
-                "📸 Скинь фото, после загрузки появится кнопка подтверждения."
+                '<tg-emoji emoji-id="5235837920081887219">📸</tg-emoji> Скинь фото, после загрузки появится кнопка подтверждения.'
             ),
             reply_markup=_ready_wait_photo_keyboard(),
             listing_photo=_ready_idea_listing_photo_path(title) or _ready_categories_listing_photo(),
@@ -3483,13 +3483,13 @@ async def ready_choose_category_hint(message: Message, state: FSMContext) -> Non
 
 @router.message(ImageGenState.ready_browsing_idea)
 async def ready_browse_hint(message: Message) -> None:
-    await message.answer("Листай идеи кнопками ⬅️/➡️ и нажми «✅ Выбрать».")
+    await message.answer("Листай идеи кнопками ⬅️/➡️ и нажми «✔️ Выбрать».")
 
 
 @router.message(ImageGenState.ready_waiting_confirm)
 async def ready_waiting_confirm_hint(message: Message) -> None:
     await message.answer(
-        "Нажми «✅ Подтвердить» для запуска или «❌ Отмена».",
+        "Нажми «✔️ Подтвердить» для запуска или «❌ Отмена».",
         reply_markup=_ready_confirm_keyboard(),
     )
 

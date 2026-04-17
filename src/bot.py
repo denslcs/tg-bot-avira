@@ -16,13 +16,13 @@ _USER_COMMANDS = [
     BotCommand(command="start", description="🏠 Главное меню и баланс"),
     BotCommand(command="profile", description="👤 Профиль и подписка"),
     BotCommand(command="help", description="❓ Список команд"),
-    BotCommand(command="pay", description="💳 Подписка и оплата"),
-    BotCommand(command="ref", description="👥 Реферальная система"),
+    BotCommand(command="pay", description="🛒 Подписка и оплата"),
+    BotCommand(command="ref", description="🫂 Реферальная система"),
     BotCommand(command="ideas", description="💡 Готовые идеи"),
     BotCommand(command="faq", description="📋 Частые вопросы"),
     BotCommand(command="newchat", description="🔄 Очистить историю диалога"),
     BotCommand(command="support", description="💬 Обращение в поддержку"),
-    BotCommand(command="resolved", description="✅ Как закрыть тикет"),
+    BotCommand(command="resolved", description="✔️ Как закрыть тикет"),
     BotCommand(command="myid", description="🆔 Мой Telegram ID"),
 ]
 

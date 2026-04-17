@@ -130,7 +130,7 @@ async def cmd_support(message: Message) -> None:
     start_support_draft(message.from_user.id, ticket_id)
     schedule_support_draft_timers(message.bot, message.from_user.id, ticket_id)
     await message.answer(
-        "Тикет открыт ✅\n"
+        "Тикет открыт ✔️\n"
         "Опишите проблему (можно несколькими сообщениями),\n"
         "потом отправьте: готово"
     )

@@ -51,7 +51,7 @@ def check_spam_private_message(
             st.captcha_fails = 0
             st.streak = 0
             st.last_norm = ""
-            return True, "Проверка пройдена ✅ Можешь продолжить."
+            return True, "Проверка пройдена ✔️ Можешь продолжить."
         st.captcha_fails += 1
         if st.captcha_fails >= 3:
             st.captcha_expected = None

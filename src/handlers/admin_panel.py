@@ -34,6 +34,26 @@ from src.subscription_catalog import PLANS, PLANS_ORDER
 
 router = Router(name="admin_panel")
 
+_PLAN_PREMIUM_EMOJI_IDS: dict[str, str] = {
+    "nova": "5242331214848756985",
+    "supernova": "5242714407535939345",
+    "galaxy": "5242227706136924612",
+    "universe": "5242285645245745392",
+}
+
+
+def _plan_title_html(plan_id: str) -> str:
+    pid = (plan_id or "").strip().lower()
+    if pid in PLANS:
+        raw_title = PLANS[pid].title
+    else:
+        raw_title = pid or "—"
+    title_wo_emoji = raw_title.split(" ", 1)[-1]
+    emoji_id = _PLAN_PREMIUM_EMOJI_IDS.get(pid)
+    if not emoji_id:
+        return esc(raw_title)
+    return f'<tg-emoji emoji-id="{emoji_id}">🤩</tg-emoji> {esc(title_wo_emoji)}'
+
 
 def _plans_hint() -> str:
     return "|".join(PLANS_ORDER)
@@ -228,7 +248,7 @@ async def _main_bot_stats_html() -> str:
         "<b>Кредиты и диалоги</b>\n"
         f"• Сумма кредитов (все пользователи): <b>{esc(credits_sum)}</b>\n"
         f"• Сообщений в историях диалогов (всего): <b>{esc(dialog_n)}</b>\n\n"
-        "<b>Поддержка</b>\n"
+        '<b><tg-emoji emoji-id="5443038326535759644">💬</tg-emoji> Поддержка</b>\n'
         f"• Открытых тикетов: <b>{esc(tickets_n)}</b>\n\n"
         "<i>Подробные оценки и SLA — в support-боте:</i> <code>/report</code>, <code>/sla</code>"
     )
@@ -351,7 +371,7 @@ async def cmd_user_lookup(message: Message) -> None:
         await message.answer("Пользователь не найден в базе (ни разу не писал боту).")
         return
     active = subscription_is_active(profile.subscription_ends_at)
-    sub_human = "активна ✅" if active else "не активна"
+    sub_human = "активна ✔️" if active else "не активна"
     sub_till = (
         format_subscription_ends_at(profile.subscription_ends_at)
         if profile.subscription_ends_at
@@ -359,7 +379,7 @@ async def cmd_user_lookup(message: Message) -> None:
     )
     pr = profile.subscription_plan
     if pr and pr in PLANS:
-        plan_line = f"{PLANS[pr].title} (<code>{esc(pr)}</code>)"
+        plan_line = f"{_plan_title_html(pr)} (<code>{esc(pr)}</code>)"
     elif pr:
         plan_line = esc(pr)
     else:
@@ -381,7 +401,7 @@ async def cmd_user_lookup(message: Message) -> None:
         "<blockquote>"
         f"<i>Telegram ID:</i> <code>{esc(uid)}</code>\n"
         f"<i>Username в БД:</i> <b>{un_html}</b>\n"
-        f"<i>Кредиты:</i> <b>{esc(profile.credits)}</b>\n"
+        f'<i><tg-emoji emoji-id="5305699699204837855">🍀</tg-emoji> Кредиты:</i> <b>{esc(profile.credits)}</b>\n'
         f"<i>В боте с:</i> <code>{esc(profile.created_at)}</code>\n"
         f"<i>Сообщений в диалоге:</i> <b>{esc(msgs)}</b>\n"
         "</blockquote>\n"
@@ -439,10 +459,10 @@ async def cmd_setsub(message: Message) -> None:
     stored = (profile_after.subscription_plan or "").strip().lower() if profile_after else ""
     plan_lines: list[str] = []
     if plan:
-        plan_lines.append(f"Тариф записан: {PLANS[plan].title} (<code>{esc(plan)}</code>)")
+        plan_lines.append(f"Тариф записан: {_plan_title_html(plan)} (<code>{esc(plan)}</code>)")
     elif stored and stored in PLANS:
         plan_lines.append(
-            f"Тариф в профиле без изменений: {PLANS[stored].title} (<code>{esc(stored)}</code>)"
+            f"Тариф в профиле без изменений: {_plan_title_html(stored)} (<code>{esc(stored)}</code>)"
         )
     plan_block = ("\n" + "\n".join(plan_lines)) if plan_lines else ""
     is_active_now = bool(
@@ -464,9 +484,9 @@ async def cmd_setsub(message: Message) -> None:
     )
     try:
         if stored and stored in PLANS:
-            title_line = f"Подписка: <b>{esc(PLANS[stored].title)}</b>\n"
+            title_line = f"Подписка: <b>{_plan_title_html(stored)}</b>\n"
         elif plan and plan in PLANS:
-            title_line = f"Подписка: <b>{esc(PLANS[plan].title)}</b>\n"
+            title_line = f"Подписка: <b>{_plan_title_html(plan)}</b>\n"
         else:
             title_line = "Подписка активирована.\n"
         await message.bot.send_message(
@@ -535,16 +555,16 @@ async def cmd_setplan(message: Message) -> None:
     if not await set_subscription_plan_only(uid, plan):
         await message.answer("Не удалось обновить тариф.")
         return
-    title = PLANS[plan].title
+    title = _plan_title_html(plan)
     await message.answer(
-        f"Тариф пользователя <code>{uid}</code> установлен: <b>{esc(title)}</b> (<code>{esc(plan)}</code>). "
+        f"Тариф пользователя <code>{uid}</code> установлен: <b>{title}</b> (<code>{esc(plan)}</code>). "
         "<blockquote><i>Срок окончания подписки не менялся — только поле тарифа в БД.</i></blockquote>",
         parse_mode=HTML,
     )
     try:
         await message.bot.send_message(
             uid,
-            f"<b>Тариф в профиле обновлён администратором:</b> {esc(title)}.\n"
+            f"<b>Тариф в профиле обновлён администратором:</b> {title}.\n"
             "<i>Дата окончания подписки не продлевалась.</i>",
             parse_mode=HTML,
         )

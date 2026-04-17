@@ -277,7 +277,7 @@ async def admin_send_chunk(callback: CallbackQuery) -> None:
     admin_outbox_append(ticket_id, chunk_text)
     if callback.message:
         try:
-            await callback.message.edit_text("Часть сохранена в очередь ✅", reply_markup=None)
+            await callback.message.edit_text("Часть сохранена в очередь ✔️", reply_markup=None)
         except Exception:
             logger.debug("admin_send_chunk: edit_text after enqueue", exc_info=True)
     await _upsert_finish_panel(callback.bot, ticket_id, ticket.thread_id)
@@ -338,7 +338,7 @@ async def admin_finish_reply(callback: CallbackQuery) -> None:
     if callback.message:
         try:
             await callback.message.edit_text(
-                "Ответ отправлен пользователю ✅",
+                "Ответ отправлен пользователю ✔️",
                 reply_markup=None,
             )
         except Exception:
@@ -626,7 +626,7 @@ async def feedback_skip_callback(callback: CallbackQuery) -> None:
     )
     if callback.message:
         await callback.message.edit_text(
-            f"Спасибо за оценку {score}/5! Тикет закрыт ✅\n"
+            f"Спасибо за оценку {score}/5! Тикет закрыт ✔️\n"
             "Текстового отзыва нет — мы всё равно учли оценку (анонимно для команды).",
             reply_markup=None,
         )
@@ -693,7 +693,7 @@ async def feedback_send_callback(callback: CallbackQuery) -> None:
     )
     if callback.message:
         await callback.message.edit_text(
-            f"Спасибо! Отзыв и оценка {score}/5 сохранены. Тикет закрыт ✅",
+            f"Спасибо! Отзыв и оценка {score}/5 сохранены. Тикет закрыт ✔️",
             reply_markup=None,
         )
     await callback.answer("Спасибо!")
@@ -758,7 +758,7 @@ async def feedback_cancel_callback(callback: CallbackQuery) -> None:
     )
     if callback.message:
         await callback.message.edit_text(
-            f"Оценка {score}/5 сохранена без текстового отзыва. Тикет закрыт ✅",
+            f"Оценка {score}/5 сохранена без текстового отзыва. Тикет закрыт ✔️",
             reply_markup=None,
         )
     await callback.answer("Готово.")

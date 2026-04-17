@@ -77,11 +77,31 @@ from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 
 router = Router(name="commands")
 
+_PLAN_PREMIUM_EMOJI_IDS: dict[str, str] = {
+    "nova": "5242331214848756985",
+    "supernova": "5242714407535939345",
+    "galaxy": "5242227706136924612",
+    "universe": "5242285645245745392",
+}
+
 _BACK_TO_MENU_ROW = [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)]
 
 
 def _back_row(back_callback: str) -> list[InlineKeyboardButton]:
     return [InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)]
+
+
+def _plan_title_html(plan_id: str) -> str:
+    pid = (plan_id or "").strip().lower()
+    if pid in PLANS:
+        raw_title = PLANS[pid].title
+    else:
+        raw_title = pid or "—"
+    title_wo_emoji = raw_title.split(" ", 1)[-1]
+    emoji_id = _PLAN_PREMIUM_EMOJI_IDS.get(pid)
+    if not emoji_id:
+        return esc(raw_title)
+    return f'<tg-emoji emoji-id="{emoji_id}">🤩</tg-emoji> {esc(title_wo_emoji)}'
 
 # Невидимый символ — только чтобы обновить reply-клавиатуру с актуальным балансом.
 _QUICK_PANEL_STUB = "\u200b"
@@ -113,13 +133,13 @@ def _budget_source_label(source: str) -> str:
 def _main_screen_text(balance: int, bonus_note: str = "") -> str:
     bonus_html = esc(bonus_note) if bonus_note else ""
     return (
-        "<b>✨ Добро пожаловать в Shard Creator</b>\n"
+        '<b><tg-emoji emoji-id="5463297803235113601">✨</tg-emoji> Добро пожаловать в Shard Creator</b>\n'
         "<i>Создание и изменение фото в пару кликов.</i>\n\n"
         '<b><tg-emoji emoji-id="5258203794772085854">⚡️</tg-emoji> Быстрый старт:</b>\n'
-        "✅ Открой <b>«📋 Меню»</b> — там все разделы: идеи, подписки, FAQ и рефералка.\n"
-        "✅ Нажми <b>«💰 Баланс»</b> — увидишь кредиты, статистику и лимиты.\n"
-        "✅ Загляни в <b>«ℹ️ Что умеет бот»</b> — там коротко и понятно, как использовать все возможности.\n\n"
-        "<blockquote><b>💡 Подсказка:</b> <i>чем точнее задача в одном сообщении, тем лучше и быстрее итоговая генерация.</i></blockquote>\n\n"
+        '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Открой <b>«<tg-emoji emoji-id="5282843764451195532">🖥</tg-emoji> Меню»</b> — там все разделы: идеи, подписки, FAQ и рефералка.\n'
+        '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Нажми <b>«<tg-emoji emoji-id="5312123810638483121">🐷</tg-emoji> Баланс»</b> — увидишь кредиты, статистику и лимиты.\n'
+        '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Загляни в <b>«<tg-emoji emoji-id="5330522514231684724">🌟</tg-emoji> Что умеет бот»</b> — там коротко и понятно, как использовать все возможности.\n\n'
+        '<blockquote><b><tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> Подсказка:</b> <i>чем точнее задача в одном сообщении, тем лучше и быстрее итоговая генерация.</i></blockquote>\n\n'
         "<blockquote><i>Продолжая работу с ботом, ты подтверждаешь согласие на обработку персональных данных.</i>"
         f"{bonus_html}</blockquote>"
     )
@@ -157,9 +177,9 @@ def _is_generated_image_result_message(message: Message) -> bool:
     cap = message.caption or ""
     if "Картинка сохранена" in cap:
         return True
-    if "Готово" in cap and "✅" in cap:
+    if "Готово" in cap and "✔️" in cap:
         return True
-    if "Списано:" in cap and "💰 Баланс" in cap:
+    if "Списано:" in cap and "Баланс" in cap:
         return True
     kb = message.reply_markup
     if kb and kb.inline_keyboard:
@@ -448,17 +468,17 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         await message.answer(ann_text[:4096])
 
 
-@router.message(F.text.startswith("💰 Баланс"))
+@router.message(F.text.startswith("🐷 Баланс") | F.text.startswith("💰 Баланс"))
 async def quick_panel_profile(message: Message) -> None:
     if not message.from_user:
         return
     await send_profile_card(message, message.from_user.id, message.from_user.username)
 
 
-@router.message(F.text == "📋 Меню")
+@router.message((F.text == "🖥 Меню") | (F.text == "📋 Меню"))
 async def quick_panel_menu(message: Message) -> None:
     await message.answer(
-        "<b>📋 Главное меню</b>\n<blockquote><i>Выбери нужный раздел.</i></blockquote>",
+        '<b><tg-emoji emoji-id="5282843764451195532">🖥</tg-emoji> Главное меню</b>\n<blockquote><i>Выбери нужный раздел.</i></blockquote>',
         reply_markup=menu_hub_keyboard(),
         parse_mode=HTML,
     )
@@ -469,7 +489,7 @@ async def quick_panel_support(message: Message) -> None:
     await cmd_support(message)
 
 
-@router.message(F.text == "👥 Реф. система")
+@router.message((F.text == "🫂 Реф. система") | (F.text == "👥 Реф. система"))
 async def quick_panel_ref(message: Message) -> None:
     if not message.from_user:
         return
@@ -552,11 +572,11 @@ async def cmd_help(message: Message) -> None:
         "💳 <code>/pay</code> — <i>подписка и оплата</i>\n"
         "👤 <code>/profile</code> — <i>статус аккаунта и подписки</i>\n"
         "👥 <code>/ref</code> — <i>реферальная система</i>\n"
-        "💡 <code>/ideas</code> — <i>готовые идеи для картинок</i>\n"
+        '<tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> <code>/ideas</code> — <i>готовые идеи для картинок</i>\n'
         "📋 <code>/faq</code> — <i>частые вопросы</i>\n"
         "🔄 <code>/newchat</code> или <code>/clear</code> — <i>очистить память диалога</i>\n"
         "💬 <code>/support</code> — <i>обращение в поддержку</i>\n"
-        "✅ <code>/resolved</code> — <i>закрыть тикет (в боте поддержки)</i>\n"
+        '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> <code>/resolved</code> — <i>закрыть тикет (в боте поддержки)</i>\n'
         "🆔 <code>/myid</code> — <i>твой Telegram ID</i>\n\n"
         "<blockquote>🎨 Картинки — через кнопки в <code>/start</code>.</blockquote>",
         reply_markup=back_to_main_menu_keyboard(),
@@ -601,7 +621,7 @@ async def menu_faq(callback: CallbackQuery) -> None:
 
     await edit_or_send_nav_message(
         callback.message,
-        text="<b>Частые вопросы</b>\n<blockquote><i>Выбери тему — пришлю короткий ответ.</i></blockquote>",
+        text='<b><tg-emoji emoji-id="5314504236132747481">⁉️</tg-emoji> Частые вопросы</b>\n<blockquote><i>Выбери тему — пришлю короткий ответ.</i></blockquote>',
         reply_markup=_faq_keyboard(back_callback=back_callback),
         parse_mode=HTML,
     )
@@ -667,7 +687,7 @@ async def menu_support(callback: CallbackQuery) -> None:
     )
     await edit_or_send_nav_message(
         callback.message,
-        text="<b>Поддержка</b>\n<i>Нажми кнопку ниже,</i> чтобы открыть чат.",
+        text='<b><tg-emoji emoji-id="5443038326535759644">💬</tg-emoji> Поддержка</b>\n<i>Нажми кнопку ниже,</i> чтобы открыть чат.',
         reply_markup=keyboard,
         parse_mode=HTML,
     )
@@ -719,11 +739,11 @@ async def _build_referral_message(
     text = (
         "<b>👥 Реферальная программа</b>\n\n"
         "<blockquote>"
-        f"<i>👤 Профиль</i> {uname_html}\n"
-        f"<i>💳 ID</i> <code>{esc(user_id)}</code>\n"
-        f"<i>💵 Кредиты</i> <b>{esc(balance)}</b>\n"
-        f"<i>🎯 Бонусных запусков «Готовых идей»</i> <b>{esc(ready_bonus_uses)}</b>\n"
-        f"<i>✉️ Приглашения</i> <b>{esc(invited)}</b>"
+        f'<i><tg-emoji emoji-id="5325971446625758812">👤</tg-emoji> Профиль</i> {uname_html}\n'
+        f'<i><tg-emoji emoji-id="5841276284155467413">🔤</tg-emoji> ID</i> <code>{esc(user_id)}</code>\n'
+        f'<i><tg-emoji emoji-id="5305699699204837855">🍀</tg-emoji> Кредиты:</i> <b>{esc(balance)}</b>\n'
+        f'<i><tg-emoji emoji-id="5452155223550223362">💎</tg-emoji> Бонусных запусков «Готовых идей»:</i> <b>{esc(ready_bonus_uses)}</b>\n'
+        f'<i><tg-emoji emoji-id="5472239203590888751">📩</tg-emoji> Приглашения:</i> <b>{esc(invited)}</b>'
         "</blockquote>\n\n"
         "<blockquote><i>"
         "За каждого приглашённого друга — <b>+15</b> кредитов тебе; за каждых <b>двух</b> друзей — "
@@ -865,19 +885,19 @@ async def _profile_card_html(
         sub_status = "активна"
         sub_till = format_subscription_ends_at(profile.subscription_ends_at)
         if is_admin:
-            plan_name = PLANS["universe"].title
+            plan_name = _plan_title_html("universe")
         elif profile.subscription_plan and profile.subscription_plan in PLANS:
-            plan_name = PLANS[profile.subscription_plan].title
+            plan_name = _plan_title_html(profile.subscription_plan)
         else:
             # В БД мог не быть записан тариф (старые выдачи / только срок); доступ как у Universe.
-            plan_name = PLANS["universe"].title
+            plan_name = _plan_title_html("universe")
         pid = "universe" if is_admin else (profile.subscription_plan or "").strip().lower()
         if pid in ("starter", "galaxy", "universe"):
             priority_note = "\n<i>⚡ Приоритет очереди генераций и скидка на повтор «готовой идеи» (см. подсказки после картинки).</i>"
     elif is_admin:
         sub_status = "админ-безлимит"
         sub_till = "—"
-        plan_name = PLANS["universe"].title
+        plan_name = _plan_title_html("universe")
         priority_note = "\n<i>⚡ Приоритет очереди генераций и скидка на повтор «готовой идеи» доступны как у Universe.</i>"
     else:
         sub_status = "не активна"
@@ -894,15 +914,15 @@ async def _profile_card_html(
     ready_cycle = "без лимита" if active_sub else f"{ru}/{rlim}"
     img_cycle = "без лимита" if active_sub else f"{fu}/{flim}"
     body = (
-        "<b>👤 Профиль</b>\n"
+        '<b><tg-emoji emoji-id="5325971446625758812">👤</tg-emoji> Профиль</b>\n'
         "<blockquote>"
         f"<i>Ник:</i> <b>{esc(username)}</b>\n"
-        f"<i>💰 Кредиты:</i> <b>{esc(balance)}</b>\n"
-        f"<i>🖼 Примерно доступно генераций:</i> <b>{esc(approx_images)}</b>\n"
+        f'<i><tg-emoji emoji-id="5305699699204837855">🍀</tg-emoji> Кредиты:</i> <b>{esc(balance)}</b>\n'
+        f'<i><tg-emoji emoji-id="5257974976094412956">🖼</tg-emoji> Примерно доступно генераций:</i> <b>{esc(approx_images)}</b>\n'
         f"<i>🎯 Готовые идеи:</i> <b>{esc(ready_cycle)}</b>\n"
-        f"<i>🧾 Картинки:</i> <b>{esc(img_cycle)}</b>\n"
-        f"<i>🎁 Бонусные запуски (реф):</i> <b>{esc(ready_bonus_uses)}</b>\n"
-        f"<i>Подписка:</i> <b>{esc(sub_status)}</b> · <i>{esc(plan_name)}</i>{priority_note}\n"
+        f'<i><tg-emoji emoji-id="5258254475386167466">🖼</tg-emoji> Картинки:</i> <b>{esc(img_cycle)}</b>\n'
+        f'<i><tg-emoji emoji-id="5203996991054432397">🎁</tg-emoji> Бонусные запуски (реф):</i> <b>{esc(ready_bonus_uses)}</b>\n'
+        f"<i>Подписка:</i> <b>{esc(sub_status)}</b> · <i>{plan_name}</i>{priority_note}\n"
         f"<i>Действует до:</i> <b>{esc(sub_till)}</b>\n"
         f"<i>Сгенерировано изображений:</i> <b>{esc(gen_total)}</b>\n"
         "</blockquote>"
@@ -939,7 +959,7 @@ async def cmd_newchat(message: Message) -> None:
     reset_user_spam(message.from_user.id)
     reset_private_rate(message.from_user.id)
     await message.answer(
-        "<b>Готово ✅</b>\n"
+        '<b>Готово <tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji></b>\n'
         "<blockquote><i>История этого диалога очищена.</i> Можно начать новую тему.</blockquote>",
         reply_markup=back_to_main_menu_keyboard(),
         parse_mode=HTML,
@@ -990,7 +1010,7 @@ async def cmd_support(message: Message) -> None:
         ]
     )
     await message.answer(
-        "<b>Поддержка</b>\n"
+        '<b><tg-emoji emoji-id="5443038326535759644">💬</tg-emoji> Поддержка</b>\n'
         "<blockquote><i>Отдельный чат для тикетов.</i> Нажми кнопку ниже.</blockquote>",
         reply_markup=keyboard,
         parse_mode=HTML,
@@ -1110,7 +1130,7 @@ async def cmd_addcredits(message: Message) -> None:
 
     new_balance = await get_credits(target_user_id)
     await message.answer(
-        f"Готово ✅ Пользователю {target_user_id} начислено {amount} кредитов.\n"
+        f'Готово <tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Пользователю {target_user_id} начислено {amount} кредитов.\n'
         f"Новый баланс: {new_balance}."
     )
 
@@ -1158,7 +1178,7 @@ async def cmd_takecredits(message: Message) -> None:
 
     new_balance = await get_credits(target_user_id)
     await message.answer(
-        f"Готово ✅ У пользователя {target_user_id} списано {amount} кредитов.\n"
+        f'Готово <tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> У пользователя {target_user_id} списано {amount} кредитов.\n'
         f"Новый баланс: {new_balance}."
     )
 
