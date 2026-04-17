@@ -22,6 +22,7 @@ CB_MENU_REF_HUB = "menu:ref_hub"
 CB_MENU_SUPPORT_HUB = "menu:support_hub"
 CB_MENU_FAQ_HUB = "menu:faq_hub"
 CB_MENU_CHANNEL_HUB = "menu:channel_hub"
+CB_MENU_BUDGET_HUB = "menu:budget_hub"
 
 # --- Генерация изображений (handlers/img_commands.py) ---
 CB_CREATE_IMAGE = "menu:create_image"
@@ -94,6 +95,7 @@ __all__ = [
     "CB_MENU_PAY_HUB",
     "CB_MENU_FAQ_HUB",
     "CB_MENU_CHANNEL_HUB",
+    "CB_MENU_BUDGET_HUB",
     "CB_PAY_BONUS_MENU",
     "CB_PAY_BONUS_MENU_HUB",
     "CB_PAY_CRYPTO_PREFIX",

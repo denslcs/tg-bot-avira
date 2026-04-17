@@ -10,8 +10,7 @@ def quick_panel_keyboard(balance: int | None = None) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=bal_btn), KeyboardButton(text="📋 Меню")],
-            [KeyboardButton(text="💬 Поддержка"), KeyboardButton(text="👥 Реф. система")],
-            [KeyboardButton(text="📊 История бюджета")],
+            [KeyboardButton(text="👥 Реф. система")],
         ],
         resize_keyboard=True,
         is_persistent=True,

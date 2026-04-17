@@ -1367,15 +1367,15 @@ def _ready_beard_size_keyboard() -> InlineKeyboardMarkup:
 def _ready_category_caption() -> str:
     return (
         "<b>💡 Готовые идеи</b>\n"
-        "<blockquote><i>Выбери направление и вариант. Под описанием каждой идеи указано, что нужно: "
-        "одно или два фото, только текст, или фото и текст. Дальше — «Выбрать», загрузка и подтверждение. "
-        f"Стоимость одной генерации — {esc(OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS)} кр.</i></blockquote>"
+        "Выбери категорию и идею, затем нажми «Выбрать».\n"
+        "Дальше бот подскажет, что отправить: фото, текст или оба шага.\n"
+        f"💳 Стоимость одной генерации: <b>{esc(OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS)} кр.</b>"
     )
 
 
 def _ready_generation_cost_html() -> str:
     """Совпадает со списанием кредитов при ready-генерации."""
-    return f"<blockquote><i>Стоимость генерации: {esc(OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS)} кр.</i></blockquote>"
+    return f"💳 Стоимость генерации: <b>{esc(OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS)} кр.</b>"
 
 
 def _ready_idea_caption(*, category_title: str, title: str, preview: str, index: int, total: int, photos_required: int) -> str:
@@ -1384,9 +1384,9 @@ def _ready_idea_caption(*, category_title: str, title: str, preview: str, index:
     recommendation_part = f"\n{recommendation}" if recommendation else ""
     return (
         f"<b>{esc(category_title)}</b>\n"
-        f"<blockquote><i>{esc(index + 1)}/{esc(total)}</i></blockquote>\n"
+        f"📌 Вариант: <b>{esc(index + 1)}/{esc(total)}</b>\n"
         f"<b>{esc(title)}</b>\n"
-        f"<blockquote><i>{esc(preview)}</i></blockquote>\n"
+        f"{esc(preview)}\n"
         f"{_ready_generation_cost_html()}\n"
         f"<b>{esc(req)}</b>"
         f"{recommendation_part}"
@@ -1407,14 +1407,14 @@ def _ready_photo_upload_hint(
                 f"<b>{esc(req)}</b>\n"
                 "<b>Шаг 1 из 2 — объект</b>\n"
                 "Пришли фото <b>того, что нужно перенести</b> (машина, вещь, предмет — что угодно, главное чтобы объект был понятен).\n"
-                "<blockquote><i>Это не фон — только объект или объект на простом фоне.</i></blockquote>"
+                "ℹ️ Это не фон: нужен именно объект (лучше на простом фоне)."
             )
         if received == 1:
             return (
                 "<b>Фото получено: 1/2</b>\n"
                 "<b>Шаг 2 из 2 — место</b>\n"
                 "Пришли фото <b>куда вставить</b> — целая сцена, интерьер, улица (куда объект должен попасть).\n"
-                "<blockquote><i>ИИ вставит предмет с первого фото в эту сцену.</i></blockquote>"
+                "✨ ИИ вставит объект с первого фото в эту сцену."
             )
         return "<b>Фото получено: 2/2</b>"
     is_for_two = cat == "for_two" and need == 2
@@ -1423,38 +1423,34 @@ def _ready_photo_upload_hint(
             return (
                 f"<b>{esc(req)}</b>\n"
                 "Пришли <b>первое</b> из двух фото.\n"
-                "<blockquote><i>Порядок не важен: нужны два снимка любых «участников» — два человека или, например, питомцы; "
-                "главное, чтобы по фото было понятно, кого совместить в кадре Polaroid.</i></blockquote>"
+                "👥 Порядок не важен: можно 2 человека или, например, питомцев."
             )
         if received == 1:
             return (
                 "<b>Фото получено: 1/2</b>\n"
-                "<blockquote><i>Пришли <b>второе</b> фото — второй участник. На результат не влияет, что загружать первым и что вторым.</i></blockquote>"
+                "Пришли <b>второе</b> фото — второй участник."
             )
         return "<b>Фото получено: 2/2</b>"
     if is_for_two:
         if received <= 0:
             return (
                 f"<b>{esc(req)}</b>\n"
-                "Скинь фото мужчины.\n"
-                "<blockquote><i>Порядок важен: сначала мужчина, потом женщина.</i></blockquote>"
+                "📸 Скинь фото мужчины.\n"
+                "⚠️ Порядок важен: сначала мужчина, потом женщина."
             )
         if received == 1:
-            return (
-                "<b>Фото получено: 1/2</b>\n"
-                "<blockquote><i>Теперь скинь фото женщины.</i></blockquote>"
-            )
+            return "<b>Фото получено: 1/2</b>\n📸 Теперь скинь фото женщины."
         return "<b>Фото получено: 2/2</b>"
     if received <= 0:
         if t == "Minecraft":
             return (
                 f"<b>{esc(req)}</b>\n"
-                "<blockquote><i>Сначала отправь фото; затем бот попросит <b>ник</b> для надписи над головой.</i></blockquote>"
+                "📸 Сначала отправь фото, затем бот попросит <b>ник</b> для надписи."
             )
         if _ready_idea_needs_headline_input(t):
             return (
                 f"<b>{esc(req)}</b>\n"
-                "<blockquote><i>Сначала отправь фото; затем бот попросит <b>текст</b> для надписи в кадре.</i></blockquote>"
+                "📸 Сначала отправь фото, затем бот попросит <b>текст</b> для надписи."
             )
         return f"<b>{esc(req)}</b>"
     if received < need:
@@ -1614,11 +1610,6 @@ def _ready_idea_result_keyboard(*, redo_label: str) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="✅ Ок", callback_data=CB_IMG_OK, style=BTN_SUCCESS
-                ),
-            ],
-            [
-                InlineKeyboardButton(
                     text=redo_label[:64],
                     callback_data=CB_REGEN_READY_REDO,
                     style=BTN_PRIMARY,
@@ -1633,6 +1624,17 @@ def _ready_idea_result_keyboard(*, redo_label: str) -> InlineKeyboardMarkup:
             ],
         ],
     )
+
+
+async def _made_in_shard_caption(message: Message) -> str:
+    """Короткая подпись под готовой картинкой с кликабельной ссылкой на бота."""
+    try:
+        me = await message.bot.get_me()
+        if me and me.username:
+            return f'<a href="https://t.me/{me.username}">🔥 Made in Shard Creator</a>'
+    except Exception:
+        logging.debug("made_in_shard_caption: bot.me() failed", exc_info=True)
+    return "🔥 Made in Shard Creator"
 
 
 def _mellstroy_result_keyboard() -> InlineKeyboardMarkup:
@@ -1730,19 +1732,42 @@ async def _send_result_photo_with_regen(
             f"<blockquote><i>💰 Баланс:</i> <b>{esc(balance)}</b></blockquote>{day_note}"
         )
     mellstroy = (ready_idea_title or "").strip() == _MELLSTROY_PHOTO_TITLE
-    if usage_kind == "ready" and mellstroy and refs_file_ids:
-        regen_markup = _mellstroy_result_keyboard()
-    elif usage_kind == "ready" and (not mellstroy) and refs_file_ids:
-        redo_lbl = await _redo_more_button_label(user_id, cost)
-        regen_markup = _ready_idea_result_keyboard(redo_label=redo_lbl)
+    # Для готовых идей: сначала отдельное фото с бренд-подписью, затем отдельное сообщение с действиями.
+    if usage_kind == "ready" and refs_file_ids:
+        made_caption = await _made_in_shard_caption(message)
+        await message.answer_photo(
+            photo=BufferedInputFile(image_bytes, filename=filename),
+            caption=made_caption,
+            parse_mode=HTML,
+        )
+        if charge and deducted_credits and not is_admin:
+            balance_after = await get_credits(user_id)
+            cw = _credits_word(cost)
+            await message.answer(
+                f"💳 Списано: <b>{esc(cost)}</b> {cw}.\n"
+                f"💰 Баланс: <b>{esc(balance_after)}</b>.",
+                parse_mode=HTML,
+            )
+        if mellstroy:
+            await message.answer(
+                "Что делаем дальше?",
+                reply_markup=_mellstroy_result_keyboard(),
+                parse_mode=HTML,
+            )
+        else:
+            redo_lbl = await _redo_more_button_label(user_id, cost)
+            await message.answer(
+                "Готово ✅ Выбери действие:",
+                reply_markup=_ready_idea_result_keyboard(redo_label=redo_lbl),
+                parse_mode=HTML,
+            )
     else:
-        regen_markup = _regen_keyboard()
-    await message.answer_photo(
-        photo=BufferedInputFile(image_bytes, filename=filename),
-        caption=caption,
-        reply_markup=regen_markup,
-        parse_mode=HTML,
-    )
+        await message.answer_photo(
+            photo=BufferedInputFile(image_bytes, filename=filename),
+            caption=caption,
+            reply_markup=_regen_keyboard(),
+            parse_mode=HTML,
+        )
     if mark_redo_half_after_success:
         await mark_redo_half_price_used_today(user_id)
     if state is not None:
@@ -2592,12 +2617,10 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
             await _edit_ready_nav_message(
                 callback.message,
                 caption=(
-                    f"<b>Выбрано:</b> {esc(title)}\n"
+                    f"✅ <b>{esc(title)}</b>\n"
                     f"{_ready_generation_cost_html()}\n"
                     f"<b>{esc(req0)}</b>\n"
-                    "<blockquote><i>Пришли <b>текст заголовка</b> для игрового логотипа — "
-                    f"латиница или кириллица, до {_FANTASY_HEADLINE_MAX_LEN} символов "
-                    "(учитываются пробелы, регистр и CAPS — как напишешь).</i></blockquote>"
+                    f"✍️ Пришли <b>текст заголовка</b> для логотипа (до {_FANTASY_HEADLINE_MAX_LEN} символов)."
                 ),
                 reply_markup=_ready_wait_photo_keyboard(),
                 listing_photo=list_ph if list_ph is not None else _ready_categories_listing_photo(),
@@ -2614,13 +2637,13 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
         await _edit_ready_nav_message(
             callback.message,
             caption=(
-                f"<b>Выбрано:</b> {esc(title)}\n"
+                f"✅ <b>{esc(title)}</b>\n"
                 f"{_ready_generation_cost_html()}\n"
                 f"{first_hint}\n"
-                "<blockquote><i>После загрузки появится кнопка подтверждения.</i></blockquote>"
+                "📸 Скинь фото, после загрузки появится кнопка подтверждения."
             ),
             reply_markup=_ready_wait_photo_keyboard(),
-            listing_photo=_ready_categories_listing_photo(),
+            listing_photo=_ready_idea_listing_photo_path(title) or _ready_categories_listing_photo(),
         )
         await callback.answer()
         return

@@ -54,6 +54,7 @@ from src.keyboards.callback_data import (
     CB_MENU_ABOUT,
     CB_MENU_ABOUT_HUB,
     CB_MENU_BACK_START,
+    CB_MENU_BUDGET_HUB,
     CB_MENU_CHANNEL,
     CB_MENU_CHANNEL_HUB,
     CB_MENU_FAQ,
@@ -477,6 +478,10 @@ async def quick_panel_ref(message: Message) -> None:
 
 @router.message(F.text == "📊 История бюджета")
 async def quick_panel_budget_history(message: Message) -> None:
+    await _send_budget_history(message, back_callback=CB_MENU_BACK_START)
+
+
+async def _send_budget_history(message: Message, *, back_callback: str) -> None:
     if not message.from_user:
         return
     rows = await get_budget_history_recent(message.from_user.id, days=7, limit=20)
@@ -485,7 +490,7 @@ async def quick_panel_budget_history(message: Message) -> None:
             "<b>📊 История бюджета (7 дней)</b>\n"
             "<blockquote><i>Пока нет записей за последнюю неделю.</i></blockquote>",
             parse_mode=HTML,
-            reply_markup=back_to_main_menu_keyboard(),
+            reply_markup=back_to_main_menu_keyboard(back_callback),
         )
         return
     lines = ["<b>📊 История бюджета (7 дней)</b>", "<blockquote>"]
@@ -497,7 +502,20 @@ async def quick_panel_budget_history(message: Message) -> None:
             f"• <b>{esc(delta_text)}</b> кр. · <i>{esc(_budget_source_label(item.source))}</i>{details}"
         )
     lines.append("</blockquote>")
-    await message.answer("\n".join(lines), parse_mode=HTML, reply_markup=back_to_main_menu_keyboard())
+    await message.answer(
+        "\n".join(lines),
+        parse_mode=HTML,
+        reply_markup=back_to_main_menu_keyboard(back_callback),
+    )
+
+
+@router.callback_query(F.data == CB_MENU_BUDGET_HUB)
+async def menu_budget_hub(callback: CallbackQuery) -> None:
+    if not callback.message:
+        await callback.answer("Сообщение недоступно.", show_alert=True)
+        return
+    await callback.answer()
+    await _send_budget_history(callback.message, back_callback=CB_MENU_HUB)
 
 
 @router.callback_query(F.data == CB_MENU_BACK_START)

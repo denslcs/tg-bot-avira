@@ -2,13 +2,14 @@
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from src.config import SUPPORT_BOT_USERNAME
+from src.config import CHANNEL_URL, SUPPORT_BOT_USERNAME
 from src.keyboards.callback_data import (
     CB_CREATE_IMAGE_HUB,
     CB_CREATE_IMAGE,
     CB_MENU_ABOUT,
     CB_MENU_ABOUT_HUB,
     CB_MENU_BACK_START,
+    CB_MENU_BUDGET_HUB,
     CB_MENU_CHANNEL,
     CB_MENU_CHANNEL_HUB,
     CB_MENU_FAQ,
@@ -69,6 +70,11 @@ def start_menu_keyboard(balance: int | None = None) -> InlineKeyboardMarkup:
 
 
 def menu_hub_keyboard() -> InlineKeyboardMarkup:
+    channel_button = (
+        InlineKeyboardButton(text="📢 Канал", url=CHANNEL_URL, style=BTN_SUCCESS)
+        if CHANNEL_URL
+        else InlineKeyboardButton(text="📢 Канал", callback_data=CB_MENU_CHANNEL_HUB, style=BTN_SUCCESS)
+    )
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -78,7 +84,7 @@ def menu_hub_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(text="⭐ Подписки", callback_data=CB_MENU_PAY_HUB, style=BTN_SUCCESS),
-                InlineKeyboardButton(text="📢 Канал", callback_data=CB_MENU_CHANNEL_HUB, style=BTN_SUCCESS),
+                channel_button,
             ],
             [
                 InlineKeyboardButton(text="⭐ Поддержка", callback_data=CB_MENU_SUPPORT_HUB, style=BTN_PRIMARY),
@@ -94,6 +100,9 @@ def menu_hub_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="⭐ Реф. система", callback_data=CB_MENU_REF_HUB),
                 InlineKeyboardButton(text="ℹ️ Что умею", callback_data=CB_MENU_ABOUT_HUB),
                 InlineKeyboardButton(text="❓ FAQ", callback_data=CB_MENU_FAQ_HUB),
+            ],
+            [
+                InlineKeyboardButton(text="📊 История бюджета", callback_data=CB_MENU_BUDGET_HUB),
             ],
             [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)],
         ]
