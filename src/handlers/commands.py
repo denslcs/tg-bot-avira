@@ -840,7 +840,9 @@ async def _profile_card_html(
         )
         plan_name = "—"
     gen_total = await count_generated_images_total(user_id)
-    fu, flim = await get_nonsub_image_quota_status(user_id)
+    ns_img = await get_nonsub_image_quota_status(user_id)
+    # При активной подписке квота «без подписки» не считается — функция возвращает None.
+    fu, flim = ns_img if ns_img is not None else (0, 0)
     ready_cycle = "без лимита" if active_sub else f"{ru}/{rlim}"
     img_cycle = "без лимита" if active_sub else f"{fu}/{flim}"
     body = (
@@ -853,6 +855,7 @@ async def _profile_card_html(
         f"<i>🧾 Картинки:</i> <b>{esc(img_cycle)}</b>\n"
         f"<i>🎁 Бонусные запуски (реф):</i> <b>{esc(ready_bonus_uses)}</b>\n"
         f"<i>Подписка:</i> <b>{esc(sub_status)}</b> · <i>{esc(plan_name)}</i>\n"
+        f"<i>Действует до:</i> <b>{esc(sub_till)}</b>\n"
         f"<i>Сгенерировано изображений:</i> <b>{esc(gen_total)}</b>\n"
         "</blockquote>"
     )
