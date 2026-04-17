@@ -892,7 +892,11 @@ def _gen_progress_caption(pct: int) -> str:
     n = 10
     filled = n if pct >= 100 else min(n, (pct * n) // 100)
     bar = "".join("🟩" if i < filled else "⬜" for i in range(n))
-    return f"<b>Идёт создание…</b>\n\n{bar}\n\n<i>{pct}%</i>"
+    return (
+        '<b><tg-emoji emoji-id="5217697679030637222">⏳</tg-emoji> Идёт создание…</b>\n\n'
+        f"{bar}\n\n"
+        f"<i>{pct}%</i>"
+    )
 
 
 async def _rollback_generation_charge(
@@ -982,7 +986,10 @@ def _waiting_prompt_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="❌ Отмена", callback_data=CB_IMG_CANCEL, style=BTN_DANGER
+                    text="⛔️ Отмена",
+                    callback_data=CB_IMG_CANCEL,
+                    style=BTN_DANGER,
+                    icon_custom_emoji_id="5247149163132493357",
                 ),
             ],
         ]
@@ -991,7 +998,7 @@ def _waiting_prompt_keyboard() -> InlineKeyboardMarkup:
 
 def _missing_config_kb(back_callback: str = CB_MENU_BACK_START) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)]]
+        inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback)]]
     )
 
 
@@ -1119,7 +1126,7 @@ def _subscriber_model_pick_keyboard(
                 )
             ]
         )
-    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)])
+    rows.append([InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -1264,7 +1271,7 @@ def _ready_categories_keyboard(back_callback: str = CB_MENU_BACK_START) -> Inlin
             pair = []
     if pair:
         rows.append(pair)
-    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)])
+    rows.append([InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -1312,7 +1319,7 @@ def _ready_browser_keyboard(
                     callback_data=f"{CB_READY_NAV_PREFIX}back_cats",
                 )
             ],
-            [InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback)],
         ]
     )
 
@@ -1324,14 +1331,21 @@ def _ready_wait_photo_keyboard(
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=back_text, callback_data=back_callback)],
-            [InlineKeyboardButton(text="❌ Отмена", callback_data=CB_IMG_CANCEL, style=BTN_DANGER)],
+            [
+                InlineKeyboardButton(
+                    text="⛔️ Отмена",
+                    callback_data=CB_IMG_CANCEL,
+                    style=BTN_DANGER,
+                    icon_custom_emoji_id="5247149163132493357",
+                )
+            ],
         ]
     )
 
 
 def _ready_wait_photo_keyboard_for_state(data: dict) -> InlineKeyboardMarkup:
     if bool(data.get("_ready_include_hidden_start_only")):
-        return _ready_wait_photo_keyboard(back_text="⬅️ Назад", back_callback=CB_MENU_BACK_START)
+        return _ready_wait_photo_keyboard(back_text="🔙 Назад", back_callback=CB_MENU_BACK_START)
     return _ready_wait_photo_keyboard()
 
 
@@ -1339,8 +1353,15 @@ def _ready_confirm_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="✔️ Подтвердить", callback_data=CB_READY_CONFIRM, style=BTN_SUCCESS)],
-            [InlineKeyboardButton(text="↩️ Назад к фото", callback_data=CB_READY_PHOTO_BACK)],
-            [InlineKeyboardButton(text="❌ Отмена", callback_data=CB_IMG_CANCEL, style=BTN_DANGER)],
+            [InlineKeyboardButton(text="🔙 Назад к фото", callback_data=CB_READY_PHOTO_BACK)],
+            [
+                InlineKeyboardButton(
+                    text="⛔️ Отмена",
+                    callback_data=CB_IMG_CANCEL,
+                    style=BTN_DANGER,
+                    icon_custom_emoji_id="5247149163132493357",
+                )
+            ],
         ]
     )
 
@@ -1365,8 +1386,15 @@ def _ready_beard_size_keyboard() -> InlineKeyboardMarkup:
                     style=BTN_PRIMARY,
                 ),
             ],
-            [InlineKeyboardButton(text="↩️ Назад к фото", callback_data=CB_READY_PHOTO_BACK)],
-            [InlineKeyboardButton(text="❌ Отмена", callback_data=CB_IMG_CANCEL, style=BTN_DANGER)],
+            [InlineKeyboardButton(text="🔙 Назад к фото", callback_data=CB_READY_PHOTO_BACK)],
+            [
+                InlineKeyboardButton(
+                    text="⛔️ Отмена",
+                    callback_data=CB_IMG_CANCEL,
+                    style=BTN_DANGER,
+                    icon_custom_emoji_id="5247149163132493357",
+                )
+            ],
         ]
     )
 
@@ -1531,8 +1559,8 @@ async def _image_gen_priority_from_user_id(user_id: int) -> bool:
 async def _redo_more_button_label(user_id: int, base_cost: int) -> str:
     if await _user_eligible_redo_half_price(user_id):
         half = max(1, int(base_cost) // 2)
-        return f"🔄 Ещё раз (−50% · {half} кр.)"
-    return "🔄 Ещё раз"
+        return f"Ещё раз (−50% · {half} кр.)"
+    return "Ещё раз"
 
 
 async def _start_ready_redo_flow(
@@ -1584,9 +1612,10 @@ async def _start_ready_redo_flow(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text="❌ Отмена",
+                        text="⛔️ Отмена",
                         callback_data=CB_BACK_TO_READY_IDEAS,
                         style=BTN_DANGER,
+                        icon_custom_emoji_id="5247149163132493357",
                     )
                 ]
             ]
@@ -1605,7 +1634,10 @@ def _regen_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="🔄 Ещё раз", callback_data=CB_REGEN, style=BTN_PRIMARY
+                    text="Ещё раз",
+                    callback_data=CB_REGEN,
+                    style=BTN_PRIMARY,
+                    icon_custom_emoji_id="5244758760429213978",
                 ),
             ],
         ],
@@ -1620,6 +1652,7 @@ def _ready_idea_result_keyboard(*, redo_label: str) -> InlineKeyboardMarkup:
                     text=redo_label[:64],
                     callback_data=CB_REGEN_READY_REDO,
                     style=BTN_PRIMARY,
+                    icon_custom_emoji_id="5244758760429213978",
                 ),
             ],
             [
@@ -1638,10 +1671,14 @@ async def _made_in_shard_caption(message: Message) -> str:
     try:
         me = await message.bot.get_me()
         if me and me.username:
-            return f'<a href="https://t.me/{me.username}">🔥 Made in Shard Creator</a>'
+            return (
+                f'<a href="https://t.me/{me.username}">'
+                '<tg-emoji emoji-id="5389038097860144794">🔥</tg-emoji> Made in Shard Creator'
+                "</a>"
+            )
     except Exception:
         logging.debug("made_in_shard_caption: bot.me() failed", exc_info=True)
-    return "🔥 Made in Shard Creator"
+    return '<tg-emoji emoji-id="5389038097860144794">🔥</tg-emoji> Made in Shard Creator'
 
 
 def _mellstroy_result_keyboard() -> InlineKeyboardMarkup:
@@ -1650,12 +1687,15 @@ def _mellstroy_result_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="⬅️ Назад", callback_data=CB_IMG_OK, style=BTN_SUCCESS
+                    text="🔙 Назад", callback_data=CB_IMG_OK, style=BTN_SUCCESS
                 ),
             ],
             [
                 InlineKeyboardButton(
-                    text="🔄 Ещё раз", callback_data=CB_REGEN, style=BTN_PRIMARY
+                    text="Ещё раз",
+                    callback_data=CB_REGEN,
+                    style=BTN_PRIMARY,
+                    icon_custom_emoji_id="5244758760429213978",
                 ),
             ],
         ],
@@ -2477,7 +2517,7 @@ async def open_mellstroy_prompt(callback: CallbackQuery, state: FSMContext) -> N
             "<blockquote><i>Попал на скрытую тусовку к Мелу.</i></blockquote>"
         ),
         reply_markup=_ready_wait_photo_keyboard(
-            back_text="⬅️ Назад",
+            back_text="🔙 Назад",
             back_callback=CB_MENU_BACK_START,
         ),
         listing_photo=_ready_idea_listing_photo_path(title) or _ready_categories_listing_photo(),
@@ -3489,7 +3529,7 @@ async def ready_browse_hint(message: Message) -> None:
 @router.message(ImageGenState.ready_waiting_confirm)
 async def ready_waiting_confirm_hint(message: Message) -> None:
     await message.answer(
-        "Нажми «✔️ Подтвердить» для запуска или «❌ Отмена».",
+        "Нажми «✔️ Подтвердить» для запуска или «⛔️ Отмена».",
         reply_markup=_ready_confirm_keyboard(),
     )
 

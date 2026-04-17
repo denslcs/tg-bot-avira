@@ -72,7 +72,7 @@ def _faq_keyboard(back_callback: str = CB_MENU_BACK_START) -> InlineKeyboardMark
             row = []
     if row:
         rows.append(row)
-    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)])
+    rows.append([InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

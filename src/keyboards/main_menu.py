@@ -86,9 +86,10 @@ def start_menu_keyboard(balance: int | None = None) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="🔥 ФОТО С МЕЛЛСТРОЙНОСТЬЮ 🔥",
+                    text="ФОТО С МЕЛЛСТРОЙНОСТЬЮ",
                     callback_data=CB_MENU_MELLSTROY,
                     style=BTN_DANGER,
+                    icon_custom_emoji_id="5389038097860144794",
                 )
             ],
         ]
@@ -97,9 +98,19 @@ def start_menu_keyboard(balance: int | None = None) -> InlineKeyboardMarkup:
 
 def menu_hub_keyboard() -> InlineKeyboardMarkup:
     channel_button = (
-        InlineKeyboardButton(text="📢 Канал", url=CHANNEL_URL, style=BTN_SUCCESS)
+        InlineKeyboardButton(
+            text="Канал",
+            url=CHANNEL_URL,
+            style=BTN_SUCCESS,
+            icon_custom_emoji_id="5388632425314140043",
+        )
         if CHANNEL_URL
-        else InlineKeyboardButton(text="📢 Канал", callback_data=CB_MENU_CHANNEL_HUB, style=BTN_SUCCESS)
+        else InlineKeyboardButton(
+            text="Канал",
+            callback_data=CB_MENU_CHANNEL_HUB,
+            style=BTN_SUCCESS,
+            icon_custom_emoji_id="5388632425314140043",
+        )
     )
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -165,12 +176,12 @@ def menu_hub_keyboard() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text="📊 История бюджета", callback_data=CB_MENU_BUDGET_HUB),
             ],
-            [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data=CB_MENU_BACK_START)],
         ]
     )
 
 
 def back_to_main_menu_keyboard(back_callback: str = CB_MENU_BACK_START) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)]]
+        inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback)]]
     )

@@ -162,7 +162,11 @@ def _feedback_confirm_keyboard(ticket_id: int) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="✏️ Изменить", callback_data=f"fb_edit:{ticket_id}"),
             ],
             [
-                InlineKeyboardButton(text="❌ Отмена", callback_data=f"fb_cancel:{ticket_id}"),
+                InlineKeyboardButton(
+                    text="⛔️ Отмена",
+                    callback_data=f"fb_cancel:{ticket_id}",
+                    icon_custom_emoji_id="5247149163132493357",
+                ),
             ],
         ]
     )
@@ -178,9 +182,10 @@ def _admin_chunk_keyboard(ticket_id: int, chunk_id: int) -> InlineKeyboardMarkup
                     style=BTN_SUCCESS,
                 ),
                 InlineKeyboardButton(
-                    text="Отмена",
+                    text="⛔️ Отмена",
                     callback_data=f"adm_can:{ticket_id}:{chunk_id}",
                     style=BTN_DANGER,
+                    icon_custom_emoji_id="5247149163132493357",
                 ),
             ]
         ]

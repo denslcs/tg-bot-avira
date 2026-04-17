@@ -35,6 +35,7 @@ from src.subscription_catalog import PLANS, PLANS_ORDER
 router = Router(name="admin_panel")
 
 _PLAN_PREMIUM_EMOJI_IDS: dict[str, str] = {
+    "starter": "5287702390370242449",
     "nova": "5242331214848756985",
     "supernova": "5242714407535939345",
     "galaxy": "5242227706136924612",
@@ -52,7 +53,8 @@ def _plan_title_html(plan_id: str) -> str:
     emoji_id = _PLAN_PREMIUM_EMOJI_IDS.get(pid)
     if not emoji_id:
         return esc(raw_title)
-    return f'<tg-emoji emoji-id="{emoji_id}">🤩</tg-emoji> {esc(title_wo_emoji)}'
+    emoji_char = "🌙" if pid == "starter" else "🤩"
+    return f'<tg-emoji emoji-id="{emoji_id}">{emoji_char}</tg-emoji> {esc(title_wo_emoji)}'
 
 
 def _plans_hint() -> str:

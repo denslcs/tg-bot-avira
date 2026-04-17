@@ -93,6 +93,7 @@ router = Router(name="payments")
 logger = logging.getLogger(__name__)
 
 _PLAN_PREMIUM_EMOJI_IDS: dict[str, str] = {
+    "starter": "5287702390370242449",
     "nova": "5242331214848756985",
     "supernova": "5242714407535939345",
     "galaxy": "5242227706136924612",
@@ -107,7 +108,8 @@ def _plan_title_html(plan_id: str) -> str:
     emoji_id = _PLAN_PREMIUM_EMOJI_IDS.get(pid)
     if not emoji_id:
         return esc(p.title)
-    return f'<tg-emoji emoji-id="{emoji_id}">🤩</tg-emoji> {esc(title_wo_emoji)}'
+    emoji_char = "🌙" if pid == "starter" else "🤩"
+    return f'<tg-emoji emoji-id="{emoji_id}">{emoji_char}</tg-emoji> {esc(title_wo_emoji)}'
 
 
 def _admin_sales_thread_for_plan(plan_id: str) -> int:
@@ -205,17 +207,17 @@ def _subscriptions_pricing_image_path() -> Path | None:
 def _plans_menu_caption() -> str:
     st = PLANS["starter"]
     return (
-        "<b>Тарифы</b> — при оплате на баланс начисляются <b>кредиты</b>.\n"
+        '<b>Тарифы</b> — при оплате на баланс начисляются <b><tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> кредиты</b>.\n'
         f"<blockquote><b>Starter</b> — пробный пакет на <b>{esc(st.period_days)}</b> дн., все модели как у Universe, "
         f"<b>одна покупка на аккаунт</b> (повторно недоступен). Остальные тарифы — <b>{esc(SUBSCRIPTION_PERIOD_DAYS)}</b> дн.</blockquote>\n"
-        "Ограничений на число генераций по подписке нет — списываются кредиты.\n\n"
+        'Ограничений на число генераций по подписке нет — списываются <tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> кредиты.\n\n'
         f"<blockquote><i>Полные тарифы:</i> не чаще <b>одного раза в {esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дней "
         f"после <b>окончания</b> подписки. Пока подписка активна — заранее продлевается только текущий тариф: дни суммируются, "
         f"бонус за повтор того же тарифа +5% (для Universe при раннем продлении +10%). "
         f"<i>Starter в паузу между полными тарифами не входит.</i></blockquote>\n\n"
         f"<blockquote><i>Без подписки:</i> до <b>{esc(NONSUB_IMAGE_WINDOW_MAX)}</b> картинок за цикл; после полного исчерпания "
         f"новый цикл через <b>{esc(NONSUB_IMAGE_WINDOW_DAYS)}</b> суток от момента исчерпания (UTC). "
-        "Кредиты лимит не обходят.</blockquote>"
+        '<tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты лимит не обходят.</blockquote>'
     )
 
 
@@ -227,25 +229,29 @@ def _plans_keyboard(
     rows: list[list[InlineKeyboardButton]] = []
     for pid in PLANS_ORDER:
         p = PLANS[pid]
+        title_wo_emoji = p.title.split(" ", 1)[-1]
+        icon_id = _PLAN_PREMIUM_EMOJI_IDS.get(pid)
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"{p.title} — +{p.bonus_credits} кр. · 🪙 {p.price_rub}",
+                    text=f"{title_wo_emoji} — +{p.bonus_credits} кр. · 🪙 {p.price_rub}",
                     callback_data=f"{CB_PAY_PLAN_PREFIX}{pid}",
                     style=BTN_PRIMARY,
+                    icon_custom_emoji_id=icon_id,
                 )
             ]
         )
     rows.append(
         [
             InlineKeyboardButton(
-                text="🎁 Пакеты бонусов",
+                text="Пакеты бонусов",
                 callback_data=bonus_menu_callback,
                 style=BTN_SUCCESS,
+                icon_custom_emoji_id="5203996991054432397",
             )
         ]
     )
-    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)])
+    rows.append([InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -299,7 +305,7 @@ def _methods_keyboard(
                     style=BTN_PRIMARY,
                 )
             ],
-            [InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback_data)],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback_data)],
         ]
     )
 
@@ -402,7 +408,7 @@ def _bonus_packs_keyboard(
     rows: list[list[InlineKeyboardButton]] = []
     order = list(BONUS_PACKS_ORDER)
     if not order:
-        rows.append([InlineKeyboardButton(text="⬅️ Назад к тарифам", callback_data=pay_menu_callback)])
+        rows.append([InlineKeyboardButton(text="🔙 Назад к тарифам", callback_data=pay_menu_callback)])
         return InlineKeyboardMarkup(inline_keyboard=rows)
     if len(order) == 1:
         b = BONUS_PACKS[order[0]]
@@ -447,7 +453,7 @@ def _bonus_packs_keyboard(
                     )
                 ]
             )
-    rows.append([InlineKeyboardButton(text="⬅️ Назад к тарифам", callback_data=pay_menu_callback)])
+    rows.append([InlineKeyboardButton(text="🔙 Назад к тарифам", callback_data=pay_menu_callback)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -554,7 +560,7 @@ async def pay_pick_plan(callback: CallbackQuery) -> None:
                     parse_mode=HTML,
                     reply_markup=InlineKeyboardMarkup(
                         inline_keyboard=[
-                            [InlineKeyboardButton(text="⬅️ К тарифам", callback_data=CB_PAY_MENU)]
+                            [InlineKeyboardButton(text="🔙 К тарифам", callback_data=CB_PAY_MENU)]
                         ]
                     ),
                 )
@@ -566,7 +572,7 @@ async def pay_pick_plan(callback: CallbackQuery) -> None:
     if callback.message and callback.message.reply_markup:
         for row in callback.message.reply_markup.inline_keyboard:
             for btn in row:
-                if (getattr(btn, "text", "") or "").strip() == "⬅️ Назад" and getattr(btn, "callback_data", None):
+                if (getattr(btn, "text", "") or "").strip() in ("🔙 Назад", "⬅️ Назад") and getattr(btn, "callback_data", None):
                     back_to_plans_callback = (
                         CB_PAY_MENU_HUB if str(btn.callback_data) == CB_MENU_HUB else CB_PAY_MENU
                     )
@@ -614,7 +620,7 @@ async def pay_pick_pack(callback: CallbackQuery) -> None:
     if callback.message and callback.message.reply_markup:
         for row in callback.message.reply_markup.inline_keyboard:
             for btn in row:
-                if (getattr(btn, "text", "") or "").strip() == "⬅️ Назад к тарифам":
+                if (getattr(btn, "text", "") or "").strip() in ("🔙 Назад к тарифам", "⬅️ Назад к тарифам"):
                     back_to_bonus_callback = (
                         CB_PAY_BONUS_MENU_HUB
                         if str(getattr(btn, "callback_data", "")) == CB_PAY_MENU_HUB
@@ -663,7 +669,7 @@ async def _external_pay_hint(
                 [InlineKeyboardButton(text=f"Перейти к оплате ({label})", url=url, style=BTN_PRIMARY)],
                 [
                     InlineKeyboardButton(
-                        text="⬅️ Назад",
+                        text="🔙 Назад",
                         callback_data=f"{CB_PAY_PLAN_PREFIX}{item_id}"
                         if item_id in PLANS
                         else f"{CB_PAY_PACK_PREFIX}{item_id}",
@@ -690,7 +696,7 @@ async def _external_pay_hint(
     )
     if callback.message:
         kb = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_PAY_MENU)]]
+            inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data=CB_PAY_MENU)]]
         )
         await edit_or_send_nav_message(
             callback.message,

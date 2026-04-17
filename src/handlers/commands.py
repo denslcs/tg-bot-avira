@@ -78,17 +78,18 @@ from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 router = Router(name="commands")
 
 _PLAN_PREMIUM_EMOJI_IDS: dict[str, str] = {
+    "starter": "5287702390370242449",
     "nova": "5242331214848756985",
     "supernova": "5242714407535939345",
     "galaxy": "5242227706136924612",
     "universe": "5242285645245745392",
 }
 
-_BACK_TO_MENU_ROW = [InlineKeyboardButton(text="⬅️ Назад", callback_data=CB_MENU_BACK_START)]
+_BACK_TO_MENU_ROW = [InlineKeyboardButton(text="🔙 Назад", callback_data=CB_MENU_BACK_START)]
 
 
 def _back_row(back_callback: str) -> list[InlineKeyboardButton]:
-    return [InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)]
+    return [InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback)]
 
 
 def _plan_title_html(plan_id: str) -> str:
@@ -101,7 +102,8 @@ def _plan_title_html(plan_id: str) -> str:
     emoji_id = _PLAN_PREMIUM_EMOJI_IDS.get(pid)
     if not emoji_id:
         return esc(raw_title)
-    return f'<tg-emoji emoji-id="{emoji_id}">🤩</tg-emoji> {esc(title_wo_emoji)}'
+    emoji_char = "🌙" if pid == "starter" else "🤩"
+    return f'<tg-emoji emoji-id="{emoji_id}">{emoji_char}</tg-emoji> {esc(title_wo_emoji)}'
 
 # Невидимый символ — только чтобы обновить reply-клавиатуру с актуальным балансом.
 _QUICK_PANEL_STUB = "\u200b"
