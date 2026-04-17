@@ -1,8 +1,9 @@
 """
 Порядок подключения роутеров главного бота.
 
-Сначала узкие хендлеры (меню, оплата, FAQ, картинки, админ), в конце — общий личный чат
-(messages: любой текст и лимиты), чтобы не перехватывать специализированные обработчики.
+Сначала узкие хендлеры (меню, оплата, FAQ), затем админ-команды, затем сценарии картинок/готовых идей
+(FSM в img_commands перехватывает любой не-фото текст — если админ стоит ниже, /admin и /stats
+не сработают). В конце — общий личный чат (messages: любой текст и лимиты).
 """
 
 from aiogram import Dispatcher
@@ -24,7 +25,7 @@ def register_routers(dp: Dispatcher) -> None:
     dp.include_router(commands_router)
     dp.include_router(payments_router)
     dp.include_router(faq_router)
-    dp.include_router(img_commands_router)
     dp.include_router(admin_panel_router)
+    dp.include_router(img_commands_router)
     dp.include_router(messages_router)
     register_global_error_handler(dp)
