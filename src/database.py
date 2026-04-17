@@ -190,6 +190,40 @@ async def _migrate_last_image_context_usage_kind(db: aiosqlite.Connection) -> No
         )
 
 
+async def _migrate_subscription_ends_at_canonical(db: aiosqlite.Connection) -> None:
+    """Один раз приводит subscription_ends_at к каноническому ISO UTC (старые строки/пробелы/типы)."""
+    async with db.execute(
+        "SELECT value FROM bot_meta WHERE key = ?",
+        ("migration_sub_ends_canonical_v1",),
+    ) as cur:
+        done = await cur.fetchone()
+    if done and str(done[0]) == "1":
+        return
+    async with db.execute(
+        "SELECT user_id, subscription_ends_at FROM users WHERE subscription_ends_at IS NOT NULL"
+    ) as cur:
+        rows = await cur.fetchall()
+    for uid, raw in rows:
+        normalized = normalize_subscription_ends_at_value(raw)
+        if not normalized:
+            await db.execute(
+                "UPDATE users SET subscription_ends_at = NULL WHERE user_id = ?",
+                (int(uid),),
+            )
+            continue
+        await db.execute(
+            "UPDATE users SET subscription_ends_at = ? WHERE user_id = ?",
+            (normalized, int(uid)),
+        )
+    await db.execute(
+        """
+        INSERT INTO bot_meta (key, value) VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """,
+        ("migration_sub_ends_canonical_v1", "1"),
+    )
+
+
 async def _migrate_nonsub_quota_exhaustion_semantics(db: aiosqlite.Connection) -> None:
     """Очистить метку исчерпания, если счётчик не на максимуме (после смены логики окон)."""
     await db.execute(
@@ -367,6 +401,7 @@ async def init_db() -> None:
         await _migrate_idea_tokens_and_ready_window(db)
         await _migrate_last_image_context_usage_kind(db)
         await _migrate_nonsub_quota_exhaustion_semantics(db)
+        await _migrate_subscription_ends_at_canonical(db)
         await db.commit()
 
 
