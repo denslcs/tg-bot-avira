@@ -190,40 +190,6 @@ async def _migrate_last_image_context_usage_kind(db: aiosqlite.Connection) -> No
         )
 
 
-async def _migrate_subscription_ends_at_canonical(db: aiosqlite.Connection) -> None:
-    """Один раз приводит subscription_ends_at к каноническому ISO UTC (старые строки/пробелы/типы)."""
-    async with db.execute(
-        "SELECT value FROM bot_meta WHERE key = ?",
-        ("migration_sub_ends_canonical_v1",),
-    ) as cur:
-        done = await cur.fetchone()
-    if done and str(done[0]) == "1":
-        return
-    async with db.execute(
-        "SELECT user_id, subscription_ends_at FROM users WHERE subscription_ends_at IS NOT NULL"
-    ) as cur:
-        rows = await cur.fetchall()
-    for uid, raw in rows:
-        normalized = normalize_subscription_ends_at_value(raw)
-        if not normalized:
-            await db.execute(
-                "UPDATE users SET subscription_ends_at = NULL WHERE user_id = ?",
-                (int(uid),),
-            )
-            continue
-        await db.execute(
-            "UPDATE users SET subscription_ends_at = ? WHERE user_id = ?",
-            (normalized, int(uid)),
-        )
-    await db.execute(
-        """
-        INSERT INTO bot_meta (key, value) VALUES (?, ?)
-        ON CONFLICT(key) DO UPDATE SET value = excluded.value
-        """,
-        ("migration_sub_ends_canonical_v1", "1"),
-    )
-
-
 async def _migrate_nonsub_quota_exhaustion_semantics(db: aiosqlite.Connection) -> None:
     """Очистить метку исчерпания, если счётчик не на максимуме (после смены логики окон)."""
     await db.execute(
@@ -973,6 +939,14 @@ def normalize_subscription_ends_at_value(raw: object | None) -> str | None:
     return s if s else None
 
 
+def _normalize_subscription_plan_value(raw: object | None) -> str | None:
+    """Тариф из БД: как ключи PLANS (strip + lower) или None."""
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    return s.lower() if s else None
+
+
 def subscription_is_active(ends_at: object | None) -> bool:
     normalized = normalize_subscription_ends_at_value(ends_at)
     if not normalized:
@@ -983,12 +957,47 @@ def subscription_is_active(ends_at: object | None) -> bool:
         return False
 
 
+async def _migrate_subscription_ends_at_canonical(db: aiosqlite.Connection) -> None:
+    """Один раз приводит subscription_ends_at к каноническому ISO UTC (старые строки/пробелы/типы)."""
+    async with db.execute(
+        "SELECT value FROM bot_meta WHERE key = ?",
+        ("migration_sub_ends_canonical_v1",),
+    ) as cur:
+        done = await cur.fetchone()
+    if done and str(done[0]) == "1":
+        return
+    async with db.execute(
+        "SELECT user_id, subscription_ends_at FROM users WHERE subscription_ends_at IS NOT NULL"
+    ) as cur:
+        rows = await cur.fetchall()
+    for uid, raw in rows:
+        normalized = normalize_subscription_ends_at_value(raw)
+        if not normalized:
+            await db.execute(
+                "UPDATE users SET subscription_ends_at = NULL WHERE user_id = ?",
+                (int(uid),),
+            )
+            continue
+        await db.execute(
+            "UPDATE users SET subscription_ends_at = ? WHERE user_id = ?",
+            (normalized, int(uid)),
+        )
+    await db.execute(
+        """
+        INSERT INTO bot_meta (key, value) VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """,
+        ("migration_sub_ends_canonical_v1", "1"),
+    )
+
+
 def subscription_cooldown_days_remaining(last_purchase_iso: str | None) -> int:
     """0 — можно оформить новую подписку; иначе оценка дней до следующей покупки."""
-    if not last_purchase_iso:
+    raw = normalize_subscription_ends_at_value(last_purchase_iso)
+    if not raw:
         return 0
     try:
-        dt = _parse_dt_utc(last_purchase_iso)
+        dt = _parse_dt_utc(raw)
     except ValueError:
         return 0
     now = datetime.now(timezone.utc)
@@ -1321,7 +1330,7 @@ async def get_daily_image_generation_usage(user_id: int, usage_kind: str) -> tup
             return 0, NONSUB_READY_IDEA_WINDOW_MAX
         return 0, free_daily_generation_limit(kind)
     ends = str(row[0]) if row[0] else None
-    plan = str(row[1]) if row[1] else None
+    plan = _normalize_subscription_plan_value(row[1])
     active = subscription_is_active(ends)
 
     if kind == "ready" and not active:
@@ -1384,7 +1393,7 @@ async def try_reserve_daily_image_generation(user_id: int, usage_kind: str) -> b
             await db.rollback()
             return False
         ends = str(row[0]) if row[0] else None
-        plan = str(row[1]) if row[1] else None
+        plan = _normalize_subscription_plan_value(row[1])
         active = subscription_is_active(ends)
 
         if kind == "ready":
@@ -1816,7 +1825,7 @@ async def get_user_admin_profile(user_id: int) -> UserAdminProfile | None:
         credits=int(row[2]),
         created_at=str(row[3]),
         subscription_ends_at=normalize_subscription_ends_at_value(row[4]),
-        subscription_plan=row[5] if row[5] else None,
+        subscription_plan=_normalize_subscription_plan_value(row[5]),
         subscription_last_purchase_at=row[6] if row[6] else None,
         starter_trial_used=starter_used,
         idea_tokens=idea_tok,
