@@ -173,6 +173,23 @@ PAY_URL_CARD_RU: str = os.getenv("PAY_URL_CARD_RU", "").strip()
 PAY_URL_CARD_INTL: str = os.getenv("PAY_URL_CARD_INTL", "").strip()
 PAY_URL_CRYPTO: str = os.getenv("PAY_URL_CRYPTO", "").strip()
 
+
+def _env_custom_emoji_id(name: str, default: str) -> str:
+    """document_id премиум-эмодзи из .env; пусто — значение по умолчанию."""
+    v = os.getenv(name, "").strip()
+    return v if v else default
+
+
+# Inline-кнопки «карта РФ» / «криптовалютой»: document_id премиум-эмодзи (как в HTML: 🪙 + id ниже).
+PAY_INLINE_RUB_BTN_EMOJI_ID: str = _env_custom_emoji_id(
+    "PAY_INLINE_RUB_BTN_EMOJI_ID",
+    "5377746319601324795",
+)
+PAY_INLINE_CRYPTO_BTN_EMOJI_ID: str = _env_custom_emoji_id(
+    "PAY_INLINE_CRYPTO_BTN_EMOJI_ID",
+    "5379773896352355687",
+)
+
 # Уведомления о покупках (⭐ Stars) в админ-чат с топиками: id супергруппы и id ветки на тариф / бонусы.
 # Бот должен быть участником чата и иметь право писать в темы. 0 = не слать.
 ADMIN_SALES_NOTIFY_CHAT_ID: int = _parse_int(os.getenv("ADMIN_SALES_NOTIFY_CHAT_ID", "0"), 0)

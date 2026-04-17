@@ -36,6 +36,8 @@ from src.config import (
     ADMIN_SALES_THREAD_SUPERNOVA,
     ADMIN_SALES_THREAD_STARTER,
     ADMIN_SALES_THREAD_UNIVERSE,
+    PAY_INLINE_CRYPTO_BTN_EMOJI_ID,
+    PAY_INLINE_RUB_BTN_EMOJI_ID,
     PAY_URL_CARD_INTL,
     PAY_URL_CARD_RU,
     PAY_URL_CRYPTO,
@@ -57,7 +59,14 @@ from src.database import (
     subscription_is_active,
     try_claim_star_payment,
 )
-from src.formatting import HTML, esc, format_subscription_ends_at
+from src.formatting import (
+    HTML,
+    esc,
+    format_subscription_ends_at,
+    full_plans_after_starter_html,
+    plan_subscription_title_html,
+    starter_already_purchased_message_html,
+)
 from src.handlers.commands import edit_or_send_nav_message
 from src.keyboards.callback_data import (
     CB_MENU_BACK_START,
@@ -82,9 +91,9 @@ from src.subscription_catalog import (
     BONUS_PACKS_ORDER,
     NONSUB_IMAGE_WINDOW_DAYS,
     NONSUB_IMAGE_WINDOW_MAX,
+    PLAN_PREMIUM_EMOJI_IDS,
     PLANS,
     PLANS_ORDER,
-    STARTER_ALREADY_PURCHASED_TEXT,
     SUBSCRIPTION_PERIOD_DAYS,
     SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS,
 )
@@ -93,39 +102,18 @@ router = Router(name="payments")
 
 logger = logging.getLogger(__name__)
 
-_PLAN_PREMIUM_EMOJI_IDS: dict[str, str] = {
-    "starter": "5287702390370242449",
-    "nova": "5242331214848756985",
-    "supernova": "5242505745139797503",
-    "galaxy": "5242227706136924612",
-    "universe": "5242285645245745392",
-}
-
-
-def _plan_title_html(plan_id: str) -> str:
-    pid = (plan_id or "").strip().lower()
-    p = PLANS[pid]
-    title_wo_emoji = p.title.split(" ", 1)[-1]
-    emoji_id = _PLAN_PREMIUM_EMOJI_IDS.get(pid)
-    if not emoji_id:
-        return esc(p.title)
-    emoji_char = "🌙" if pid == "starter" else "🤩"
-    return f'<tg-emoji emoji-id="{emoji_id}">{emoji_char}</tg-emoji> {esc(title_wo_emoji)}'
-
-
 def _plan_invoice_plain_texts(plan_id: str) -> tuple[str, str, str]:
-    """Заголовок / описание / label цены для send_invoice (plain text, как премиум-иконки в UI)."""
+    """Заголовок / описание / label для send_invoice (только plain text; без Unicode-эмодзи тиров)."""
     pid = (plan_id or "").strip().lower()
     p = PLANS[pid]
     name = p.title.split(" ", 1)[-1]
-    emoji_char = "🌙" if pid == "starter" else "🤩"
     pd = p.period_days
-    title = f"Shard Creator — {emoji_char} {name}"[:32]
+    title = f"Shard Creator — {name}"[:32]
     desc = (
-        f"Подписка {emoji_char} {name}: +{p.bonus_credits} кредитов, "
+        f"Подписка {name}: +{p.bonus_credits} кредитов, "
         f"{pd} дн. Картинки и готовые идеи — по кредитам."
     )[:255]
-    price_lbl = f"{emoji_char} {name} ({pd} дн.)"[:64]
+    price_lbl = f"{name} ({pd} дн.)"[:64]
     return title, desc, price_lbl
 
 
@@ -302,15 +290,17 @@ def _subscriptions_pricing_image_path() -> Path | None:
 
 def _plans_menu_caption() -> str:
     st = PLANS["starter"]
+    st_h = plan_subscription_title_html("starter")
+    u_h = plan_subscription_title_html("universe")
     return (
         '<b>Тарифы</b> — при оплате на баланс начисляются <b><tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> кредиты</b>.\n'
-        f"<blockquote><b>Starter</b> — пробный пакет на <b>{esc(st.period_days)}</b> дн., все модели как у Universe, "
+        f"<blockquote>{st_h} — пробный пакет на <b>{esc(st.period_days)}</b> дн., все модели как у {u_h}, "
         f"<b>одна покупка на аккаунт</b> (повторно недоступен). Остальные тарифы — <b>{esc(SUBSCRIPTION_PERIOD_DAYS)}</b> дн.</blockquote>\n"
         'Ограничений на число генераций по подписке нет — списываются <tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> кредиты.\n\n'
         f"<blockquote><i>Полные тарифы:</i> не чаще <b>одного раза в {esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дней "
         f"после <b>окончания</b> подписки. Пока подписка активна — заранее продлевается только текущий тариф: дни суммируются, "
-        f"бонус за повтор того же тарифа +5% (для Universe при раннем продлении +10%). "
-        f"<i>Starter в паузу между полными тарифами не входит.</i></blockquote>\n\n"
+        f"бонус за повтор того же тарифа +5% (для {u_h} при раннем продлении +10%). "
+        f"<i>{st_h} в паузу между полными тарифами не входит.</i></blockquote>\n\n"
         f"<blockquote><i>Без подписки:</i> до <b>{esc(NONSUB_IMAGE_WINDOW_MAX)}</b> картинок за цикл; после полного исчерпания "
         f"новый цикл через <b>{esc(NONSUB_IMAGE_WINDOW_DAYS)}</b> суток от момента исчерпания (UTC). "
         '<tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты лимит не обходят.</blockquote>'
@@ -326,7 +316,7 @@ def _plans_keyboard(
     for pid in PLANS_ORDER:
         p = PLANS[pid]
         title_wo_emoji = p.title.split(" ", 1)[-1]
-        icon_id = _PLAN_PREMIUM_EMOJI_IDS.get(pid)
+        icon_id = PLAN_PREMIUM_EMOJI_IDS.get(pid)
         rows.append(
             [
                 InlineKeyboardButton(
@@ -386,7 +376,7 @@ def _methods_keyboard(
                     text=f"{rub} ₽ · картой РФ",
                     callback_data=f"{CB_PAY_RUB_PREFIX}{item_id}",
                     style=BTN_PRIMARY,
-                    icon_custom_emoji_id="5377746319601324795",
+                    icon_custom_emoji_id=PAY_INLINE_RUB_BTN_EMOJI_ID,
                 )
             ],
             [
@@ -410,7 +400,7 @@ def _methods_keyboard(
                     text=f"{usd:g} $ · криптовалютой",
                     callback_data=f"{CB_PAY_CRYPTO_PREFIX}{item_id}",
                     style=BTN_PRIMARY,
-                    icon_custom_emoji_id="5379773896352355687",
+                    icon_custom_emoji_id=PAY_INLINE_CRYPTO_BTN_EMOJI_ID,
                 )
             ],
             [
@@ -426,7 +416,7 @@ def _methods_keyboard(
 
 def _pay_methods_text(plan_id: str) -> str:
     p = PLANS[plan_id]
-    title = _plan_title_html(plan_id)
+    title = plan_subscription_title_html(plan_id)
     days = p.period_days
     starter_block = ""
     cooldown_block = (
@@ -437,13 +427,14 @@ def _pay_methods_text(plan_id: str) -> str:
     )
     if plan_id == "starter":
         starter_block = (
-            "<blockquote><b>Пробный Starter (3 дня):</b> как Universe — полный набор моделей, "
+            "<blockquote>"
+            f"<b>Пробный {plan_subscription_title_html('starter')} (3 дня):</b> как {plan_subscription_title_html('universe')} — полный набор моделей, "
             f"без лимита «готовых идей», +{esc(p.bonus_credits)} кредитов. "
-            "После окончания — полные тарифы Nova / SuperNova / Galaxy / Universe. "
-            "<b>Повторно Starter купить нельзя.</b></blockquote>\n"
+            f"После окончания — полные тарифы {full_plans_after_starter_html(sep=' / ')}. "
+            f"<b>Повторно {plan_subscription_title_html('starter')} купить нельзя.</b></blockquote>\n"
         )
         cooldown_block = (
-            "<blockquote><i>Starter не увеличивает паузу между покупками полных тарифов.</i></blockquote>\n"
+            f"<blockquote><i>{plan_subscription_title_html('starter')} не увеличивает паузу между покупками полных тарифов.</i></blockquote>\n"
         )
     return (
         "<b>💳 Выбери способ оплаты</b>\n\n"
@@ -471,7 +462,7 @@ def _pack_methods_text(
     discount_block = ""
     if discounted and discount_price_rub is not None:
         discount_block = (
-            f"<blockquote><i>Персональная скидка Universe: <b>-15%</b> "
+            f"<blockquote><i>Персональная скидка {plan_subscription_title_html('universe')}: <b>-15%</b> "
             f'(<tg-emoji emoji-id="5377746319601324795">🪙</tg-emoji> {esc(p.price_rub)} → <b><tg-emoji emoji-id="5377746319601324795">🪙</tg-emoji> {esc(discount_price_rub)}</b>).</i></blockquote>\n'
         )
     return (
@@ -492,7 +483,7 @@ def _bonus_packs_caption(*, universe_discount: bool = False) -> str:
     ]
     if universe_discount:
         lines.append(
-            "<blockquote><i>Для активной <b>Universe</b> действует персональная скидка "
+            f"<blockquote><i>Для активной {plan_subscription_title_html('universe')} действует персональная скидка "
             "<b>-15%</b> на все бонус-пакеты.</i></blockquote>"
         )
     for pid in BONUS_PACKS_ORDER:
@@ -690,7 +681,7 @@ async def pay_pick_plan(callback: CallbackQuery) -> None:
             if prof and prof.starter_trial_used:
                 await callback.answer()
                 await callback.message.answer(
-                    STARTER_ALREADY_PURCHASED_TEXT,
+                    starter_already_purchased_message_html(),
                     parse_mode=HTML,
                     reply_markup=InlineKeyboardMarkup(
                         inline_keyboard=[
@@ -941,6 +932,11 @@ async def pay_stars_invoice(callback: CallbackQuery) -> None:
             back_to_bonus=CB_PAY_BONUS_MENU,
         )
         inv_title, inv_desc, price_lbl = _plan_invoice_plain_texts(item_id)
+        await callback.message.bot.send_message(
+            callback.message.chat.id,
+            f"<b>Telegram Stars</b>\n{plan_subscription_title_html(item_id)}",
+            parse_mode=HTML,
+        )
         await callback.message.bot.send_invoice(
             chat_id=callback.message.chat.id,
             title=inv_title,
@@ -1015,7 +1011,7 @@ async def pay_invoice_back_to_methods(callback: CallbackQuery) -> None:
                 if prof and prof.starter_trial_used:
                     await callback.answer()
                     await callback.message.answer(
-                        STARTER_ALREADY_PURCHASED_TEXT,
+                        starter_already_purchased_message_html(),
                         parse_mode=HTML,
                         reply_markup=InlineKeyboardMarkup(
                             inline_keyboard=[
@@ -1250,8 +1246,10 @@ async def successful_payment(message: Message) -> None:
         starter_tail = ""
         if item_id == "starter":
             starter_tail = (
-                "\n\n<blockquote><i>После окончания Starter оформи полный тариф в</i> "
-                "<code>/start</code> <i>→</i> <b>Оплатить</b><i>. Повторно Starter купить нельзя.</i></blockquote>"
+                "\n\n<blockquote><i>После окончания "
+                f"{plan_subscription_title_html('starter')} оформи полный тариф в</i> "
+                "<code>/start</code> <i>→</i> <b>Оплатить</b><i>. Повторно "
+                f"{plan_subscription_title_html('starter')} купить нельзя.</i></blockquote>"
             )
         verify_tail = ""
         if not sub_active_ok:
@@ -1261,7 +1259,7 @@ async def successful_payment(message: Message) -> None:
             )
         await message.answer(
             "<b>Спасибо за покупку!</b>\n"
-            f"Вы приобрели подписку <b>{_plan_title_html(item_id)}</b>.\n\n"
+            f"Вы приобрели подписку <b>{plan_subscription_title_html(item_id)}</b>.\n\n"
             f"<blockquote>{quote_inner}</blockquote>\n\n"
             "<i>Можно снова открыть «Создать картинку» в</i> <code>/start</code>."
             f"{starter_tail}{verify_tail}",
@@ -1278,7 +1276,7 @@ async def successful_payment(message: Message) -> None:
         admin_txt = (
             "<b>Подписка оплачена</b>\n"
             f"<b>Тип оплаты:</b> {pay_kind}\n"
-            f"Тариф: {_plan_title_html(item_id)} · <code>{esc(item_id)}</code>\n"
+            f"Тариф: {plan_subscription_title_html(item_id)} · <code>{esc(item_id)}</code>\n"
             f"Пользователь: {_user_line_html(message.from_user)}\n"
             f'<tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты: <b>+{esc(total_bonus_credits)}</b>'
             f"{(' (в т.ч. продление +' + str(renewal_extra) + ')' if renewal_extra else '')}"
@@ -1329,7 +1327,7 @@ async def successful_payment(message: Message) -> None:
             "<b>Пакет бонусов оплачен</b>\n"
             f"<b>Тип оплаты:</b> {pay_kind}\n"
             f"Пакет: {esc(b.title)} · <code>{esc(item_id)}</code> · <b>+{esc(b.credits)}</b> кр."
-            f"{' · Universe -15%' if discounted else ''}\n"
+            f"{' · ' + plan_subscription_title_html('universe') + ' −15%' if discounted else ''}\n"
             f"Пользователь: {_user_line_html(message.from_user)}\n"
             f"Сумма: <b>{esc(stars_amt)}</b> {esc(cur)}\n"
             f"charge: <code>{esc(charge_id)}</code>"

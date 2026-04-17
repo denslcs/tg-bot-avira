@@ -69,7 +69,7 @@ from src.database import (
     try_reserve_nonsub_image_quota_slot,
     try_reserve_nonsub_ready_idea_slot,
 )
-from src.formatting import HTML, esc
+from src.formatting import HTML, esc, plans_premium_sequence_html
 from src.image_gen_gate import image_generation_slot
 from src.handlers.commands import edit_or_send_nav_message, restore_main_menu_message
 from src.keyboards.main_menu import start_menu_keyboard
@@ -1690,7 +1690,9 @@ async def _start_ready_redo_flow(
     disc = ""
     if consume:
         disc = (
-            "\n<blockquote><i>Starter / Galaxy / Universe: <b>−50%</b> на этот повтор — не чаще "
+            "\n<blockquote><i>"
+            + plans_premium_sequence_html(["starter", "galaxy", "universe"], sep=" / ")
+            + ": <b>−50%</b> на этот повтор — не чаще "
             "<b>одного раза в сутки</b> (UTC).</i></blockquote>"
         )
     await message.answer(

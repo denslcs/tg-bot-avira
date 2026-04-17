@@ -48,7 +48,13 @@ from src.database import (
     take_credits_with_reason,
 )
 from src.subscription_catalog import PLANS
-from src.formatting import HTML, esc, format_subscription_ends_at
+from src.formatting import (
+    HTML,
+    all_plans_premium_line_html,
+    esc,
+    format_subscription_ends_at,
+    plan_subscription_title_html,
+)
 from src.keyboards.callback_data import (
     CB_IMG_OK,
     CB_MENU_ABOUT,
@@ -77,14 +83,6 @@ from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 
 router = Router(name="commands")
 
-_PLAN_PREMIUM_EMOJI_IDS: dict[str, str] = {
-    "starter": "5287702390370242449",
-    "nova": "5242331214848756985",
-    "supernova": "5242505745139797503",
-    "galaxy": "5242227706136924612",
-    "universe": "5242285645245745392",
-}
-
 _BACK_TO_MENU_ROW = [
     InlineKeyboardButton(
         text="Назад",
@@ -103,19 +101,6 @@ def _back_row(back_callback: str) -> list[InlineKeyboardButton]:
         )
     ]
 
-
-def _plan_title_html(plan_id: str) -> str:
-    pid = (plan_id or "").strip().lower()
-    if pid in PLANS:
-        raw_title = PLANS[pid].title
-    else:
-        raw_title = pid or "—"
-    title_wo_emoji = raw_title.split(" ", 1)[-1]
-    emoji_id = _PLAN_PREMIUM_EMOJI_IDS.get(pid)
-    if not emoji_id:
-        return esc(raw_title)
-    emoji_char = "🌙" if pid == "starter" else "🤩"
-    return f'<tg-emoji emoji-id="{emoji_id}">{emoji_char}</tg-emoji> {esc(title_wo_emoji)}'
 
 # Невидимый символ — только чтобы обновить reply-клавиатуру с актуальным балансом.
 _QUICK_PANEL_STUB = "\u200b"
@@ -904,20 +889,26 @@ async def _profile_card_html(
         sub_status = "активна"
         sub_till = format_subscription_ends_at(profile.subscription_ends_at)
         if is_admin:
-            plan_name = _plan_title_html("universe")
+            plan_name = plan_subscription_title_html("universe")
         elif profile.subscription_plan and profile.subscription_plan in PLANS:
-            plan_name = _plan_title_html(profile.subscription_plan)
+            plan_name = plan_subscription_title_html(profile.subscription_plan)
         else:
             # В БД мог не быть записан тариф (старые выдачи / только срок); доступ как у Universe.
-            plan_name = _plan_title_html("universe")
+            plan_name = plan_subscription_title_html("universe")
         pid = "universe" if is_admin else (profile.subscription_plan or "").strip().lower()
         if pid in ("starter", "galaxy", "universe"):
-            priority_note = "\n<i>⚡ Приоритет очереди генераций и скидка на повтор «готовой идеи» (см. подсказки после картинки).</i>"
+            priority_note = (
+                f"\n<i>⚡ Приоритет очереди генераций и скидка на повтор «готовой идеи» как у "
+                f"{plan_subscription_title_html('universe')} (см. подсказки после картинки).</i>"
+            )
     elif is_admin:
         sub_status = "админ-безлимит"
         sub_till = "—"
-        plan_name = _plan_title_html("universe")
-        priority_note = "\n<i>⚡ Приоритет очереди генераций и скидка на повтор «готовой идеи» доступны как у Universe.</i>"
+        plan_name = plan_subscription_title_html("universe")
+        priority_note = (
+            f"\n<i>⚡ Приоритет очереди генераций и скидка на повтор «готовой идеи» доступны как у "
+            f"{plan_subscription_title_html('universe')}.</i>"
+        )
     else:
         sub_status = "не активна"
         sub_till = (
@@ -1072,11 +1063,13 @@ async def cmd_chatid(message: Message) -> None:
                 "2) <b>ID группы</b> — напиши в группе команду <code>/chatid</code> "
                 "(можно в любой теме или в «Общем»). Бот пришлёт число вида <code>-100…</code> "
                 "— его клади в <code>ADMIN_SALES_NOTIFY_CHAT_ID</code>.\n"
-                "3) <b>ID каждой темы</b> — зайди <i>внутрь темы</i> (Starter, Nova, Galaxy и т.д.) и "
+                "3) <b>ID каждой темы</b> — зайди <i>внутрь темы</i> ("
+                f"{all_plans_premium_line_html(sep=', ')}) и "
                 "в этой теме снова напиши <code>/chatid</code>. Появится "
                 "<code>message_thread_id</code> — его в соответствующий "
                 "<code>ADMIN_SALES_THREAD_*</code> в <code>.env</code>.\n"
-                "4) Повтори шаг 3 для всех тем: Starter, Nova, SuperNova, Galaxy, Universe и бонусы/пакеты.\n"
+                "4) Повтори шаг 3 для всех тем: "
+                f"{all_plans_premium_line_html(sep=', ')} и бонусы/пакеты.\n"
                 "5) Перезапусти бота.\n\n"
                 "<blockquote><i>Если написать <code>/chatid</code> только в личке без пересылки — "
                 "показывается эта памятка. Пересланное из группы иногда даёт только chat id, "

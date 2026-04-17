@@ -27,35 +27,18 @@ from src.database import (
     subscription_is_active,
     sum_users_credits,
 )
-from src.formatting import HTML, esc, format_subscription_ends_at
+from src.formatting import (
+    HTML,
+    esc,
+    format_subscription_ends_at,
+    plan_subscription_title_html,
+    plans_premium_sequence_html,
+)
 from src.handlers.commands import edit_or_send_nav_message
 from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 from src.subscription_catalog import PLANS, PLANS_ORDER
 
 router = Router(name="admin_panel")
-
-_PLAN_PREMIUM_EMOJI_IDS: dict[str, str] = {
-    "starter": "5287702390370242449",
-    "nova": "5242331214848756985",
-    "supernova": "5242505745139797503",
-    "galaxy": "5242227706136924612",
-    "universe": "5242285645245745392",
-}
-
-
-def _plan_title_html(plan_id: str) -> str:
-    pid = (plan_id or "").strip().lower()
-    if pid in PLANS:
-        raw_title = PLANS[pid].title
-    else:
-        raw_title = pid or "—"
-    title_wo_emoji = raw_title.split(" ", 1)[-1]
-    emoji_id = _PLAN_PREMIUM_EMOJI_IDS.get(pid)
-    if not emoji_id:
-        return esc(raw_title)
-    emoji_char = "🌙" if pid == "starter" else "🤩"
-    return f'<tg-emoji emoji-id="{emoji_id}">{emoji_char}</tg-emoji> {esc(title_wo_emoji)}'
-
 
 def _plans_hint() -> str:
     return "|".join(PLANS_ORDER)
@@ -381,7 +364,7 @@ async def cmd_user_lookup(message: Message) -> None:
     )
     pr = profile.subscription_plan
     if pr and pr in PLANS:
-        plan_line = f"{_plan_title_html(pr)} (<code>{esc(pr)}</code>)"
+        plan_line = f"{plan_subscription_title_html(pr)} (<code>{esc(pr)}</code>)"
     elif pr:
         plan_line = esc(pr)
     else:
@@ -434,7 +417,8 @@ async def cmd_setsub(message: Message) -> None:
         else:
             await message.answer(
                 "Неизвестный тариф.\n"
-                f"Доступно: {', '.join(PLANS_ORDER)}"
+                f"Доступно: {plans_premium_sequence_html(list(PLANS_ORDER), sep=', ')}",
+                parse_mode=HTML,
             )
             return
     elif len(raw) == 3:
@@ -461,10 +445,10 @@ async def cmd_setsub(message: Message) -> None:
     stored = (profile_after.subscription_plan or "").strip().lower() if profile_after else ""
     plan_lines: list[str] = []
     if plan:
-        plan_lines.append(f"Тариф записан: {_plan_title_html(plan)} (<code>{esc(plan)}</code>)")
+        plan_lines.append(f"Тариф записан: {plan_subscription_title_html(plan)} (<code>{esc(plan)}</code>)")
     elif stored and stored in PLANS:
         plan_lines.append(
-            f"Тариф в профиле без изменений: {_plan_title_html(stored)} (<code>{esc(stored)}</code>)"
+            f"Тариф в профиле без изменений: {plan_subscription_title_html(stored)} (<code>{esc(stored)}</code>)"
         )
     plan_block = ("\n" + "\n".join(plan_lines)) if plan_lines else ""
     is_active_now = bool(
@@ -486,9 +470,9 @@ async def cmd_setsub(message: Message) -> None:
     )
     try:
         if stored and stored in PLANS:
-            title_line = f"Подписка: <b>{_plan_title_html(stored)}</b>\n"
+            title_line = f"Подписка: <b>{plan_subscription_title_html(stored)}</b>\n"
         elif plan and plan in PLANS:
-            title_line = f"Подписка: <b>{_plan_title_html(plan)}</b>\n"
+            title_line = f"Подписка: <b>{plan_subscription_title_html(plan)}</b>\n"
         else:
             title_line = "Подписка активирована.\n"
         await message.bot.send_message(
@@ -549,7 +533,8 @@ async def cmd_setplan(message: Message) -> None:
     if plan not in PLANS:
         await message.answer(
             "Неизвестный тариф.\n"
-            f"Доступно: {', '.join(PLANS_ORDER)}"
+            f"Доступно: {plans_premium_sequence_html(list(PLANS_ORDER), sep=', ')}",
+            parse_mode=HTML,
         )
         return
     uid = int(raw[1])
@@ -557,7 +542,7 @@ async def cmd_setplan(message: Message) -> None:
     if not await set_subscription_plan_only(uid, plan):
         await message.answer("Не удалось обновить тариф.")
         return
-    title = _plan_title_html(plan)
+    title = plan_subscription_title_html(plan)
     await message.answer(
         f"Тариф пользователя <code>{uid}</code> установлен: <b>{title}</b> (<code>{esc(plan)}</code>). "
         "<blockquote><i>Срок окончания подписки не менялся — только поле тарифа в БД.</i></blockquote>",

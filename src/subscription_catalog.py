@@ -70,13 +70,6 @@ class BonusPack:
 
 PLANS_ORDER: tuple[str, ...] = ("starter", "nova", "supernova", "galaxy", "universe")
 
-# Текст, если пользователь снова нажимает на Starter после единственной покупки.
-STARTER_ALREADY_PURCHASED_TEXT = (
-    "Вы уже оформляли пробную подписку <b>Starter</b> — купить её повторно нельзя.\n\n"
-    "<blockquote>Выбери полный тариф: Nova, SuperNova, Galaxy или Universe в разделе "
-    "<code>/start</code> → <b>Оплатить</b>.</blockquote>"
-)
-
 def _stars_from_usd(usd: float) -> int:
     """Та же формула, что в каталоге до смены: Nova $2.99 → 225 ⭐."""
     return max(1, round(usd / 2.99 * 225))
@@ -125,6 +118,24 @@ PLANS: dict[str, SubscriptionPlan] = {
         stars=_stars_from_usd(21.18),
         bonus_credits=2850,
     ),
+}
+
+# document_id премиум-эмодзи тарифов (HTML <tg-emoji> и icon_custom_emoji_id в кнопках).
+PLAN_PREMIUM_EMOJI_IDS: dict[str, str] = {
+    "starter": "5287702390370242449",
+    "nova": "5242331214848756985",
+    "supernova": "5242505745139797503",
+    "galaxy": "5242227706136924612",
+    "universe": "5242285645245745392",
+}
+
+# Заглушка внутри <tg-emoji> для клиентов без custom emoji (совпадает с темой тира в PLANS.title).
+PLAN_PREMIUM_EMOJI_FALLBACK: dict[str, str] = {
+    "starter": "🌙",
+    "nova": "✨",
+    "supernova": "🌟",
+    "galaxy": "🌌",
+    "universe": "🌍",
 }
 
 
