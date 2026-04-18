@@ -171,17 +171,10 @@ def _plan_pay_perks_block_html(plan_id: str) -> str:
     return f"<blockquote>{body}</blockquote>\n"
 
 
-def _plan_list_button_text(plan_id: str, p: SubscriptionPlan) -> str:
-    """Подпись кнопки в меню тарифов (Telegram ≤64 символов)."""
+def _plan_list_button_text(p: SubscriptionPlan) -> str:
+    """Подпись кнопки в меню тарифов (Telegram ≤64 символов): название, кредиты, цена в ₽."""
     name = p.title.split(" ", 1)[-1]
-    tag = {
-        "starter": "3 дн · все модели",
-        "nova": "Klein 4B",
-        "supernova": "Klein+NB",
-        "galaxy": "+GPT 1.5",
-        "universe": "все · приоритет",
-    }.get(plan_id, "")
-    s = f"{name} — {tag} · +{p.bonus_credits} кр. · {p.price_rub} ₽"
+    s = f"{name} — +{p.bonus_credits} кр. · {p.price_rub} ₽"
     return s[:64]
 
 def _plan_invoice_plain_texts(plan_id: str) -> tuple[str, str, str]:
@@ -382,6 +375,7 @@ def _subscriptions_pricing_image_path() -> Path | None:
 def _plan_payment_preview_image_path(plan_id: str) -> Path | None:
     """Экран оплаты выбранного тарифа — отдельная карточка-превью; общий баннер см. subscriptions_pricing."""
     name = {
+        "starter": "starter_subscription_preview.png",
         "nova": "nova_subscription_preview.png",
         "supernova": "supernova_subscription_preview.png",
         "galaxy": "galaxy_subscription_preview.png",
@@ -474,7 +468,7 @@ def _plans_keyboard(
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=_plan_list_button_text(pid, p),
+                    text=_plan_list_button_text(p),
                     callback_data=f"{CB_PAY_PLAN_PREFIX}{pid}",
                     style=BTN_PRIMARY,
                     icon_custom_emoji_id=icon_id,
@@ -775,10 +769,26 @@ async def send_subscription_menu(
     if replace_previous and pricing_img and pricing_img.is_file():
         caption = _plans_menu_photo_caption()
         kb = _plans_keyboard(back_callback=back_callback, bonus_menu_callback=bonus_menu_callback)
+        if message.photo and not _is_generated_image_result_message(message):
+            try:
+                await message.edit_media(
+                    media=InputMediaPhoto(
+                        media=FSInputFile(pricing_img),
+                        caption=caption,
+                        parse_mode=HTML,
+                    ),
+                    reply_markup=kb,
+                )
+                return
+            except Exception:
+                logger.debug(
+                    "send_subscription_menu: edit_media на баннер тарифов не удался, fallback delete+send",
+                    exc_info=True,
+                )
         try:
             await message.delete()
         except Exception:
-            logging.debug(
+            logger.debug(
                 "send_subscription_menu: не удалось удалить сообщение перед баннером тарифов",
                 exc_info=True,
             )
@@ -933,18 +943,30 @@ async def pay_bonus_menu(callback: CallbackQuery) -> None:
         pay_menu_callback=(CB_PAY_MENU_HUB if is_hub else CB_PAY_MENU),
         universe_discount=universe_discount,
     )
-    if _plans_screen_uses_pricing_image() and callback.message.photo:
+    pricing_img = _subscriptions_pricing_image_path()
+    if (
+        callback.message.photo
+        and not _is_generated_image_result_message(callback.message)
+        and _plans_screen_uses_pricing_image()
+        and pricing_img
+        and pricing_img.is_file()
+        and len(bonus_text) <= 1024
+    ):
         try:
-            await callback.message.delete()
+            await callback.message.edit_media(
+                media=InputMediaPhoto(
+                    media=FSInputFile(pricing_img),
+                    caption=bonus_text,
+                    parse_mode=HTML,
+                ),
+                reply_markup=bonus_kb,
+            )
+            return
         except Exception:
-            logging.debug("pay_bonus_menu: не удалось удалить фото тарифов перед пакетами", exc_info=True)
-        await callback.bot.send_message(
-            callback.message.chat.id,
-            bonus_text,
-            reply_markup=bonus_kb,
-            parse_mode=HTML,
-        )
-        return
+            logger.debug(
+                "pay_bonus_menu: edit_media на баннер + подпись пакетов не удался, fallback",
+                exc_info=True,
+            )
     await edit_or_send_nav_message(
         callback.message,
         text=bonus_text,
