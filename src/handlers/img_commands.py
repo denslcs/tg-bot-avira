@@ -800,6 +800,9 @@ _LUXURY_TORN_COVER_LISTING_IMAGE = (
 _SUPERHERO_MIRROR_LISTING_IMAGE = (
     PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "superhero_mirror_multiverse_preview.png"
 )
+_RONALDO_PHOTO_LISTING_IMAGE = (
+    PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "ronaldo_preview.png"
+)
 _MELLSTROY_PHOTO_LISTING_IMAGE = (
     PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "mellstroy_preview.png"
 )
@@ -912,6 +915,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _LUXURY_TORN_COVER_LISTING_IMAGE
     if t == _SUPERHERO_MIRROR_TITLE and _SUPERHERO_MIRROR_LISTING_IMAGE.is_file():
         return _SUPERHERO_MIRROR_LISTING_IMAGE
+    if t == _RONALDO_PHOTO_TITLE and _RONALDO_PHOTO_LISTING_IMAGE.is_file():
+        return _RONALDO_PHOTO_LISTING_IMAGE
     if t == _MELLSTROY_PHOTO_TITLE and _MELLSTROY_PHOTO_LISTING_IMAGE.is_file():
         return _MELLSTROY_PHOTO_LISTING_IMAGE
     if t == "Красивый костюм с букетом" and _SUIT_BOUQUET_READY_LISTING_IMAGE.is_file():
@@ -2778,39 +2783,14 @@ async def open_mellstroy_prompt(callback: CallbackQuery, state: FSMContext) -> N
     if target_idx < 0:
         await callback.answer("Идея пока недоступна.", show_alert=True)
         return
-    title, _preview, _prompt, photos_required = ideas[target_idx]
     await state.clear()
-    await state.update_data(
-        _ready_back_cb=CB_MENU_BACK_START,
-        _ready_category=category,
-        _ready_index=target_idx,
-        _ready_photos=[],
-        _ready_need=photos_required,
-        _ready_overlay_nick="",
-        _ready_poster_text="",
-        _ready_beard_size="",
-        _ready_fantasy_color="",
-    )
-    await state.set_state(ImageGenState.ready_waiting_photos)
-    first_hint = _ready_photo_upload_hint(category=category, need=photos_required, received=0, idea_title=title)
-    ronaldo_title = (
-        '<tg-emoji emoji-id="5389038097860144794">🔥</tg-emoji> '
-        "<b>ФОТО С РОНАЛДО</b> "
-        '<tg-emoji emoji-id="5389038097860144794">🔥</tg-emoji>'
-    )
-    await _edit_ready_nav_message(
+    await state.update_data(_ready_back_cb=CB_MENU_BACK_START)
+    await _open_ready_card(
         callback.message,
-        caption=(
-            f"{ronaldo_title}\n"
-            f"{_ready_generation_cost_html()}\n"
-            f"{first_hint}\n"
-            "<blockquote><i>Стадион, софиты и совместный кадр с Криштиану Роналдо.</i></blockquote>"
-        ),
-        reply_markup=_ready_wait_photo_keyboard(
-            back_text="Назад",
-            back_callback=CB_MENU_BACK_START,
-        ),
-        listing_photo=_ready_idea_listing_photo_path(title) or _ready_categories_listing_photo(),
+        state,
+        category=category,
+        index=target_idx,
+        edit=True,
     )
 
 
