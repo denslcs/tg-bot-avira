@@ -730,6 +730,8 @@ _SUPERHERO_MIRROR_LISTING_IMAGE = (
 _MELLSTROY_PHOTO_LISTING_IMAGE = (
     PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "mellstroy_preview.png"
 )
+# Категория «Добавить фото» → «Перемещение объекта»; только UI, не в API.
+_OBJECT_IN_SCENE_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "add_photo_object_in_scene_preview.png"
 
 
 def _start_listing_banner_path() -> Path | None:
@@ -877,6 +879,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _BEARD_MUSTACHE_LISTING_IMAGE
     if t == "Смена пола" and _GENDER_SWAP_LISTING_IMAGE.is_file():
         return _GENDER_SWAP_LISTING_IMAGE
+    if t == _OBJECT_IN_SCENE_TITLE and _OBJECT_IN_SCENE_LISTING_IMAGE.is_file():
+        return _OBJECT_IN_SCENE_LISTING_IMAGE
     return _start_listing_banner_path()
 
 

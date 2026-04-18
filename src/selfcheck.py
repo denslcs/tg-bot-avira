@@ -135,6 +135,14 @@ def _check_ready_ideas() -> tuple[list[str], list[str]]:
         errors.append("Backrooms listing preview missing: assets/ready_ideas/backrooms_preview.png")
     checks.append("Backrooms ready-idea listing preview file exists.")
 
+    add_photo_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "add_photo_object_in_scene_preview.png"
+    if not add_photo_listing.is_file():
+        errors.append(
+            "Add photo / object-in-scene listing preview missing: "
+            "assets/ready_ideas/add_photo_object_in_scene_preview.png"
+        )
+    checks.append("Add photo (object in scene) ready-idea listing preview file exists.")
+
     or_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "orange_color_preview.png"
     if not or_listing.is_file():
         errors.append("Orange color listing preview missing: assets/ready_ideas/orange_color_preview.png")
