@@ -1549,6 +1549,8 @@ def _ideas_for_category(
 ) -> list[tuple[str, str, str, int]]:
     ideas = READY_IDEA_ITEMS.get((category or "").strip().lower(), [])
     if include_hidden_start_only:
+        if (category or "").strip().lower() == "celebrities":
+            return [it for it in ideas if (it[0] or "").strip() == _RONALDO_PHOTO_TITLE]
         return ideas
     # Идея доступна из старт-панели, но скрыта из общего листинга «Готовых идей».
     return [it for it in ideas if (it[0] or "").strip() != _RONALDO_PHOTO_TITLE]
