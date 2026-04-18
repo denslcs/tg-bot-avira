@@ -68,7 +68,10 @@ from src.formatting import (
     plan_subscription_title_html,
     starter_already_purchased_message_html,
 )
-from src.handlers.commands import edit_or_send_nav_message
+from src.handlers.commands import (
+    edit_or_send_nav_message,
+    _is_generated_image_result_message,
+)
 from src.keyboards.callback_data import (
     CB_MENU_BACK_START,
     CB_MENU_PAY,
@@ -131,6 +134,34 @@ _PLAN_PAY_PERKS_HTML: dict[str, str] = {
         "При раннем продлении — <b>+10%</b> к бонусным кредитам (вместо +5%). С активной Universe — <b>−15%</b> на пакеты бонусов."
     ),
 }
+
+# Короткие перки для подписи под баннером тарифов (Telegram caption ≤ 1024 — иначе текст уходит отдельным сообщением).
+_PLAN_PAY_PERKS_PHOTO_HTML: dict[str, str] = {
+    "starter": (
+        "<blockquote><i><b>Пробный 3 дня.</b> Модели как у Universe; повтор «готовой идеи» <b>−50%</b>, не чаще раза в сутки. "
+        "<b>Один раз на аккаунт.</b></i></blockquote>\n"
+        "<blockquote><i>После пробного — полные тарифы в меню оплаты.</i></blockquote>\n"
+    ),
+    "nova": (
+        "<blockquote><i><b>Nova:</b> только Klein 4B; повтор той же готовой идеи — по полной цене.</i></blockquote>\n"
+    ),
+    "supernova": (
+        "<blockquote><i><b>SuperNova:</b> Klein + Nano Banana; без GPT 1.5, FLUX Pro и старших моделей.</i></blockquote>\n"
+    ),
+    "galaxy": (
+        "<blockquote><i><b>Galaxy:</b> Klein + Nano Banana + GPT 1.5; приоритет; −50% на повтор готовой идеи (раз/сутки).</i></blockquote>\n"
+    ),
+    "universe": (
+        "<blockquote><i><b>Universe:</b> все модели; приоритет; −50% на повтор готовой идеи; раннее продление +10% к кр.; "
+        "−15% на бонус-паки.</i></blockquote>\n"
+    ),
+}
+
+_COOLDOWN_PHOTO_HTML = (
+    f"<blockquote><i>После окончания подписки следующий <b>полный</b> тариф — не раньше чем через "
+    f"<b>{esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дн. Продление того же тарифа суммирует дни (+5% к кр.; "
+    f"у {plan_subscription_title_html('universe')} при раннем продлении +10%).</i></blockquote>\n"
+)
 
 
 def _plan_pay_perks_block_html(plan_id: str) -> str:
@@ -214,12 +245,20 @@ def _invoice_back_after_stars_data(
     *,
     back_to_plans: str,
     back_to_bonus: str,
+    photo_message_id: int | None = None,
 ) -> str:
+    """Callback ≤64 байта: при наличии photo_message_id — вернём подпись на тот же баннер тарифов."""
     if item_id in PLANS:
         ctx = "h" if back_to_plans == CB_PAY_MENU_HUB else "m"
-        return f"{CB_PAY_INVOICE_BACK_PREFIX}p:{item_id}:{ctx}"
+        base = f"{CB_PAY_INVOICE_BACK_PREFIX}p:{item_id}:{ctx}"
+        if photo_message_id is not None:
+            return f"{base}:{photo_message_id}"
+        return base
     ctx = "h" if back_to_bonus == CB_PAY_BONUS_MENU_HUB else "m"
-    return f"{CB_PAY_INVOICE_BACK_PREFIX}b:{item_id}:{ctx}"
+    base = f"{CB_PAY_INVOICE_BACK_PREFIX}b:{item_id}:{ctx}"
+    if photo_message_id is not None:
+        return f"{base}:{photo_message_id}"
+    return base
 
 
 def _stars_invoice_keyboard(*, stars_amount: int, back_data: str) -> InlineKeyboardMarkup:
@@ -479,10 +518,23 @@ def _methods_keyboard(
     )
 
 
-def _pay_methods_text(plan_id: str) -> str:
+def _pay_methods_text(plan_id: str, *, for_photo_caption: bool = False) -> str:
     p = PLANS[plan_id]
     title = plan_subscription_title_html(plan_id)
     days = p.period_days
+    if for_photo_caption:
+        pid = (plan_id or "").strip().lower()
+        perks_photo = _PLAN_PAY_PERKS_PHOTO_HTML.get(pid) or _PLAN_PAY_PERKS_PHOTO_HTML["universe"]
+        cooldown_photo = "" if pid == "starter" else _COOLDOWN_PHOTO_HTML
+        return (
+            "<b>💳 Выбери способ оплаты</b>\n\n"
+            f'<tg-emoji emoji-id="5203996991054432397">🎁</tg-emoji> <b>Подписка:</b> {title}\n'
+            f'<i><tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты на баланс:</i> <b>+{esc(p.bonus_credits)}</b>\n'
+            f"Срок: <b>{esc(days)}</b> дн.\n\n"
+            f"{perks_photo}"
+            f"{cooldown_photo}"
+            "<i>Оформляя оплату, ты соглашаешься с условиями сервиса и политикой возврата.</i>"
+        )
     perks_block = _plan_pay_perks_block_html(plan_id)
     starter_extra = ""
     cooldown_block = (
@@ -786,9 +838,12 @@ async def pay_pick_plan(callback: CallbackQuery) -> None:
         return
     await callback.answer()
     back_to_plans_callback = _back_to_plans_from_pay_methods_message(callback.message)
+    use_photo_caption = bool(callback.message.photo) and not _is_generated_image_result_message(
+        callback.message
+    )
     await edit_or_send_nav_message(
         callback.message,
-        text=_pay_methods_text(plan_id),
+        text=_pay_methods_text(plan_id, for_photo_caption=use_photo_caption),
         reply_markup=_methods_keyboard(plan_id, is_pack=False, back_callback_data=back_to_plans_callback),
         parse_mode=HTML,
     )
@@ -1030,20 +1085,16 @@ async def pay_stars_invoice(callback: CallbackQuery) -> None:
             return
         p = PLANS[item_id]
         payload = f"plan:{callback.from_user.id}:{item_id}"
-        pd = p.period_days
         back_plans = _back_to_plans_from_pay_methods_message(callback.message)
+        photo_mid = callback.message.message_id if callback.message.photo else None
         back_cb = _invoice_back_after_stars_data(
             item_id,
             back_to_plans=back_plans,
             back_to_bonus=CB_PAY_BONUS_MENU,
+            photo_message_id=photo_mid,
         )
         inv_title, inv_desc, price_lbl = _plan_invoice_plain_texts(item_id)
-        await callback.message.bot.send_message(
-            callback.message.chat.id,
-            f"<b>Telegram Stars</b>\n{plan_subscription_title_html(item_id)}",
-            parse_mode=HTML,
-        )
-        await callback.message.bot.send_invoice(
+        send_invoice_kw = dict(
             chat_id=callback.message.chat.id,
             title=inv_title,
             description=inv_desc,
@@ -1053,6 +1104,9 @@ async def pay_stars_invoice(callback: CallbackQuery) -> None:
             provider_token="",
             reply_markup=_stars_invoice_keyboard(stars_amount=p.stars, back_data=back_cb),
         )
+        if photo_mid is not None:
+            send_invoice_kw["reply_to_message_id"] = photo_mid
+        await callback.message.bot.send_invoice(**send_invoice_kw)
     elif item_id in BONUS_PACKS:
         b = BONUS_PACKS[item_id]
         universe_discount = await _has_active_starter_or_universe(callback.from_user.id)
@@ -1098,13 +1152,16 @@ async def pay_invoice_back_to_methods(callback: CallbackQuery) -> None:
         await callback.answer()
         return
     parts = callback.data.split(":")
-    if len(parts) != 5 or parts[2] not in ("p", "b"):
+    if len(parts) not in (5, 6) or parts[2] not in ("p", "b"):
         await callback.answer("Ошибка", show_alert=True)
         return
     kind, item_id, ctx = parts[2], parts[3], parts[4]
     if ctx not in ("m", "h"):
         await callback.answer("Ошибка", show_alert=True)
         return
+    photo_mid: int | None = None
+    if len(parts) == 6 and (parts[5] or "").isdigit():
+        photo_mid = int(parts[5])
     hub = ctx == "h"
     if kind == "p":
         if item_id not in PLANS:
@@ -1135,9 +1192,26 @@ async def pay_invoice_back_to_methods(callback: CallbackQuery) -> None:
             return
         await callback.answer()
         back_cb = CB_PAY_MENU_HUB if hub else CB_PAY_MENU
+        chat_id = callback.message.chat.id
         await _delete_message_soft(callback.message)
-        await callback.message.bot.send_message(
-            callback.message.chat.id,
+        if photo_mid is not None:
+            try:
+                await callback.bot.edit_message_caption(
+                    chat_id=chat_id,
+                    message_id=photo_mid,
+                    caption=_pay_methods_text(item_id, for_photo_caption=True),
+                    reply_markup=_methods_keyboard(
+                        item_id, is_pack=False, back_callback_data=back_cb
+                    ),
+                    parse_mode=HTML,
+                )
+                return
+            except Exception:
+                logger.exception(
+                    "pay_invoice_back_to_methods: не удалось вернуть способы оплаты на баннер"
+                )
+        await callback.bot.send_message(
+            chat_id,
             _pay_methods_text(item_id),
             reply_markup=_methods_keyboard(item_id, is_pack=False, back_callback_data=back_cb),
             parse_mode=HTML,
