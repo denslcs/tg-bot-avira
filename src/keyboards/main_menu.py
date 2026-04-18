@@ -86,7 +86,7 @@ def start_menu_keyboard(balance: int | None = None) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="ФОТО С МЕЛЛСТРОЙНОСТЬЮ",
+                    text="ФОТО С РОНАЛДО",
                     callback_data=CB_MENU_MELLSTROY,
                     style=BTN_DANGER,
                     icon_custom_emoji_id="5389038097860144794",

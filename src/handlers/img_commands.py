@@ -194,6 +194,7 @@ _LUXURY_TORN_COVER_TITLE = "Luxury torn cover"
 _SUPERHERO_MIRROR_TITLE = "Mirror superhero multiverse"
 _BEARD_MUSTACHE_TITLE = "Густая борода + усы"
 _MELLSTROY_PHOTO_TITLE = "Фото с Меллстройностью"
+_RONALDO_PHOTO_TITLE = "Фото с Роналдо"
 _SONY_ERICSSON_T100_TITLE = "Sony Ericsson T100"
 _CHALK_ON_ASPHALT_TITLE = "Мел на асфальте"
 _POLAROID_CURTAIN_TITLE = "Polaroid и занавеска"
@@ -512,6 +513,23 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         ),
     ],
     "celebrities": [
+        (
+            _RONALDO_PHOTO_TITLE,
+            "Фото с Криштиану Роналдо на стадионе Аль-Наср.",
+            "CRITICAL IDENTITY LOCK: image #1 (uploaded by user) is the ONLY source of the user's identity. "
+            "Preserve exact face geometry, skin texture, age cues, hairline, and recognizable likeness with high fidelity. "
+            "No beautification drift, no lookalike replacement, no identity mixing. "
+            "SCENE: photorealistic night scene at Al-Nassr stadium, full crowd in stands, bright green grass, cinematic stadium spotlights, eye-level composition. "
+            "SUBJECTS: the user and Cristiano Ronaldo stand side by side in the center of the frame, smiling naturally. "
+            "The user wraps one arm around Ronaldo. "
+            "WARDROBE (UNISEX, mandatory): both subjects wear Al-Nassr team jerseys adapted naturally to body/presentation from the reference; "
+            "no gender stereotypes, realistic fit. The user may wear dark blue jeans. "
+            "PROP ACTION (mandatory): both hold one Al-Nassr jersey stretched toward camera, showing the back with readable text \"RONALDO\" and number \"7\". "
+            "CRISTIANO RONALDO LOCK: keep Ronaldo clearly recognizable and realistic, no face distortions, no substitution. "
+            "COMPOSITION: medium-wide eye-level sports-photo framing, both figures visible at least knee-up, natural perspective. "
+            "QUALITY: high-end realistic sports photography, coherent shadows/reflections, no watermark, no random text overlays.",
+            1,
+        ),
         (
             _MELLSTROY_PHOTO_TITLE,
             "Попал на скрытую тусовку к Мелу.",
@@ -1525,10 +1543,7 @@ def _ideas_for_category(
     include_hidden_start_only: bool = False,
 ) -> list[tuple[str, str, str, int]]:
     ideas = READY_IDEA_ITEMS.get((category or "").strip().lower(), [])
-    if include_hidden_start_only:
-        return ideas
-    # Идея доступна из старт-панели, но скрыта из общего листинга «Готовых идей».
-    return [it for it in ideas if (it[0] or "").strip() != _MELLSTROY_PHOTO_TITLE]
+    return ideas
 
 
 def _ready_browser_keyboard(
@@ -1957,30 +1972,6 @@ async def _made_in_shard_caption(message: Message) -> str:
     return '<tg-emoji emoji-id="5389038097860144794">🔥</tg-emoji> Made in Shard Creator'
 
 
-def _mellstroy_result_keyboard() -> InlineKeyboardMarkup:
-    """Для скрытой идеи с Меллстроем: только назад в меню и повтор сценария."""
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="Назад",
-                    callback_data=CB_IMG_OK,
-                    style=BTN_SUCCESS,
-                    icon_custom_emoji_id="5256247952564825322",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Ещё раз",
-                    callback_data=CB_REGEN,
-                    style=BTN_PRIMARY,
-                    icon_custom_emoji_id="5244758760429213978",
-                ),
-            ],
-        ],
-    )
-
-
 def _credits_word(n: int) -> str:
     n = abs(int(n)) % 100
     n1 = n % 10
@@ -2057,7 +2048,6 @@ async def _send_result_photo_with_regen(
             f"{spent}"
             f'<blockquote><i>{CREDITS_COIN_TG_HTML} кредиты:</i> <b>{esc(balance)}</b></blockquote>{day_note}'
         )
-    mellstroy = (ready_idea_title or "").strip() == _MELLSTROY_PHOTO_TITLE
     # Для готовых идей: сначала отдельное фото с бренд-подписью, затем отдельное сообщение с действиями.
     if usage_kind == "ready" and refs_file_ids:
         made_caption = await _made_in_shard_caption(message)
@@ -2087,19 +2077,12 @@ async def _send_result_photo_with_regen(
                 f"{CREDITS_COIN_TG_HTML} кредиты: <b>{esc(balance_after)}</b>.",
                 parse_mode=HTML,
             )
-        if mellstroy:
-            await message.answer(
-                "Что делаем дальше?",
-                reply_markup=_mellstroy_result_keyboard(),
-                parse_mode=HTML,
-            )
-        else:
-            redo_lbl = await _redo_more_button_label(user_id, cost)
-            await message.answer(
-                'Готово <tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Выбери действие:',
-                reply_markup=_ready_idea_result_keyboard(redo_label=redo_lbl),
-                parse_mode=HTML,
-            )
+        redo_lbl = await _redo_more_button_label(user_id, cost)
+        await message.answer(
+            'Готово <tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Выбери действие:',
+            reply_markup=_ready_idea_result_keyboard(redo_label=redo_lbl),
+            parse_mode=HTML,
+        )
     else:
         await message.answer_photo(
             photo=BufferedInputFile(image_bytes, filename=filename),
@@ -2790,8 +2773,8 @@ async def open_mellstroy_prompt(callback: CallbackQuery, state: FSMContext) -> N
         )
         return
     category = "celebrities"
-    ideas = _ideas_for_category(category, include_hidden_start_only=True)
-    target_idx = next((i for i, it in enumerate(ideas) if (it[0] or "").strip() == _MELLSTROY_PHOTO_TITLE), -1)
+    ideas = _ideas_for_category(category)
+    target_idx = next((i for i, it in enumerate(ideas) if (it[0] or "").strip() == _RONALDO_PHOTO_TITLE), -1)
     if target_idx < 0:
         await callback.answer("Идея пока недоступна.", show_alert=True)
         return
@@ -2799,7 +2782,6 @@ async def open_mellstroy_prompt(callback: CallbackQuery, state: FSMContext) -> N
     await state.clear()
     await state.update_data(
         _ready_back_cb=CB_MENU_BACK_START,
-        _ready_include_hidden_start_only=True,
         _ready_category=category,
         _ready_index=target_idx,
         _ready_photos=[],
@@ -2811,18 +2793,18 @@ async def open_mellstroy_prompt(callback: CallbackQuery, state: FSMContext) -> N
     )
     await state.set_state(ImageGenState.ready_waiting_photos)
     first_hint = _ready_photo_upload_hint(category=category, need=photos_required, received=0, idea_title=title)
-    mell_title = (
+    ronaldo_title = (
         '<tg-emoji emoji-id="5389038097860144794">🔥</tg-emoji> '
-        "<b>ФОТО С МЕЛЛСТРОЙНОСТЬЮ</b> "
+        "<b>ФОТО С РОНАЛДО</b> "
         '<tg-emoji emoji-id="5389038097860144794">🔥</tg-emoji>'
     )
     await _edit_ready_nav_message(
         callback.message,
         caption=(
-            f"{mell_title}\n"
+            f"{ronaldo_title}\n"
             f"{_ready_generation_cost_html()}\n"
             f"{first_hint}\n"
-            "<blockquote><i>Попал на скрытую тусовку к Мелу.</i></blockquote>"
+            "<blockquote><i>Стадион, софиты и совместный кадр с Криштиану Роналдо.</i></blockquote>"
         ),
         reply_markup=_ready_wait_photo_keyboard(
             back_text="Назад",
