@@ -51,6 +51,10 @@ from src.subscription_catalog import PLANS
 from src.formatting import (
     CREDITS_COIN_TG_HTML,
     HTML,
+    PROFILE_AVATAR_TG_HTML,
+    PROFILE_GENERATED_IMAGES_LABEL_TG_HTML,
+    PROFILE_SUBSCRIPTION_LABEL_TG_HTML,
+    PROFILE_VALID_UNTIL_LABEL_TG_HTML,
     all_plans_premium_line_html,
     esc,
     format_subscription_ends_at,
@@ -137,7 +141,7 @@ def _main_screen_text(balance: int, bonus_note: str = "") -> str:
         "<i>Создание и изменение фото в пару кликов.</i>\n\n"
         '<b><tg-emoji emoji-id="5258203794772085854">⚡️</tg-emoji> Быстрый старт:</b>\n'
         '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Открой <b>«<tg-emoji emoji-id="5282843764451195532">🖥</tg-emoji> Меню»</b> — там все разделы: идеи, подписки, FAQ и рефералка.\n'
-        '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Нажми <b>«<tg-emoji emoji-id="5312123810638483121">🐷</tg-emoji> Баланс»</b> — увидишь '
+        f'<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Нажми <b>«{PROFILE_AVATAR_TG_HTML} Профиль»</b> внизу — увидишь '
         f"{CREDITS_COIN_TG_HTML} кредиты, статистику и лимиты.\n"
         '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Загляни в <b>«<tg-emoji emoji-id="5330522514231684724">🌟</tg-emoji> Что умеет бот»</b> — там коротко и понятно, как использовать все возможности.\n\n'
         '<blockquote><b><tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> Подсказка:</b> <i>чем точнее задача в одном сообщении, тем лучше и быстрее итоговая генерация.</i></blockquote>\n\n'
@@ -166,8 +170,8 @@ def _days_in_bot(created_at: str) -> int:
 
 
 def _start_banner_path() -> Path | None:
-    """Баннер приветствия /start. Файл: assets/start/start_banner.png"""
-    p = PROJECT_ROOT / "assets" / "start" / "start_banner.png"
+    """Баннер только для главного экрана (/start, restore меню). Файл: assets/start/main_menu_banner.png"""
+    p = PROJECT_ROOT / "assets" / "start" / "main_menu_banner.png"
     return p if p.is_file() else None
 
 
@@ -182,7 +186,7 @@ def _is_generated_image_result_message(message: Message) -> bool:
         return True
     if "Готово" in cap and "✔️" in cap:
         return True
-    if "Списано:" in cap and "Баланс" in cap:
+    if "Списано:" in cap and ("Баланс" in cap or "кредит" in cap.lower()):
         return True
     kb = message.reply_markup
     if kb and kb.inline_keyboard:
@@ -471,7 +475,11 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         await message.answer(ann_text[:4096])
 
 
-@router.message(F.text.startswith("🐷 Баланс") | F.text.startswith("💰 Баланс"))
+@router.message(
+    F.text.startswith("👤 Профиль")
+    | F.text.startswith("🐷 Баланс")
+    | F.text.startswith("💰 Баланс")
+)
 async def quick_panel_profile(message: Message) -> None:
     if not message.from_user:
         return
@@ -480,9 +488,12 @@ async def quick_panel_profile(message: Message) -> None:
 
 @router.message((F.text == "🖥 Меню") | (F.text == "📋 Меню"))
 async def quick_panel_menu(message: Message) -> None:
+    bal: int | None = None
+    if message.from_user:
+        bal = await get_credits(message.from_user.id)
     await message.answer(
         '<b><tg-emoji emoji-id="5282843764451195532">🖥</tg-emoji> Главное меню</b>\n<blockquote><i>Выбери нужный раздел.</i></blockquote>',
-        reply_markup=menu_hub_keyboard(),
+        reply_markup=menu_hub_keyboard(bal),
         parse_mode=HTML,
     )
 
@@ -561,10 +572,13 @@ async def menu_hub(callback: CallbackQuery) -> None:
         await callback.answer("Сообщение недоступно.", show_alert=True)
         return
     await callback.answer()
+    bal: int | None = None
+    if callback.from_user:
+        bal = await get_credits(callback.from_user.id)
     await edit_or_send_nav_message(
         callback.message,
         text="<b>📋 Главное меню</b>\n<blockquote><i>Выбери нужный раздел.</i></blockquote>",
-        reply_markup=menu_hub_keyboard(),
+        reply_markup=menu_hub_keyboard(bal),
         parse_mode=HTML,
     )
 
@@ -745,7 +759,7 @@ async def _build_referral_message(
     text = (
         '<b><tg-emoji emoji-id="5391320026869408028">🫂</tg-emoji> Реферальная программа</b>\n\n'
         "<blockquote>"
-        f'<i><tg-emoji emoji-id="5260399854500191689">👤</tg-emoji> Профиль</i> {uname_html}\n'
+        f"<i>{PROFILE_AVATAR_TG_HTML} Профиль</i> {uname_html}\n"
         f'<i><tg-emoji emoji-id="5841276284155467413">🔤</tg-emoji> ID</i> <code>{esc(user_id)}</code>\n'
         f'<i><tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты:</i> <b>{esc(balance)}</b>\n'
         f'<i><tg-emoji emoji-id="5452155223550223362">💎</tg-emoji> Бонусных запусков «Готовых идей»:</i> <b>{esc(ready_bonus_uses)}</b>\n'
@@ -926,7 +940,7 @@ async def _profile_card_html(
     ready_cycle = "без лимита" if active_sub else f"{ru}/{rlim}"
     img_cycle = "без лимита" if active_sub else f"{fu}/{flim}"
     body = (
-        '<b><tg-emoji emoji-id="5260399854500191689">👤</tg-emoji> Профиль</b>\n'
+        f"<b>{PROFILE_AVATAR_TG_HTML} Профиль</b>\n"
         "<blockquote>"
         f"<i>Ник:</i> <b>{esc(username)}</b>\n"
         f'<i><tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты:</i> <b>{esc(balance)}</b>\n'
@@ -934,9 +948,9 @@ async def _profile_card_html(
         f"<i>🎯 Готовые идеи:</i> <b>{esc(ready_cycle)}</b>\n"
         f'<i><tg-emoji emoji-id="5258254475386167466">🖼</tg-emoji> Картинки:</i> <b>{esc(img_cycle)}</b>\n'
         f'<i><tg-emoji emoji-id="5203996991054432397">🎁</tg-emoji> Бонусные запуски (реф):</i> <b>{esc(ready_bonus_uses)}</b>\n'
-        f"<i>Подписка:</i> <b>{esc(sub_status)}</b> · <i>{plan_name}</i>{priority_note}\n"
-        f"<i>Действует до:</i> <b>{esc(sub_till)}</b>\n"
-        f"<i>Сгенерировано изображений:</i> <b>{esc(gen_total)}</b>\n"
+        f"<i>{PROFILE_SUBSCRIPTION_LABEL_TG_HTML} Подписка:</i> <b>{esc(sub_status)}</b> · <i>{plan_name}</i>{priority_note}\n"
+        f"<i>{PROFILE_VALID_UNTIL_LABEL_TG_HTML} Действует до:</i> <b>{esc(sub_till)}</b>\n"
+        f"<i>{PROFILE_GENERATED_IMAGES_LABEL_TG_HTML} Сгенерировано изображений:</i> <b>{esc(gen_total)}</b>\n"
         "</blockquote>"
     )
     return body, back_to_main_menu_keyboard(back_callback)

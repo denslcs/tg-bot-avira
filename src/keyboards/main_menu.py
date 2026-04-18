@@ -96,7 +96,7 @@ def start_menu_keyboard(balance: int | None = None) -> InlineKeyboardMarkup:
     )
 
 
-def menu_hub_keyboard() -> InlineKeyboardMarkup:
+def menu_hub_keyboard(balance: int | None = None) -> InlineKeyboardMarkup:
     channel_button = (
         InlineKeyboardButton(
             text="Канал",
@@ -111,6 +111,11 @@ def menu_hub_keyboard() -> InlineKeyboardMarkup:
             style=BTN_SUCCESS,
             icon_custom_emoji_id="5388632425314140043",
         )
+    )
+    profile_btn_text = (
+        f"Профиль · {balance}"
+        if isinstance(balance, int) and balance >= 0
+        else "Профиль"
     )
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -139,7 +144,7 @@ def menu_hub_keyboard() -> InlineKeyboardMarkup:
                     icon_custom_emoji_id="5443038326535759644",
                 ),
                 InlineKeyboardButton(
-                    text="Профиль",
+                    text=profile_btn_text[:64],
                     callback_data=CB_MENU_PROFILE_HUB,
                     style=BTN_PRIMARY,
                     icon_custom_emoji_id="5260399854500191689",
@@ -149,14 +154,6 @@ def menu_hub_keyboard() -> InlineKeyboardMarkup:
                     callback_data=CB_CREATE_IMAGE_HUB,
                     style=BTN_PRIMARY,
                     icon_custom_emoji_id="5220195193923328112",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Баланс",
-                    callback_data=CB_MENU_PROFILE_HUB,
-                    style=BTN_PRIMARY,
-                    icon_custom_emoji_id="5312123810638483121",
                 ),
             ],
             [

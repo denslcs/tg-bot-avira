@@ -97,11 +97,59 @@ from src.subscription_catalog import (
     PLANS_ORDER,
     SUBSCRIPTION_PERIOD_DAYS,
     SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS,
+    SubscriptionPlan,
 )
 
 router = Router(name="payments")
 
 logger = logging.getLogger(__name__)
+
+# Перки по тарифам — как в img_commands._model_choices_for_subscription_plan, _image_gen_priority_from_user_id,
+# _user_eligible_redo_half_price, _repeat_plan_bonus_extra_credits, скидка −15% на бонус-пакеты при активной Universe.
+_PLAN_PAY_PERKS_HTML: dict[str, str] = {
+    "starter": (
+        "<b>Пробный 3 дня.</b> Те же модели, что у Universe (Klein, Nano Banana, GPT Image 1.5, FLUX Pro, Nano Banana 2, GPT‑5 Image). "
+        "Приоритет очереди. Повтор «готовой идеи» — <b>−50%</b> к цене, не чаще раза в сутки (UTC). "
+        "<b>Один раз на аккаунт.</b> Не откладывает 30-дневную паузу между полными тарифами."
+    ),
+    "nova": (
+        "<b>Nova.</b> Только <b>FLUX Klein 4B</b>. Очередь общая (без приоритета). "
+        "Повтор той же готовой идеи — всегда по полной стоимости (скидки −50% нет)."
+    ),
+    "supernova": (
+        "<b>SuperNova.</b> <b>Klein 4B</b> + <b>Nano Banana</b>. Очередь общая. "
+        "Без приоритета и без −50% на повтор готовой идеи. Нет моделей GPT Image 1.5, FLUX Pro, Nano Banana 2, GPT‑5 Image."
+    ),
+    "galaxy": (
+        "<b>Galaxy.</b> <b>Klein</b> + <b>Nano Banana</b> + <b>GPT Image 1.5</b>. "
+        "<b>Приоритет</b> очереди. Повтор той же готовой идеи — <b>−50%</b>, не чаще одного раза в сутки (UTC)."
+    ),
+    "universe": (
+        "<b>Universe.</b> Все модели (Klein, Nano Banana, GPT Image 1.5, FLUX Pro, Nano Banana 2, GPT‑5 Image). "
+        "<b>Приоритет</b> очереди. Повтор готовой идеи — <b>−50%</b>, до раза в сутки (UTC). "
+        "При раннем продлении — <b>+10%</b> к бонусным кредитам (вместо +5%). С активной Universe — <b>−15%</b> на пакеты бонусов."
+    ),
+}
+
+
+def _plan_pay_perks_block_html(plan_id: str) -> str:
+    pid = (plan_id or "").strip().lower()
+    body = _PLAN_PAY_PERKS_HTML.get(pid) or _PLAN_PAY_PERKS_HTML["universe"]
+    return f"<blockquote>{body}</blockquote>\n"
+
+
+def _plan_list_button_text(plan_id: str, p: SubscriptionPlan) -> str:
+    """Подпись кнопки в меню тарифов (Telegram ≤64 символов)."""
+    name = p.title.split(" ", 1)[-1]
+    tag = {
+        "starter": "3 дн · все модели",
+        "nova": "Klein 4B",
+        "supernova": "Klein+NB",
+        "galaxy": "+GPT 1.5",
+        "universe": "все · приоритет",
+    }.get(plan_id, "")
+    s = f"{name} — {tag} · +{p.bonus_credits} кр. · {p.price_rub} ₽"
+    return s[:64]
 
 def _plan_invoice_plain_texts(plan_id: str) -> tuple[str, str, str]:
     """Заголовок / описание / label для send_invoice (только plain text; без Unicode-эмодзи тиров)."""
@@ -290,21 +338,17 @@ def _subscriptions_pricing_image_path() -> Path | None:
 
 
 def _plans_menu_caption() -> str:
-    st = PLANS["starter"]
-    st_h = plan_subscription_title_html("starter")
     u_h = plan_subscription_title_html("universe")
     return (
         f"<b>Тарифы</b> — при оплате на баланс начисляются <b>{CREDITS_COIN_TG_HTML} кредиты</b>.\n"
-        f"<blockquote>{st_h} — пробный пакет на <b>{esc(st.period_days)}</b> дн., все модели как у {u_h}, "
-        f"<b>одна покупка на аккаунт</b> (повторно недоступен). Остальные тарифы — <b>{esc(SUBSCRIPTION_PERIOD_DAYS)}</b> дн.</blockquote>\n"
         f"Ограничений на число генераций по подписке нет — списываются {CREDITS_COIN_TG_HTML} кредиты.\n\n"
-        f"<blockquote><i>Полные тарифы:</i> не чаще <b>одного раза в {esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дней "
-        f"после <b>окончания</b> подписки. Пока подписка активна — заранее продлевается только текущий тариф: дни суммируются, "
-        f"бонус за повтор того же тарифа +5% (для {u_h} при раннем продлении +10%). "
-        f"<i>{st_h} в паузу между полными тарифами не входит.</i></blockquote>\n\n"
-        f"<blockquote><i>Без подписки:</i> до <b>{esc(NONSUB_IMAGE_WINDOW_MAX)}</b> картинок за цикл; после полного исчерпания "
-        f"новый цикл через <b>{esc(NONSUB_IMAGE_WINDOW_DAYS)}</b> суток от момента исчерпания (UTC). "
-        f"{CREDITS_COIN_TG_HTML} Кредиты лимит не обходят.</blockquote>"
+        f"<blockquote><i>Продление и пауза:</i> после <b>окончания</b> подписки следующую покупку полного тарифа можно оформить "
+        f"не раньше чем через <b>{esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дней. Пока подписка ещё действует, заранее можно "
+        f"продлить только <b>тот же</b> тариф — дни суммируются; при повторе того же тарифа к кредитам <b>+5%</b>, "
+        f"для {u_h} при раннем продлении <b>+10%</b>.</blockquote>\n\n"
+        f"<blockquote><i>Если подписка не активна:</i> за один цикл — до <b>{esc(NONSUB_IMAGE_WINDOW_MAX)}</b> картинок; "
+        f"когда все слоты цикла израсходованы, новый цикл откроется через <b>{esc(NONSUB_IMAGE_WINDOW_DAYS)}</b> суток "
+        f"от этого момента (UTC). {CREDITS_COIN_TG_HTML} Кредиты этот лимит не обходят — сначала действует лимит цикла.</blockquote>"
     )
 
 
@@ -316,12 +360,11 @@ def _plans_keyboard(
     rows: list[list[InlineKeyboardButton]] = []
     for pid in PLANS_ORDER:
         p = PLANS[pid]
-        title_wo_emoji = p.title.split(" ", 1)[-1]
         icon_id = PLAN_PREMIUM_EMOJI_IDS.get(pid)
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"{title_wo_emoji} — +{p.bonus_credits} кр. · {p.price_rub} ₽",
+                    text=_plan_list_button_text(pid, p),
                     callback_data=f"{CB_PAY_PLAN_PREFIX}{pid}",
                     style=BTN_PRIMARY,
                     icon_custom_emoji_id=icon_id,
@@ -419,35 +462,28 @@ def _pay_methods_text(plan_id: str) -> str:
     p = PLANS[plan_id]
     title = plan_subscription_title_html(plan_id)
     days = p.period_days
-    starter_block = ""
+    perks_block = _plan_pay_perks_block_html(plan_id)
+    starter_extra = ""
     cooldown_block = (
-        f"<blockquote><i>Полный тариф после окончания подписки — не чаще одного раза в {esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)} дней</i> "
-        f"с прошлой покупки. Пока подписка ещё идёт — можно продлить только этот же тариф "
-        f"(дни добавятся; бонус только за повтор того же тарифа). "
-        f'Оплата <tg-emoji emoji-id="5267500801240092311">⭐️</tg-emoji> учитывается автоматически.</blockquote>\n'
+        f"<blockquote><i>После <b>окончания</b> подписки следующую покупку полного тарифа можно оформить не раньше чем через "
+        f"<b>{esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дней. Пока срок идёт — продлевается только <b>тот же</b> тариф "
+        f"(дни суммируются; за повтор — <b>+5%</b> к кредитам, у {plan_subscription_title_html('universe')} при раннем продлении <b>+10%</b>). "
+        f'Оплата <tg-emoji emoji-id="5267500801240092311">⭐️</tg-emoji> учитывается автоматически.</i></blockquote>\n'
     )
     if plan_id == "starter":
-        starter_block = (
-            "<blockquote>"
-            f"<b>Пробный {plan_subscription_title_html('starter')} (3 дня):</b> как {plan_subscription_title_html('universe')} — полный набор моделей, "
-            f"без лимита «готовых идей», +{esc(p.bonus_credits)} кредитов. "
-            f"После окончания — полные тарифы {full_plans_after_starter_html(sep=' / ')}. "
-            f"<b>Повторно {plan_subscription_title_html('starter')} купить нельзя.</b></blockquote>\n"
+        starter_extra = (
+            f"<blockquote><i>После пробного — полные тарифы: {full_plans_after_starter_html(sep=' / ')}.</i></blockquote>\n"
         )
-        cooldown_block = (
-            f"<blockquote><i>{plan_subscription_title_html('starter')} не увеличивает паузу между покупками полных тарифов.</i></blockquote>\n"
-        )
+        cooldown_block = ""
     return (
         "<b>💳 Выбери способ оплаты</b>\n\n"
         f'<tg-emoji emoji-id="5203996991054432397">🎁</tg-emoji> <b>Подписка:</b> {title}\n'
         f'<i><tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты на баланс:</i> <b>+{esc(p.bonus_credits)}</b>\n'
-        f"Срок: <b>{esc(days)}</b> дн.\n"
-        f"{starter_block}"
-        "<blockquote><i>Картинки по своему описанию</i> — без дневного лимита по числу запросов (с кредитами). "
-        "<i>Готовые идеи</i> — без лимита при активной подписке.</blockquote>\n"
+        f"Срок: <b>{esc(days)}</b> дн.\n\n"
+        f"{perks_block}"
+        f"{starter_extra}"
         f"{cooldown_block}"
-        f"<blockquote><i>Без подписки:</i> до <b>{esc(NONSUB_IMAGE_WINDOW_MAX)}</b> картинок за цикл; после исчерпания цикла "
-        f"следующий через <b>{esc(NONSUB_IMAGE_WINDOW_DAYS)}</b> суток от этого момента (UTC). Кредиты лимит не обходят.</blockquote>\n\n"
+        "\n"
         "<i>Оформляя оплату, ты соглашаешься с условиями сервиса и политикой возврата "
         "(подробности — в поддержке или на странице оплаты).</i>"
     )

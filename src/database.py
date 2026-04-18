@@ -210,6 +210,41 @@ async def _migrate_redo_half_price_date(db: aiosqlite.Connection) -> None:
         await db.execute("ALTER TABLE users ADD COLUMN redo_half_price_utc_date TEXT")
 
 
+async def _migrate_generated_images_total(db: aiosqlite.Connection) -> None:
+    async with db.execute("PRAGMA table_info(users)") as cur:
+        cols = {row[1] for row in await cur.fetchall()}
+    if "generated_images_total" not in cols:
+        await db.execute(
+            "ALTER TABLE users ADD COLUMN generated_images_total INTEGER NOT NULL DEFAULT 0"
+        )
+
+
+async def _backfill_generated_images_total_once(db: aiosqlite.Connection) -> None:
+    """Один раз переносим старый учёт (дневные/месячные слоты) в единый счётчик профиля."""
+    async with db.execute(
+        "SELECT 1 FROM bot_meta WHERE key = ?",
+        ("generated_images_total_backfill_v1",),
+    ) as cur:
+        if await cur.fetchone():
+            return
+    await db.execute(
+        """
+        UPDATE users
+        SET generated_images_total = IFNULL(
+            (SELECT SUM(u.count) FROM user_daily_image_usage u WHERE u.user_id = users.user_id),
+            0
+        ) + IFNULL(
+            (SELECT SUM(m.count) FROM user_monthly_image_usage m WHERE m.user_id = users.user_id),
+            0
+        )
+        """
+    )
+    await db.execute(
+        "INSERT INTO bot_meta (key, value) VALUES (?, ?)",
+        ("generated_images_total_backfill_v1", "1"),
+    )
+
+
 async def _migrate_nonsub_quota_exhaustion_semantics(db: aiosqlite.Connection) -> None:
     """Очистить метку исчерпания, если счётчик не на максимуме (после смены логики окон)."""
     await db.execute(
@@ -404,6 +439,8 @@ async def init_db() -> None:
         await _migrate_last_image_context_usage_kind(db)
         await _migrate_last_image_context_redo_fields(db)
         await _migrate_redo_half_price_date(db)
+        await _migrate_generated_images_total(db)
+        await _backfill_generated_images_total_once(db)
         await _migrate_nonsub_quota_exhaustion_semantics(db)
         await _migrate_subscription_ends_at_canonical(db)
         await db.commit()
@@ -1981,21 +2018,29 @@ async def count_dialog_messages(user_id: int) -> int:
 
 
 async def count_generated_images_total(user_id: int) -> int:
-    """Общее число генераций картинок пользователя (исторически: monthly + daily)."""
+    """Всего успешных генераций изображений (готовые идеи и свои картинки)."""
     async with open_db() as db:
         async with db.execute(
-            "SELECT COALESCE(SUM(count), 0) FROM user_monthly_image_usage WHERE user_id = ?",
+            "SELECT COALESCE(generated_images_total, 0) FROM users WHERE user_id = ?",
             (user_id,),
         ) as cur:
-            row_m = await cur.fetchone()
-        async with db.execute(
-            "SELECT COALESCE(SUM(count), 0) FROM user_daily_image_usage WHERE user_id = ?",
-            (user_id,),
-        ) as cur:
-            row_d = await cur.fetchone()
-    return int(row_m[0] if row_m and row_m[0] is not None else 0) + int(
-        row_d[0] if row_d and row_d[0] is not None else 0
-    )
+            row = await cur.fetchone()
+    return int(row[0]) if row and row[0] is not None else 0
+
+
+async def increment_user_generated_images_total(user_id: int, delta: int = 1) -> None:
+    """+1 к счётчику профиля после успешной выдачи сгенерированного изображения."""
+    d = max(1, int(delta))
+    async with open_db() as db:
+        await db.execute(
+            """
+            UPDATE users
+            SET generated_images_total = COALESCE(generated_images_total, 0) + ?
+            WHERE user_id = ?
+            """,
+            (d, user_id),
+        )
+        await db.commit()
 
 
 async def get_user_admin_profile(user_id: int) -> UserAdminProfile | None:

@@ -57,6 +57,7 @@ from src.database import (
     get_nonsub_image_quota_status,
     get_redo_half_price_utc_date,
     get_user_admin_profile,
+    increment_user_generated_images_total,
     mark_redo_half_price_used_today,
     release_daily_image_generation,
     release_nonsub_image_quota_slot,
@@ -72,7 +73,7 @@ from src.database import (
 from src.formatting import CREDITS_COIN_TG_HTML, HTML, esc, plans_premium_sequence_html
 from src.image_gen_gate import image_generation_slot
 from src.handlers.commands import edit_or_send_nav_message, restore_main_menu_message
-from src.keyboards.main_menu import start_menu_keyboard
+from src.keyboards.main_menu import menu_hub_keyboard, start_menu_keyboard
 from src.keyboards.callback_data import (
     CB_BACK_IMAGE_MODELS,
     CB_CREATE_IMAGE_HUB,
@@ -732,7 +733,8 @@ _MELLSTROY_PHOTO_LISTING_IMAGE = (
 
 
 def _start_listing_banner_path() -> Path | None:
-    p = PROJECT_ROOT / "assets" / "start" / "start_banner.png"
+    """Фолбэк-картинка для навигации «Готовые идеи» (не путать с баннером главного меню)."""
+    p = PROJECT_ROOT / "assets" / "start" / "ready_ideas_nav_banner.png"
     return p if p.is_file() else None
 
 
@@ -741,7 +743,7 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
 
     Используется только в UI (_edit_ready_nav_message). Не является референсом для генерации:
     в API уходят фото пользователя и, для части идей, байты из _READY_IDEA_STATIC_REF_BY_TITLE.
-    При выходе в категории/загрузку фото подставляется start_banner через _ready_categories_listing_photo().
+    При выходе в категории/загрузку фото подставляется ready_ideas_nav_banner через _ready_categories_listing_photo().
     """
     t = title.strip()
     if t == "Minecraft" and _MINECRAFT_READY_LISTING_IMAGE.is_file():
@@ -1076,6 +1078,11 @@ def _waiting_prompt_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
+                InlineKeyboardButton(
+                    text="Назад",
+                    callback_data=CB_BACK_IMAGE_MODELS,
+                    icon_custom_emoji_id="5256247952564825322",
+                ),
                 InlineKeyboardButton(
                     text="Отмена",
                     callback_data=CB_IMG_CANCEL,
@@ -1928,7 +1935,7 @@ async def _send_result_photo_with_regen(
             "<b>Готово!</b>\n"
             "<i>сгенерировано при помощи Shard Creator</i>\n"
             f"{spent}"
-            f'<blockquote><i><tg-emoji emoji-id="5312123810638483121">🐷</tg-emoji> Баланс:</i> <b>{esc(balance)}</b></blockquote>{day_note}'
+            f'<blockquote><i>{CREDITS_COIN_TG_HTML} кредиты:</i> <b>{esc(balance)}</b></blockquote>{day_note}'
         )
     mellstroy = (ready_idea_title or "").strip() == _MELLSTROY_PHOTO_TITLE
     # Для готовых идей: сначала отдельное фото с бренд-подписью, затем отдельное сообщение с действиями.
@@ -1939,6 +1946,7 @@ async def _send_result_photo_with_regen(
             caption=made_caption,
             parse_mode=HTML,
         )
+        await increment_user_generated_images_total(user_id)
         if is_admin:
             await message.answer(
                 f"👑 Режим админа: {CREDITS_COIN_TG_HTML} кредиты не списывались.",
@@ -1949,14 +1957,14 @@ async def _send_result_photo_with_regen(
             cw = _credits_word(cost)
             await message.answer(
                 f'<tg-emoji emoji-id="5444856076954520455">🧾</tg-emoji> Списано: <b>{esc(cost)}</b> {cw}.\n'
-                f'<tg-emoji emoji-id="5312123810638483121">🐷</tg-emoji> Баланс: <b>{esc(balance_after)}</b>.',
+                f"{CREDITS_COIN_TG_HTML} кредиты: <b>{esc(balance_after)}</b>.",
                 parse_mode=HTML,
             )
         elif charge:
             balance_after = await get_credits(user_id)
             await message.answer(
                 "ℹ️ Кредиты за эту генерацию не списались.\n"
-                f'<tg-emoji emoji-id="5312123810638483121">🐷</tg-emoji> Баланс: <b>{esc(balance_after)}</b>.',
+                f"{CREDITS_COIN_TG_HTML} кредиты: <b>{esc(balance_after)}</b>.",
                 parse_mode=HTML,
             )
         if mellstroy:
@@ -1979,6 +1987,7 @@ async def _send_result_photo_with_regen(
             reply_markup=_regen_keyboard(),
             parse_mode=HTML,
         )
+        await increment_user_generated_images_total(user_id)
     if mark_redo_half_after_success:
         await mark_redo_half_price_used_today(user_id)
     if state is not None:
@@ -2496,6 +2505,29 @@ async def remind_pick_model_or_ignore(message: Message, state: FSMContext) -> No
     )
 
 
+async def _restore_image_flow_parent_menu(
+    callback: CallbackQuery,
+    *,
+    back_callback: str,
+    user_id: int,
+    username: str | None,
+) -> None:
+    """Экран до «Создать картинку»: хаб меню или главный /start (см. _img_back_cb)."""
+    msg = callback.message
+    if msg is None:
+        return
+    if back_callback == CB_MENU_HUB:
+        balance = await get_credits(user_id)
+        await edit_or_send_nav_message(
+            msg,
+            text="<b>📋 Главное меню</b>\n<blockquote><i>Выбери нужный раздел.</i></blockquote>",
+            reply_markup=menu_hub_keyboard(balance),
+            parse_mode=HTML,
+        )
+    else:
+        await restore_main_menu_message(msg, user_id, username)
+
+
 @router.callback_query(F.data == CB_IMG_CANCEL)
 async def cancel_image_flow(callback: CallbackQuery, state: FSMContext) -> None:
     if not callback.from_user or not callback.message:
@@ -2536,13 +2568,12 @@ async def back_to_image_flow(callback: CallbackQuery, state: FSMContext) -> None
             back_callback=back_callback,
         )
     else:
-        await _start_image_flow(
-            callback.message,
-            state,
-            uid,
-            callback.from_user.username,
-            replace_menu=True,
+        await state.clear()
+        await _restore_image_flow_parent_menu(
+            callback,
             back_callback=back_callback,
+            user_id=uid,
+            username=callback.from_user.username,
         )
 
 

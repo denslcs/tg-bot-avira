@@ -12,7 +12,15 @@ from src.subscription_catalog import PLANS, PLANS_ORDER, PLAN_PREMIUM_EMOJI_FALL
 
 HTML = ParseMode.HTML
 
-CREDITS_COIN_TG_HTML = '<tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji>'
+CREDITS_PREMIUM_EMOJI_ID = "5382164415019768638"
+CREDITS_COIN_TG_HTML = f'<tg-emoji emoji-id="{CREDITS_PREMIUM_EMOJI_ID}">🪙</tg-emoji>'
+
+PROFILE_AVATAR_PREMIUM_EMOJI_ID = "5260399854500191689"
+PROFILE_AVATAR_TG_HTML = f'<tg-emoji emoji-id="{PROFILE_AVATAR_PREMIUM_EMOJI_ID}">👤</tg-emoji>'
+
+PROFILE_SUBSCRIPTION_LABEL_TG_HTML = '<tg-emoji emoji-id="5427168083074628963">💎</tg-emoji>'
+PROFILE_VALID_UNTIL_LABEL_TG_HTML = '<tg-emoji emoji-id="5893102202817352158">🕞</tg-emoji>'
+PROFILE_GENERATED_IMAGES_LABEL_TG_HTML = '<tg-emoji emoji-id="5305265301917549162">📎</tg-emoji>'
 
 
 def esc(value: str | int | float) -> str:
