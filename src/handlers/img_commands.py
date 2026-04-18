@@ -738,6 +738,85 @@ def _start_listing_banner_path() -> Path | None:
     return p if p.is_file() else None
 
 
+# Ровно два превью для экрана списка категорий «Готовые идеи» (замени файлы в assets/start/).
+# Превью конкретных идей внутри категорий — по-прежнему из _ready_idea_listing_photo_path.
+_READY_IDEAS_HUB_TILE_IMAGES: tuple[Path, ...] = (
+    PROJECT_ROOT / "assets" / "start" / "ready_ideas_hub_1.png",
+    PROJECT_ROOT / "assets" / "start" / "ready_ideas_hub_2.png",
+)
+
+
+def _ready_ideas_category_hub_photo_paths() -> list[Path]:
+    """Два превью для корневого экрана «Готовые идеи»; если файла нет — один фолбэк-баннер."""
+    out = [p for p in _READY_IDEAS_HUB_TILE_IMAGES if p.is_file()]
+    if len(out) >= 2:
+        return out[:2]
+    if len(out) == 1:
+        return out
+    b = _start_listing_banner_path()
+    return [b] if b else []
+
+
+async def _purge_prior_ready_hub_ui(
+    bot,
+    chat_id: int,
+    anchor: Message | None,
+    prior_data: dict,
+) -> None:
+    """Удаляет альбом категорий и/или якорное сообщение перед новым UI (без дублей в чате)."""
+    ids = list(prior_data.get("_ready_category_album_ids") or [])
+    seen: set[int] = set()
+    for mid in ids:
+        if mid in seen:
+            continue
+        seen.add(mid)
+        try:
+            await bot.delete_message(chat_id, mid)
+        except Exception:
+            logging.debug("purge hub album mid=%s", mid, exc_info=True)
+    if anchor is not None and anchor.message_id not in seen:
+        try:
+            await anchor.delete()
+        except Exception:
+            logging.debug("purge hub anchor", exc_info=True)
+
+
+async def _send_ready_hub_messages(
+    bot,
+    chat_id: int,
+    caption: str,
+    reply_markup: InlineKeyboardMarkup,
+    paths: list[Path],
+) -> tuple[Message, list[int]]:
+    """Один снимок или альбом из двух фото (экран категорий); клавиатура — на первом сообщении альбома."""
+    ok = [p for p in paths if p.is_file()]
+    if not ok:
+        m = await bot.send_message(chat_id, caption, reply_markup=reply_markup, parse_mode=HTML)
+        return m, [m.message_id]
+    if len(ok) == 1:
+        m = await bot.send_photo(
+            chat_id,
+            FSInputFile(ok[0]),
+            caption=caption,
+            reply_markup=reply_markup,
+            parse_mode=HTML,
+        )
+        return m, [m.message_id]
+    media: list[InputMediaPhoto] = []
+    for i, p in enumerate(ok):
+        if i == 0:
+            media.append(InputMediaPhoto(media=FSInputFile(p), caption=caption, parse_mode=HTML))
+        else:
+            media.append(InputMediaPhoto(media=FSInputFile(p)))
+    msgs = await bot.send_media_group(chat_id, media=media)
+    await bot.edit_message_reply_markup(
+        chat_id=chat_id,
+        message_id=msgs[0].message_id,
+        reply_markup=reply_markup,
+    )
+    return msgs[0], [x.message_id for x in msgs]
+
+
 def _ready_idea_listing_photo_path(title: str) -> Path | None:
     """Файл картинки для карточки просмотра готовой идеи в чате (иллюстрация «как может выглядеть результат»).
 
@@ -851,6 +930,9 @@ async def _edit_ready_nav_message(
 
     Если текущее сообщение без фото (текстовое меню), а нужно превью идеи — шлём новое фото
     и удаляем старое сообщение, иначе подпись остаётся без картинки.
+
+    При сбое edit_media сначала удаляем старое сообщение, потом шлём новое — иначе в чате на миг
+    два превью и визуально «прыгает» картинка.
     """
     if listing_photo is None or not listing_photo.is_file():
         return await edit_or_send_nav_message(
@@ -863,33 +945,40 @@ async def _edit_ready_nav_message(
         parse_mode=HTML,
     )
 
+    chat_id = message.chat.id
+    bot = message.bot
+
     if message.photo:
         try:
             return await message.edit_media(media=media, reply_markup=reply_markup)
         except Exception:
             logging.warning("_edit_ready_nav_message: edit_media failed", exc_info=True)
         try:
-            sent = await message.bot.send_photo(
-                message.chat.id,
+            await message.delete()
+        except Exception:
+            logging.debug("_edit_ready_nav_message: delete before resend failed", exc_info=True)
+        try:
+            return await bot.send_photo(
+                chat_id,
                 photo=FSInputFile(listing_photo),
                 caption=caption,
                 reply_markup=reply_markup,
                 parse_mode=HTML,
             )
         except Exception:
-            logging.warning("_edit_ready_nav_message: send_photo after edit_media failed", exc_info=True)
-            return await edit_or_send_nav_message(
-                message, text=caption, reply_markup=reply_markup, parse_mode=HTML
-            )
-        try:
-            await message.delete()
-        except Exception:
-            logging.debug("_edit_ready_nav_message: delete old photo message failed", exc_info=True)
-        return sent
+            logging.warning("_edit_ready_nav_message: send_photo after delete failed", exc_info=True)
+            try:
+                return await bot.send_message(chat_id, caption, reply_markup=reply_markup, parse_mode=HTML)
+            except Exception:
+                return None
 
     try:
-        sent = await message.bot.send_photo(
-            message.chat.id,
+        await message.delete()
+    except Exception:
+        logging.debug("_edit_ready_nav_message: delete text nav before photo failed", exc_info=True)
+    try:
+        return await bot.send_photo(
+            chat_id,
             photo=FSInputFile(listing_photo),
             caption=caption,
             reply_markup=reply_markup,
@@ -897,19 +986,16 @@ async def _edit_ready_nav_message(
         )
     except Exception:
         logging.warning("_edit_ready_nav_message: send_photo for listing failed", exc_info=True)
-        return await edit_or_send_nav_message(
-            message, text=caption, reply_markup=reply_markup, parse_mode=HTML
-        )
-    try:
-        await message.delete()
-    except Exception:
-        logging.debug("_edit_ready_nav_message: delete old text nav message failed", exc_info=True)
-    return sent
+        try:
+            return await bot.send_message(chat_id, caption, reply_markup=reply_markup, parse_mode=HTML)
+        except Exception:
+            return None
 
 
 def _ready_categories_listing_photo() -> Path | None:
-    """Картинка для списка категорий готовых идей — всегда общий баннер, не превью игр."""
-    return _start_listing_banner_path()
+    """Одна картинка для фолбэков (корневой экран с альбомом задаётся через _send_ready_hub_messages)."""
+    paths = _ready_ideas_category_hub_photo_paths()
+    return paths[0] if paths else _start_listing_banner_path()
 
 # Подпись для внутреннего контекста «Ещё раз» (пользователю не показываем).
 _IMAGE_CONTEXT_LABEL = "text2img"
@@ -2586,34 +2672,34 @@ async def _send_ready_ideas_screen(
     edit: bool = False,
     back_callback: str = CB_MENU_BACK_START,
 ) -> None:
+    prior = await state.get_data()
+    chat_id = message.chat.id
+    bot = message.bot
+    if edit:
+        await _purge_prior_ready_hub_ui(bot, chat_id, message, prior)
+    else:
+        await _purge_prior_ready_hub_ui(bot, chat_id, None, prior)
+
     await state.clear()
     if not is_openrouter_image_configured():
         if edit:
-            await _edit_ready_nav_message(
-                message,
-                caption=_IMAGE_GEN_MISSING_TEXT,
+            await bot.send_message(
+                chat_id,
+                _IMAGE_GEN_MISSING_TEXT,
                 reply_markup=_missing_config_kb(),
-                listing_photo=_ready_categories_listing_photo(),
+                parse_mode=HTML,
             )
         else:
             await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
         return
     await ensure_user(user_id, username)
-    await state.update_data(_ready_back_cb=back_callback)
     await state.set_state(ImageGenState.ready_choosing_category)
     cap = _ready_category_caption()
     kb = _ready_categories_keyboard(back_callback=back_callback)
-    if edit:
-        edited = await _edit_ready_nav_message(
-            message,
-            caption=cap,
-            reply_markup=kb,
-            listing_photo=_ready_categories_listing_photo(),
-        )
-        await _set_img_flow_anchor(state, edited or message)
-    else:
-        sent = await message.answer(cap, reply_markup=kb, parse_mode=HTML)
-        await _set_img_flow_anchor(state, sent)
+    paths = _ready_ideas_category_hub_photo_paths()
+    first, album_ids = await _send_ready_hub_messages(bot, chat_id, cap, kb, paths)
+    await state.update_data(_ready_back_cb=back_callback, _ready_category_album_ids=album_ids)
+    await _set_img_flow_anchor(state, first)
 
 
 @router.callback_query(F.data == CB_READY_IDEAS)
@@ -2721,22 +2807,30 @@ async def _open_ready_card(
     edit: bool,
 ) -> None:
     data = await state.get_data()
+    chat_id = message.chat.id
+    bot = message.bot
+    hub_cleared = False
+    if data.get("_ready_category_album_ids"):
+        await _purge_prior_ready_hub_ui(bot, chat_id, message, data)
+        await state.update_data(_ready_category_album_ids=[])
+        edit = False
+        hub_cleared = True
     back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
     ideas = _ideas_for_category(category)
     if not ideas:
-        if edit:
+        empty_txt = "<b>В этой категории пока пусто.</b>\n<blockquote><i>Выбери другое направление.</i></blockquote>"
+        kb = _ready_categories_keyboard(back_callback=back_callback)
+        if hub_cleared:
+            await bot.send_message(chat_id, empty_txt, reply_markup=kb, parse_mode=HTML)
+        elif edit:
             await _edit_ready_nav_message(
                 message,
-                caption="<b>В этой категории пока пусто.</b>\n<blockquote><i>Выбери другое направление.</i></blockquote>",
-                reply_markup=_ready_categories_keyboard(back_callback=back_callback),
+                caption=empty_txt,
+                reply_markup=kb,
                 listing_photo=_ready_categories_listing_photo(),
             )
         else:
-            await message.answer(
-                "<b>В этой категории пока пусто.</b>\n<blockquote><i>Выбери другое направление.</i></blockquote>",
-                reply_markup=_ready_categories_keyboard(back_callback=back_callback),
-                parse_mode=HTML,
-            )
+            await message.answer(empty_txt, reply_markup=kb, parse_mode=HTML)
         await state.set_state(ImageGenState.ready_choosing_category)
         return
     total = len(ideas)
@@ -2757,17 +2851,17 @@ async def _open_ready_card(
 
     if edit and photo_path is not None and not message.photo:
         try:
-            sent = await message.bot.send_photo(
-                message.chat.id,
+            try:
+                await message.delete()
+            except Exception:
+                logging.debug("ready card: delete text msg before photo", exc_info=True)
+            sent = await bot.send_photo(
+                chat_id,
                 photo=FSInputFile(photo_path),
                 caption=cap,
                 reply_markup=kb,
                 parse_mode=HTML,
             )
-            try:
-                await message.edit_reply_markup(reply_markup=None)
-            except Exception:
-                logging.debug("ready card: strip keyboard from prior text msg", exc_info=True)
             await _set_img_flow_anchor(state, sent)
             return
         except Exception:
@@ -2779,17 +2873,29 @@ async def _open_ready_card(
     else:
         if photo_path is not None:
             try:
-                sent = await message.answer_photo(
-                    photo=FSInputFile(photo_path),
-                    caption=cap,
-                    reply_markup=kb,
-                    parse_mode=HTML,
-                )
+                if hub_cleared:
+                    sent = await bot.send_photo(
+                        chat_id,
+                        photo=FSInputFile(photo_path),
+                        caption=cap,
+                        reply_markup=kb,
+                        parse_mode=HTML,
+                    )
+                else:
+                    sent = await message.answer_photo(
+                        photo=FSInputFile(photo_path),
+                        caption=cap,
+                        reply_markup=kb,
+                        parse_mode=HTML,
+                    )
                 await _set_img_flow_anchor(state, sent)
                 return
             except Exception:
                 logging.warning("ready card answer_photo failed, fallback text", exc_info=True)
-        sent = await message.answer(cap, reply_markup=kb, parse_mode=HTML)
+        if hub_cleared:
+            sent = await bot.send_message(chat_id, cap, reply_markup=kb, parse_mode=HTML)
+        else:
+            sent = await message.answer(cap, reply_markup=kb, parse_mode=HTML)
         await _set_img_flow_anchor(state, sent)
 
 
@@ -2813,12 +2919,18 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
         data = await state.get_data()
         back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
         await state.set_state(ImageGenState.ready_choosing_category)
-        await _edit_ready_nav_message(
-            callback.message,
-            caption=_ready_category_caption(),
-            reply_markup=_ready_categories_keyboard(back_callback=back_callback),
-            listing_photo=_ready_categories_listing_photo(),
-        )
+        chat_id = callback.message.chat.id
+        bot = callback.message.bot
+        try:
+            await callback.message.delete()
+        except Exception:
+            logging.debug("ready back_cats: delete idea card failed", exc_info=True)
+        cap = _ready_category_caption()
+        kb = _ready_categories_keyboard(back_callback=back_callback)
+        paths = _ready_ideas_category_hub_photo_paths()
+        first, album_ids = await _send_ready_hub_messages(bot, chat_id, cap, kb, paths)
+        await state.update_data(_ready_category_album_ids=album_ids)
+        await _set_img_flow_anchor(state, first)
         await callback.answer()
         return
     parts = payload.split(":")
