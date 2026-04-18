@@ -46,7 +46,8 @@ _READY_LIMITS_FAQ_BODY = (
     f"За запуск списывается {OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS} {CREDITS_COIN_TG_HTML} кредитов.\n\n"
     f"{PROFILE_SUBSCRIPTION_LABEL_TG_HTML} С подпиской: лимита по «Готовым идеям» нет.\n"
     f"{PROFILE_VALID_UNTIL_LABEL_TG_HTML} Без подписки: 1 запуск за цикл, новый цикл через 30 суток после исчерпания.\n"
-    f"{_GIFT_HEAD_TG} Бонус: +1 запуск за каждых 2 друзей по /ref."
+    f"{_GIFT_HEAD_TG} Рефералка /ref: без подписки — +1 бонусный запуск за каждых 2 друзей; "
+    f"с подпиской за тех же условий — +10 {CREDITS_COIN_TG_HTML} кредитов вместо запуска."
 )
 
 _CREDITS_FAQ_BODY = (

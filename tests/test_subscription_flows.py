@@ -10,6 +10,11 @@ os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test-token")
 
 from src import database as db  # noqa: E402
 from src.handlers.payments import _discount_pack_values, _has_active_starter_or_universe  # noqa: E402
+from src.subscription_catalog import (  # noqa: E402
+    BONUS_PACKS,
+    BONUS_PACKS_ORDER,
+    UNIVERSE_BONUS_PACK_DISCOUNT_MULTIPLIER,
+)
 
 
 class SubscriptionFlowsTests(unittest.IsolatedAsyncioTestCase):
@@ -87,14 +92,19 @@ class SubscriptionFlowsTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(can_buy)
         self.assertIn("только текущий тариф", (reason or "").lower())
 
-    async def test_universe_pack_discount_values(self) -> None:
-        rub, usd, stars, discounted = _discount_pack_values(
-            "pack1000", apply_universe_discount=True
-        )
-        self.assertTrue(discounted)
-        self.assertEqual(rub, 849)
-        self.assertAlmostEqual(usd, 10.58, places=2)
-        self.assertEqual(stars, 796)
+    async def test_universe_pack_discount_15_percent_all_bonus_packs(self) -> None:
+        m = UNIVERSE_BONUS_PACK_DISCOUNT_MULTIPLIER
+        for pack_id in BONUS_PACKS_ORDER:
+            p = BONUS_PACKS[pack_id]
+            rub, usd, stars, discounted = _discount_pack_values(
+                pack_id, apply_universe_discount=True
+            )
+            self.assertTrue(discounted, msg=pack_id)
+            self.assertEqual(rub, max(1, int(round(p.price_rub * m))), msg=pack_id)
+            self.assertAlmostEqual(
+                usd, round(float(p.price_usd) * m, 2), places=2, msg=pack_id
+            )
+            self.assertEqual(stars, max(1, int(round(p.stars * m))), msg=pack_id)
 
     async def test_pack_values_without_universe_discount(self) -> None:
         rub, usd, stars, discounted = _discount_pack_values(
@@ -102,8 +112,8 @@ class SubscriptionFlowsTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertFalse(discounted)
         self.assertEqual(rub, 999)
-        self.assertAlmostEqual(usd, 12.45, places=2)
-        self.assertEqual(stars, 936)
+        self.assertAlmostEqual(usd, 12.99, places=2)
+        self.assertEqual(stars, 989)
 
     async def test_universe_discount_tied_to_active_subscription_only(self) -> None:
         # Нет подписки -> скидки нет.

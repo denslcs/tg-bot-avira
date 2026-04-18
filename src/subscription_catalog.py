@@ -149,30 +149,33 @@ PLAN_PREMIUM_EMOJI_FALLBACK: dict[str, str] = {
 
 BONUS_PACKS_ORDER: tuple[str, ...] = ("pack300", "pack500", "pack1000")
 
+# −15% к цене бонус-пака (₽, $, ⭐) при активной подписке Starter или Universe — см. payments._discount_pack_values.
+UNIVERSE_BONUS_PACK_DISCOUNT_MULTIPLIER: float = 0.85
+
 BONUS_PACKS: dict[str, BonusPack] = {
     "pack300": BonusPack(
         id="pack300",
         title="300 кредитов",
         credits=300,
         price_rub=299,
-        price_usd=3.73,
-        stars=281,
+        price_usd=2.89,
+        stars=289,
     ),
     "pack500": BonusPack(
         id="pack500",
         title="500 кредитов",
         credits=500,
         price_rub=499,
-        price_usd=6.22,
-        stars=468,
+        price_usd=6.49,
+        stars=489,
     ),
     "pack1000": BonusPack(
         id="pack1000",
         title="1000 кредитов",
         credits=1000,
         price_rub=999,
-        price_usd=12.45,
-        stars=936,
+        price_usd=12.99,
+        stars=989,
     ),
 }
 

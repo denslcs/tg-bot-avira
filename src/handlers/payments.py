@@ -90,6 +90,7 @@ from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 from src.subscription_catalog import (
     BONUS_PACKS,
     BONUS_PACKS_ORDER,
+    UNIVERSE_BONUS_PACK_DISCOUNT_MULTIPLIER,
     NONSUB_IMAGE_WINDOW_DAYS,
     NONSUB_IMAGE_WINDOW_MAX,
     PLAN_PREMIUM_EMOJI_IDS,
@@ -313,13 +314,14 @@ async def _has_active_starter_or_universe(user_id: int) -> bool:
 
 
 def _discount_pack_values(pack_id: str, *, apply_universe_discount: bool) -> tuple[int, float, int, bool]:
-    """Цена пакета с учётом перка Universe: -15% на бонус-паки."""
+    """Цена пакета с учётом перка Universe: −15% на все бонус-паки (₽, $, ⭐)."""
     p = BONUS_PACKS[pack_id]
     if not apply_universe_discount:
         return p.price_rub, p.price_usd, p.stars, False
-    rub = max(1, int(round(p.price_rub * 0.85)))
-    usd = round(float(p.price_usd) * 0.85, 2)
-    stars = max(1, int(round(p.stars * 0.85)))
+    m = UNIVERSE_BONUS_PACK_DISCOUNT_MULTIPLIER
+    rub = max(1, int(round(p.price_rub * m)))
+    usd = round(float(p.price_usd) * m, 2)
+    stars = max(1, int(round(p.stars * m)))
     return rub, usd, stars, True
 
 
@@ -335,6 +337,25 @@ def _repeat_plan_bonus_extra_credits(*, plan_id: str, base_credits: int, early_r
 def _subscriptions_pricing_image_path() -> Path | None:
     p = PROJECT_ROOT / "assets" / "pay" / "subscriptions_pricing.png"
     return p if p.is_file() else None
+
+
+def _plans_screen_uses_pricing_image() -> bool:
+    p = _subscriptions_pricing_image_path()
+    return p is not None and p.is_file()
+
+
+def _plans_menu_photo_caption() -> str:
+    """Короткая подпись к баннеру тарифов (детали цен — на картинке)."""
+    return (
+        "<b>Тарифы</b>\n"
+        f"<i>На баланс начисляются {CREDITS_COIN_TG_HTML} кредиты. Выбери тариф кнопкой ниже.</i>"
+    )
+
+
+def _plans_menu_caption_for_display() -> str:
+    if _plans_screen_uses_pricing_image():
+        return _plans_menu_photo_caption()
+    return _plans_menu_caption()
 
 
 def _plans_menu_caption() -> str:
@@ -620,7 +641,7 @@ def _bonus_packs_keyboard(
 
 
 async def _send_plans_menu_to_chat(bot, chat_id: int) -> None:
-    caption = _plans_menu_caption()
+    caption = _plans_menu_caption_for_display()
     kb = _plans_keyboard()
     pricing_img = _subscriptions_pricing_image_path()
     if pricing_img and pricing_img.is_file():
@@ -648,8 +669,27 @@ async def send_subscription_menu(
     await ensure_user(message.from_user.id, message.from_user.username)
     chat_id = message.chat.id
     bot = message.bot
+    pricing_img = _subscriptions_pricing_image_path()
+    if replace_previous and pricing_img and pricing_img.is_file():
+        caption = _plans_menu_photo_caption()
+        kb = _plans_keyboard(back_callback=back_callback, bonus_menu_callback=bonus_menu_callback)
+        try:
+            await message.delete()
+        except Exception:
+            logging.debug(
+                "send_subscription_menu: не удалось удалить сообщение перед баннером тарифов",
+                exc_info=True,
+            )
+        await bot.send_photo(
+            chat_id,
+            photo=FSInputFile(pricing_img),
+            caption=caption,
+            reply_markup=kb,
+            parse_mode=HTML,
+        )
+        return
     if replace_previous:
-        caption = _plans_menu_caption()
+        caption = _plans_menu_caption_for_display()
         kb = _plans_keyboard(back_callback=back_callback, bonus_menu_callback=bonus_menu_callback)
         edited = await edit_or_send_nav_message(
             message,
@@ -688,12 +728,27 @@ async def pay_back_plans(callback: CallbackQuery) -> None:
         await callback.answer()
         return
     await callback.answer()
-    caption = _plans_menu_caption()
     is_hub = callback.data == CB_PAY_MENU_HUB
     kb = _plans_keyboard(
         back_callback=(CB_MENU_HUB if is_hub else CB_MENU_BACK_START),
         bonus_menu_callback=(CB_PAY_BONUS_MENU_HUB if is_hub else CB_PAY_BONUS_MENU),
     )
+    caption = _plans_menu_caption_for_display()
+    pricing_img = _subscriptions_pricing_image_path()
+    if _plans_screen_uses_pricing_image() and not callback.message.photo:
+        try:
+            await callback.message.delete()
+        except Exception:
+            logging.debug("pay_back_plans: не удалось удалить сообщение перед фото тарифов", exc_info=True)
+        if pricing_img and pricing_img.is_file():
+            await callback.bot.send_photo(
+                callback.message.chat.id,
+                photo=FSInputFile(pricing_img),
+                caption=caption,
+                reply_markup=kb,
+                parse_mode=HTML,
+            )
+        return
     await edit_or_send_nav_message(
         callback.message,
         text=caption,
@@ -747,13 +802,27 @@ async def pay_bonus_menu(callback: CallbackQuery) -> None:
     await callback.answer()
     is_hub = callback.data == CB_PAY_BONUS_MENU_HUB
     universe_discount = await _has_active_starter_or_universe(callback.from_user.id) if callback.from_user else False
+    bonus_text = _bonus_packs_caption(universe_discount=universe_discount)
+    bonus_kb = _bonus_packs_keyboard(
+        pay_menu_callback=(CB_PAY_MENU_HUB if is_hub else CB_PAY_MENU),
+        universe_discount=universe_discount,
+    )
+    if _plans_screen_uses_pricing_image() and callback.message.photo:
+        try:
+            await callback.message.delete()
+        except Exception:
+            logging.debug("pay_bonus_menu: не удалось удалить фото тарифов перед пакетами", exc_info=True)
+        await callback.bot.send_message(
+            callback.message.chat.id,
+            bonus_text,
+            reply_markup=bonus_kb,
+            parse_mode=HTML,
+        )
+        return
     await edit_or_send_nav_message(
         callback.message,
-        text=_bonus_packs_caption(universe_discount=universe_discount),
-        reply_markup=_bonus_packs_keyboard(
-            pay_menu_callback=(CB_PAY_MENU_HUB if is_hub else CB_PAY_MENU),
-            universe_discount=universe_discount,
-        ),
+        text=bonus_text,
+        reply_markup=bonus_kb,
         parse_mode=HTML,
     )
 

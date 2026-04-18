@@ -865,7 +865,11 @@ async def get_budget_history_recent(
 
 
 async def apply_referral(invitee_user_id: int, inviter_user_id: int) -> bool:
-    """Apply referral once. Inviter +15 credits (+1 bonus ready-use each 2 invitees), invitee +5 credits."""
+    """Apply referral once. Inviter +20 credits, invitee +10 credits.
+
+    Каждые 2 приглашения у пригласившего: без подписки — +1 idea_token (бонусный запуск «Готовых идей»);
+    с активной подпиской — +10 кредитов вместо токена.
+    """
     if invitee_user_id == inviter_user_id:
         logging.info("referral: skip self-ref invitee=%s", invitee_user_id)
         return False
@@ -902,11 +906,11 @@ async def apply_referral(invitee_user_id: int, inviter_user_id: int) -> bool:
                 (invitee_user_id, inviter_user_id),
             )
             await db.execute(
-                "UPDATE users SET credits = credits + 15 WHERE user_id = ?",
+                "UPDATE users SET credits = credits + 20 WHERE user_id = ?",
                 (inviter_user_id,),
             )
             await db.execute(
-                "UPDATE users SET credits = credits + 5 WHERE user_id = ?",
+                "UPDATE users SET credits = credits + 10 WHERE user_id = ?",
                 (invitee_user_id,),
             )
             async with db.execute(
@@ -916,10 +920,24 @@ async def apply_referral(invitee_user_id: int, inviter_user_id: int) -> bool:
                 cnt_row = await cur2.fetchone()
             n_inv = int(cnt_row[0]) if cnt_row else 0
             if n_inv > 0 and n_inv % 2 == 0:
-                await db.execute(
-                    "UPDATE users SET idea_tokens = idea_tokens + 1 WHERE user_id = ?",
+                async with db.execute(
+                    "SELECT subscription_ends_at FROM users WHERE user_id = ?",
                     (inviter_user_id,),
+                ) as cur_sub:
+                    sub_row = await cur_sub.fetchone()
+                inviter_sub_active = subscription_is_active(
+                    sub_row[0] if sub_row else None
                 )
+                if inviter_sub_active:
+                    await db.execute(
+                        "UPDATE users SET credits = credits + 10 WHERE user_id = ?",
+                        (inviter_user_id,),
+                    )
+                else:
+                    await db.execute(
+                        "UPDATE users SET idea_tokens = idea_tokens + 1 WHERE user_id = ?",
+                        (inviter_user_id,),
+                    )
             await db.commit()
             return True
         except sqlite3.IntegrityError:

@@ -449,7 +449,7 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         await ensure_user(referrer_id, None)
         applied = await apply_referral(invitee_user_id=user_id, inviter_user_id=referrer_id)
         if applied:
-            bonus_note = "\n🎉 Реферальный бонус: тебе +5 кредитов."
+            bonus_note = "\n🎉 Реферальный бонус: тебе +10 кредитов."
             logging.info("referral applied: invitee=%s inviter=%s", user_id, referrer_id)
     balance = await get_credits(user_id)
 
@@ -766,9 +766,9 @@ async def _build_referral_message(
         f'<i><tg-emoji emoji-id="5472239203590888751">📩</tg-emoji> Приглашения:</i> <b>{esc(invited)}</b>'
         "</blockquote>\n\n"
         "<blockquote><i>"
-        "За каждого приглашённого друга — <b>+15</b> кредитов тебе; за каждых <b>двух</b> друзей — "
-        "ещё <b>+1</b> дополнительный запуск «Готовых идей» без подписки. "
-        "Новому пользователю при первом <code>/start</code> по твоей ссылке — <b>+5</b> кредитов."
+        "За каждого приглашённого — <b>+20</b> кредитов тебе; новому пользователю при первом <code>/start</code> по твоей ссылке — <b>+10</b> кредитов. "
+        "За каждых <b>двух</b> приглашённых: без подписки — <b>+1</b> бонусный запуск «Готовых идей»; "
+        "при активной подписке — <b>+10</b> кредитов вместо запуска."
         "</i></blockquote>\n\n"
         "<b>🔗 Твоя ссылка</b>\n"
         f"<code>{esc(ref_link)}</code>"
