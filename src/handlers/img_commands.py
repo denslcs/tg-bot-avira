@@ -788,7 +788,11 @@ async def _send_ready_hub_messages(
     reply_markup: InlineKeyboardMarkup,
     paths: list[Path],
 ) -> tuple[Message, list[int]]:
-    """Один снимок или альбом из двух фото (экран категорий); клавиатура — на первом сообщении альбома."""
+    """Два превью подряд: первое фото — подпись и inline-клавиатура, второе — только картинка.
+
+    Не используем send_media_group: после альбома edit_message_reply_markup часто даёт BadRequest,
+    из‑за чего клавиатура не появляется и падает глобальный обработчик ошибок.
+    """
     ok = [p for p in paths if p.is_file()]
     if not ok:
         m = await bot.send_message(chat_id, caption, reply_markup=reply_markup, parse_mode=HTML)
@@ -802,19 +806,16 @@ async def _send_ready_hub_messages(
             parse_mode=HTML,
         )
         return m, [m.message_id]
-    media: list[InputMediaPhoto] = []
-    for i, p in enumerate(ok):
-        if i == 0:
-            media.append(InputMediaPhoto(media=FSInputFile(p), caption=caption, parse_mode=HTML))
-        else:
-            media.append(InputMediaPhoto(media=FSInputFile(p)))
-    msgs = await bot.send_media_group(chat_id, media=media)
-    await bot.edit_message_reply_markup(
-        chat_id=chat_id,
-        message_id=msgs[0].message_id,
+    first_p, second_p = ok[0], ok[1]
+    m1 = await bot.send_photo(
+        chat_id,
+        FSInputFile(first_p),
+        caption=caption,
         reply_markup=reply_markup,
+        parse_mode=HTML,
     )
-    return msgs[0], [x.message_id for x in msgs]
+    m2 = await bot.send_photo(chat_id, FSInputFile(second_p))
+    return m1, [m1.message_id, m2.message_id]
 
 
 def _ready_idea_listing_photo_path(title: str) -> Path | None:
