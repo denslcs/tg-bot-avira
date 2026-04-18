@@ -1562,6 +1562,7 @@ def _ready_browser_keyboard(
     back_callback: str = CB_MENU_BACK_START,
     *,
     category_slug: str | None = None,
+    single_shortcut_mode: bool = False,
 ) -> InlineKeyboardMarkup:
     prev_i = (index - 1) % total
     next_i = (index + 1) % total
@@ -1574,6 +1575,26 @@ def _ready_browser_keyboard(
     }
     if cat_icon:
         cats_btn["icon_custom_emoji_id"] = cat_icon
+    if single_shortcut_mode:
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="Выбрать",
+                        callback_data=f"{CB_READY_NAV_PREFIX}pick:{index}",
+                        style=BTN_SUCCESS,
+                        icon_custom_emoji_id="5206607081334906820",
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="Назад",
+                        callback_data=back_callback,
+                        icon_custom_emoji_id="5256247952564825322",
+                    )
+                ],
+            ]
+        )
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -1712,12 +1733,22 @@ def _ready_generation_cost_html() -> str:
     return f'<tg-emoji emoji-id="5330320040883411678">🗺</tg-emoji> Стоимость генерации: <b>{esc(OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS)} кр.</b>'
 
 
-def _ready_idea_caption(*, category: str, title: str, preview: str, index: int, total: int, photos_required: int) -> str:
+def _ready_idea_caption(
+    *,
+    category: str,
+    title: str,
+    preview: str,
+    index: int,
+    total: int,
+    photos_required: int,
+    show_category_title: bool = True,
+) -> str:
     req = _ready_idea_requirement_line(title=title, photos_required=photos_required)
     recommendation = _ready_idea_recommendation_line(title=title, photos_required=photos_required)
     recommendation_part = f"\n{recommendation}" if recommendation else ""
+    category_part = f"{_ready_category_title_html(category)}\n" if show_category_title else ""
     return (
-        f"{_ready_category_title_html(category)}\n"
+        f"{category_part}"
         f'<tg-emoji emoji-id="5397782960512444700">📌</tg-emoji> Вариант: <b>{esc(index + 1)}/{esc(total)}</b>\n'
         f"<b>{esc(title)}</b>\n"
         f"{esc(preview)}\n"
@@ -2841,6 +2872,7 @@ async def _open_ready_card(
     total = len(ideas)
     idx = index % total
     title, preview, _prompt, photos_required = ideas[idx]
+    single_shortcut_mode = include_hidden and category == "celebrities" and (title or "").strip() == _RONALDO_PHOTO_TITLE
     cap = _ready_idea_caption(
         category=category,
         title=title,
@@ -2848,10 +2880,17 @@ async def _open_ready_card(
         index=idx,
         total=total,
         photos_required=photos_required,
+        show_category_title=not single_shortcut_mode,
     )
     await state.update_data(_ready_category=category, _ready_index=idx)
     await state.set_state(ImageGenState.ready_browsing_idea)
-    kb = _ready_browser_keyboard(idx, total, back_callback=back_callback, category_slug=category)
+    kb = _ready_browser_keyboard(
+        idx,
+        total,
+        back_callback=back_callback,
+        category_slug=category,
+        single_shortcut_mode=single_shortcut_mode,
+    )
     photo_path = _ready_idea_listing_photo_path(title)
 
     if edit and photo_path is not None and not message.photo:
