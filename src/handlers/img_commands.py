@@ -733,28 +733,18 @@ _MELLSTROY_PHOTO_LISTING_IMAGE = (
 
 
 def _start_listing_banner_path() -> Path | None:
-    """Фолбэк-картинка для навигации «Готовые идеи» (не путать с баннером главного меню)."""
-    p = PROJECT_ROOT / "assets" / "start" / "ready_ideas_nav_banner.png"
+    """Единое превью раздела «Готовые идеи»: список категорий и фолбэк для идеи без своего превью.
+
+    Файл: assets/start/ready_ideas_preview.png (одна картинка; баннер главного меню — другой файл).
+    """
+    p = PROJECT_ROOT / "assets" / "start" / "ready_ideas_preview.png"
     return p if p.is_file() else None
 
 
-# Ровно два превью для экрана списка категорий «Готовые идеи» (замени файлы в assets/start/).
-# Превью конкретных идей внутри категорий — по-прежнему из _ready_idea_listing_photo_path.
-_READY_IDEAS_HUB_TILE_IMAGES: tuple[Path, ...] = (
-    PROJECT_ROOT / "assets" / "start" / "ready_ideas_hub_1.png",
-    PROJECT_ROOT / "assets" / "start" / "ready_ideas_hub_2.png",
-)
-
-
 def _ready_ideas_category_hub_photo_paths() -> list[Path]:
-    """Два превью для корневого экрана «Готовые идеи»; если файла нет — один фолбэк-баннер."""
-    out = [p for p in _READY_IDEAS_HUB_TILE_IMAGES if p.is_file()]
-    if len(out) >= 2:
-        return out[:2]
-    if len(out) == 1:
-        return out
-    b = _start_listing_banner_path()
-    return [b] if b else []
+    """Одно фото для экрана категорий — тот же путь, что и _start_listing_banner_path."""
+    p = _start_listing_banner_path()
+    return [p] if p else []
 
 
 async def _purge_prior_ready_hub_ui(
@@ -788,34 +778,19 @@ async def _send_ready_hub_messages(
     reply_markup: InlineKeyboardMarkup,
     paths: list[Path],
 ) -> tuple[Message, list[int]]:
-    """Два превью подряд: первое фото — подпись и inline-клавиатура, второе — только картинка.
-
-    Не используем send_media_group: после альбома edit_message_reply_markup часто даёт BadRequest,
-    из‑за чего клавиатура не появляется и падает глобальный обработчик ошибок.
-    """
+    """Одно фото с подписью и inline-клавиатурой (экран категорий «Готовые идеи»)."""
     ok = [p for p in paths if p.is_file()]
     if not ok:
         m = await bot.send_message(chat_id, caption, reply_markup=reply_markup, parse_mode=HTML)
         return m, [m.message_id]
-    if len(ok) == 1:
-        m = await bot.send_photo(
-            chat_id,
-            FSInputFile(ok[0]),
-            caption=caption,
-            reply_markup=reply_markup,
-            parse_mode=HTML,
-        )
-        return m, [m.message_id]
-    first_p, second_p = ok[0], ok[1]
-    m1 = await bot.send_photo(
+    m = await bot.send_photo(
         chat_id,
-        FSInputFile(first_p),
+        FSInputFile(ok[0]),
         caption=caption,
         reply_markup=reply_markup,
         parse_mode=HTML,
     )
-    m2 = await bot.send_photo(chat_id, FSInputFile(second_p))
-    return m1, [m1.message_id, m2.message_id]
+    return m, [m.message_id]
 
 
 def _ready_idea_listing_photo_path(title: str) -> Path | None:
@@ -823,7 +798,7 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
 
     Используется только в UI (_edit_ready_nav_message). Не является референсом для генерации:
     в API уходят фото пользователя и, для части идей, байты из _READY_IDEA_STATIC_REF_BY_TITLE.
-    При выходе в категории/загрузку фото подставляется ready_ideas_nav_banner через _ready_categories_listing_photo().
+    При отсутствии своего превью подставляется ready_ideas_preview.png через _ready_categories_listing_photo().
     """
     t = title.strip()
     if t == "Minecraft" and _MINECRAFT_READY_LISTING_IMAGE.is_file():
@@ -994,9 +969,8 @@ async def _edit_ready_nav_message(
 
 
 def _ready_categories_listing_photo() -> Path | None:
-    """Одна картинка для фолбэков (корневой экран с альбомом задаётся через _send_ready_hub_messages)."""
-    paths = _ready_ideas_category_hub_photo_paths()
-    return paths[0] if paths else _start_listing_banner_path()
+    """Превью по умолчанию для «Готовых идей» — ready_ideas_preview.png."""
+    return _start_listing_banner_path()
 
 # Подпись для внутреннего контекста «Ещё раз» (пользователю не показываем).
 _IMAGE_CONTEXT_LABEL = "text2img"
