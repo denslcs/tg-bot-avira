@@ -20,6 +20,7 @@ from aiogram.types import (
     FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    InputMediaPhoto,
     LabeledPrice,
     Message,
     PreCheckoutQuery,
@@ -378,6 +379,20 @@ def _subscriptions_pricing_image_path() -> Path | None:
     return p if p.is_file() else None
 
 
+def _plan_payment_preview_image_path(plan_id: str) -> Path | None:
+    """Экран оплаты выбранного тарифа — отдельная карточка-превью; общий баннер см. subscriptions_pricing."""
+    name = {
+        "nova": "nova_subscription_preview.png",
+        "supernova": "supernova_subscription_preview.png",
+        "galaxy": "galaxy_subscription_preview.png",
+        "universe": "universe_subscription_preview.png",
+    }.get((plan_id or "").strip().lower())
+    if not name:
+        return None
+    p = PROJECT_ROOT / "assets" / "pay" / name
+    return p if p.is_file() else None
+
+
 def _plans_screen_uses_pricing_image() -> bool:
     p = _subscriptions_pricing_image_path()
     return p is not None and p.is_file()
@@ -395,6 +410,41 @@ def _plans_menu_caption_for_display() -> str:
     if _plans_screen_uses_pricing_image():
         return _plans_menu_photo_caption()
     return _plans_menu_caption()
+
+
+async def _apply_plan_payment_to_message(
+    message: Message,
+    *,
+    plan_id: str,
+    use_photo_caption: bool,
+    back_callback_data: str,
+) -> None:
+    """На общем баннере тарифов: при наличии карточки-превью для плана меняем медиа на неё."""
+    caption_text = _pay_methods_text(plan_id, for_photo_caption=use_photo_caption)
+    kb = _methods_keyboard(plan_id, is_pack=False, back_callback_data=back_callback_data)
+    preview = _plan_payment_preview_image_path(plan_id)
+    if use_photo_caption and preview is not None and preview.is_file():
+        try:
+            await message.edit_media(
+                media=InputMediaPhoto(
+                    media=FSInputFile(preview),
+                    caption=caption_text,
+                    parse_mode=HTML,
+                ),
+                reply_markup=kb,
+            )
+            return
+        except Exception:
+            logger.exception(
+                "%s: не удалось установить превью-карточку, общий баннер",
+                (plan_id or "").strip().lower() or "plan",
+            )
+    await edit_or_send_nav_message(
+        message,
+        text=caption_text,
+        reply_markup=kb,
+        parse_mode=HTML,
+    )
 
 
 def _plans_menu_caption() -> str:
@@ -801,6 +851,27 @@ async def pay_back_plans(callback: CallbackQuery) -> None:
                 parse_mode=HTML,
             )
         return
+    if (
+        _plans_screen_uses_pricing_image()
+        and callback.message.photo
+        and pricing_img
+        and pricing_img.is_file()
+    ):
+        try:
+            await callback.message.edit_media(
+                media=InputMediaPhoto(
+                    media=FSInputFile(pricing_img),
+                    caption=caption,
+                    parse_mode=HTML,
+                ),
+                reply_markup=kb,
+            )
+            return
+        except Exception:
+            logging.debug(
+                "pay_back_plans: edit_media с общим баннером не удался, fallback",
+                exc_info=True,
+            )
     await edit_or_send_nav_message(
         callback.message,
         text=caption,
@@ -841,11 +912,11 @@ async def pay_pick_plan(callback: CallbackQuery) -> None:
     use_photo_caption = bool(callback.message.photo) and not _is_generated_image_result_message(
         callback.message
     )
-    await edit_or_send_nav_message(
+    await _apply_plan_payment_to_message(
         callback.message,
-        text=_pay_methods_text(plan_id, for_photo_caption=use_photo_caption),
-        reply_markup=_methods_keyboard(plan_id, is_pack=False, back_callback_data=back_to_plans_callback),
-        parse_mode=HTML,
+        plan_id=plan_id,
+        use_photo_caption=use_photo_caption,
+        back_callback_data=back_to_plans_callback,
     )
 
 
