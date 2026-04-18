@@ -1548,7 +1548,10 @@ def _ideas_for_category(
     include_hidden_start_only: bool = False,
 ) -> list[tuple[str, str, str, int]]:
     ideas = READY_IDEA_ITEMS.get((category or "").strip().lower(), [])
-    return ideas
+    if include_hidden_start_only:
+        return ideas
+    # Идея доступна из старт-панели, но скрыта из общего листинга «Готовых идей».
+    return [it for it in ideas if (it[0] or "").strip() != _RONALDO_PHOTO_TITLE]
 
 
 def _ready_browser_keyboard(
@@ -2778,13 +2781,16 @@ async def open_mellstroy_prompt(callback: CallbackQuery, state: FSMContext) -> N
         )
         return
     category = "celebrities"
-    ideas = _ideas_for_category(category)
+    ideas = _ideas_for_category(category, include_hidden_start_only=True)
     target_idx = next((i for i, it in enumerate(ideas) if (it[0] or "").strip() == _RONALDO_PHOTO_TITLE), -1)
     if target_idx < 0:
         await callback.answer("Идея пока недоступна.", show_alert=True)
         return
     await state.clear()
-    await state.update_data(_ready_back_cb=CB_MENU_BACK_START)
+    await state.update_data(
+        _ready_back_cb=CB_MENU_BACK_START,
+        _ready_include_hidden_start_only=True,
+    )
     await _open_ready_card(
         callback.message,
         state,
@@ -2812,7 +2818,8 @@ async def _open_ready_card(
         edit = False
         hub_cleared = True
     back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
-    ideas = _ideas_for_category(category)
+    include_hidden = bool(data.get("_ready_include_hidden_start_only"))
+    ideas = _ideas_for_category(category, include_hidden_start_only=include_hidden)
     if not ideas:
         empty_txt = "<b>В этой категории пока пусто.</b>\n<blockquote><i>Выбери другое направление.</i></blockquote>"
         kb = _ready_categories_keyboard(back_callback=back_callback)
@@ -2914,6 +2921,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
     if payload == "back_cats":
         data = await state.get_data()
         back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
+        await state.update_data(_ready_include_hidden_start_only=False)
         await state.set_state(ImageGenState.ready_choosing_category)
         chat_id = callback.message.chat.id
         bot = callback.message.bot
