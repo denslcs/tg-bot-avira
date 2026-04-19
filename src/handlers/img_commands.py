@@ -23,7 +23,6 @@ from aiogram.types import (
     FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    InputMediaPhoto,
     Message,
 )
 
@@ -1002,71 +1001,36 @@ async def _edit_ready_nav_message(
     listing_photo: Path | None,
 ) -> Message | None:
     """
-    Для сообщений с фото меняем и изображение, и подпись — иначе при смене экрана
-    «залипает» превью чужой игры (остаётся только edit_caption).
+    Смена экрана готовых идей: сначала replace (одно сообщение — превью совпадает с подписью).
 
-    Если текущее сообщение без фото (текстовое меню), а нужно превью идеи — шлём новое фото
-    и удаляем старое сообщение, иначе подпись остаётся без картинки.
-
-    При сбое edit_media сначала удаляем старое сообщение, потом шлём новое — иначе в чате на миг
-    два превью и визуально «прыгает» картинка.
+    Если нужна другая картинка, а edit_media не вышел — delete + send_photo, не edit_caption на старом фото.
     """
-    if listing_photo is None or not listing_photo.is_file():
-        return await edit_or_send_nav_message(
-            message, text=caption, reply_markup=reply_markup, parse_mode=HTML
+    if listing_photo is not None and listing_photo.is_file():
+        ok = await replace_nav_screen_in_message(
+            message,
+            caption_html=caption,
+            reply_markup=reply_markup,
+            new_media_path=listing_photo,
         )
-
-    media = InputMediaPhoto(
-        media=FSInputFile(listing_photo),
-        caption=caption,
-        parse_mode=HTML,
-    )
-
-    chat_id = message.chat.id
-    bot = message.bot
-
-    if message.photo:
+        if ok:
+            return message
         try:
-            return await message.edit_media(media=media, reply_markup=reply_markup)
-        except Exception:
-            logging.warning("_edit_ready_nav_message: edit_media failed", exc_info=True)
-        try:
-            await message.delete()
-        except Exception:
-            logging.debug("_edit_ready_nav_message: delete before resend failed", exc_info=True)
-        try:
-            return await bot.send_photo(
-                chat_id,
+            try:
+                await message.delete()
+            except Exception:
+                logging.debug("_edit_ready_nav_message: delete before resend listing photo failed", exc_info=True)
+            return await message.bot.send_photo(
+                message.chat.id,
                 photo=FSInputFile(listing_photo),
                 caption=caption,
                 reply_markup=reply_markup,
                 parse_mode=HTML,
             )
         except Exception:
-            logging.warning("_edit_ready_nav_message: send_photo after delete failed", exc_info=True)
-            try:
-                return await bot.send_message(chat_id, caption, reply_markup=reply_markup, parse_mode=HTML)
-            except Exception:
-                return None
-
-    try:
-        await message.delete()
-    except Exception:
-        logging.debug("_edit_ready_nav_message: delete text nav before photo failed", exc_info=True)
-    try:
-        return await bot.send_photo(
-            chat_id,
-            photo=FSInputFile(listing_photo),
-            caption=caption,
-            reply_markup=reply_markup,
-            parse_mode=HTML,
-        )
-    except Exception:
-        logging.warning("_edit_ready_nav_message: send_photo for listing failed", exc_info=True)
-        try:
-            return await bot.send_message(chat_id, caption, reply_markup=reply_markup, parse_mode=HTML)
-        except Exception:
-            return None
+            logging.warning("_edit_ready_nav_message: send_photo after replace failed", exc_info=True)
+    return await edit_or_send_nav_message(
+        message, text=caption, reply_markup=reply_markup, parse_mode=HTML
+    )
 
 
 def _ready_categories_listing_photo() -> Path | None:
@@ -2774,12 +2738,29 @@ async def _send_ready_ideas_screen(
                     new_media_path=listing if listing is not None and listing.is_file() else None,
                 )
                 if not ok:
-                    await bot.send_message(
-                        chat_id,
-                        _IMAGE_GEN_MISSING_TEXT,
-                        reply_markup=_missing_config_kb(back_callback),
-                        parse_mode=HTML,
-                    )
+                    try:
+                        await message.delete()
+                    except Exception:
+                        logging.debug(
+                            "_send_ready_ideas_screen: delete before missing-config fallback failed",
+                            exc_info=True,
+                        )
+                    kb = _missing_config_kb(back_callback)
+                    if listing is not None and listing.is_file():
+                        await bot.send_photo(
+                            chat_id,
+                            photo=FSInputFile(listing),
+                            caption=_IMAGE_GEN_MISSING_TEXT,
+                            reply_markup=kb,
+                            parse_mode=HTML,
+                        )
+                    else:
+                        await bot.send_message(
+                            chat_id,
+                            _IMAGE_GEN_MISSING_TEXT,
+                            reply_markup=kb,
+                            parse_mode=HTML,
+                        )
         else:
             await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
         return
@@ -2958,6 +2939,7 @@ async def _open_ready_card(
     photo_path = _ready_idea_listing_photo_path(title)
 
     if edit and photo_path is not None and not message.photo:
+        # Текст нельзя заменить на фото через edit — только delete + send или второе сообщение.
         try:
             try:
                 await message.delete()
@@ -3030,13 +3012,28 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
         await state.set_state(ImageGenState.ready_choosing_category)
         chat_id = callback.message.chat.id
         bot = callback.message.bot
-        try:
-            await callback.message.delete()
-        except Exception:
-            logging.debug("ready back_cats: delete idea card failed", exc_info=True)
         cap = _ready_category_caption()
         kb = _ready_categories_keyboard(back_callback=back_callback)
         paths = _ready_ideas_category_hub_photo_paths()
+        ok_paths = [p for p in paths if p.is_file()]
+        listing = ok_paths[0] if ok_paths else None
+        msg = callback.message
+        if not _is_generated_image_result_message(msg):
+            ok = await replace_nav_screen_in_message(
+                msg,
+                caption_html=cap,
+                reply_markup=kb,
+                new_media_path=listing,
+            )
+            if ok:
+                await state.update_data(_ready_category_album_ids=[msg.message_id])
+                await _set_img_flow_anchor(state, msg)
+                await callback.answer()
+                return
+        try:
+            await msg.delete()
+        except Exception:
+            logging.debug("ready back_cats: delete before hub resend failed", exc_info=True)
         first, album_ids = await _send_ready_hub_messages(bot, chat_id, cap, kb, paths)
         await state.update_data(_ready_category_album_ids=album_ids)
         await _set_img_flow_anchor(state, first)

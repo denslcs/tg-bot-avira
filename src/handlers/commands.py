@@ -207,9 +207,14 @@ async def replace_nav_screen_in_message(
 ) -> bool:
     """Заменить экран в том же сообщении: edit_media → edit_caption → edit_text. Без delete+send.
 
-    Не трогает сообщения с результатом генерации. Если задан ``new_media_path`` и он есть на диске,
-    при фото-сообщении сначала меняется картинка; при сбое пробуем только подпись на старом фото.
-    Для текстового главного меню — ``edit_text``. Возвращает True при успехе.
+    Не трогает сообщения с результатом генерации. Если задан ``new_media_path`` и он есть на диске:
+    для **фото** — только ``edit_media`` (новая картинка + подпись). При сбое **не** правим только
+    подпись на старом фото — иначе «чужое» превью остаётся на месте.
+
+    Для **текста** нельзя подставить файл через Bot API — возвращаем False; вызывающий шлёт фото
+    отдельно (часто delete + send_photo), иначе подпись обновилась бы без нужной картинки.
+
+    Без ``new_media_path`` у фото — ``edit_caption``; у текста — ``edit_text``.
     """
     if _is_generated_image_result_message(message):
         return False
@@ -228,25 +233,8 @@ async def replace_nav_screen_in_message(
                 return True
             except Exception:
                 logging.debug("replace_nav_screen_in_message: edit_media failed", exc_info=True)
-            try:
-                await message.edit_caption(
-                    caption=caption_html,
-                    reply_markup=reply_markup,
-                    parse_mode=parse_mode,
-                )
-                return True
-            except Exception:
-                logging.debug("replace_nav_screen_in_message: edit_caption after media failed", exc_info=True)
-        try:
-            await message.edit_text(
-                caption_html,
-                reply_markup=reply_markup,
-                parse_mode=parse_mode,
-            )
-            return True
-        except Exception:
-            logging.debug("replace_nav_screen_in_message: edit_text (with media path) failed", exc_info=True)
             return False
+        return False
     if message.photo:
         try:
             await message.edit_caption(
