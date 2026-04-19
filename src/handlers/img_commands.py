@@ -1997,24 +1997,30 @@ def _ready_idea_result_keyboard(*, redo_label: str) -> InlineKeyboardMarkup:
     )
 
 
-# document_id премиум-эмодзи 🔥 — как в подписи к результату и в бренд-плашке на пикселях (см. _overlay_shard_creator_quote_badge).
+# document_id премиум-эмодзи 🔥 — только в тексте подписи к фото (не в пикселях картинки).
 _SHARD_IMAGE_BADGE_TG_EMOJI_ID = "5389038097860144794"
 
 
-async def _made_in_shard_caption(message: Message) -> str:
-    """Короткая подпись под готовой картинкой с кликабельной ссылкой на бота."""
+async def _shard_creator_brand_blockquote_html(message: Message) -> str:
+    """Строка бренда в виде цитаты: премиум 🔥 + Made in Shard Creator, при наличии — ссылка на бота."""
     eid = _SHARD_IMAGE_BADGE_TG_EMOJI_ID
+    inner = f'<tg-emoji emoji-id="{eid}">🔥</tg-emoji> Made in Shard Creator'
     try:
         me = await message.bot.get_me()
         if me and me.username:
-            return (
+            inner = (
                 f'<a href="https://t.me/{me.username}">'
                 f'<tg-emoji emoji-id="{eid}">🔥</tg-emoji> Made in Shard Creator'
                 "</a>"
             )
     except Exception:
-        logging.debug("made_in_shard_caption: bot.me() failed", exc_info=True)
-    return f'<tg-emoji emoji-id="{eid}">🔥</tg-emoji> Made in Shard Creator'
+        logging.debug("shard_creator_brand_blockquote: get_me failed", exc_info=True)
+    return f"<blockquote><i>{inner}</i></blockquote>"
+
+
+async def _made_in_shard_caption(message: Message) -> str:
+    """Подпись под результатом готовой идеи — только бренд-цитата."""
+    return await _shard_creator_brand_blockquote_html(message)
 
 
 def _credits_word(n: int) -> str:
@@ -2060,7 +2066,7 @@ async def _send_result_photo_with_regen(
         refs_file_ids=refs_file_ids,
         ready_idea_title=ready_idea_title,
     )
-    image_bytes = _overlay_shard_creator_quote_badge(image_bytes)
+    brand_bq = await _shard_creator_brand_blockquote_html(message)
     if is_admin:
         day_note = ""
     else:
@@ -2080,7 +2086,8 @@ async def _send_result_photo_with_regen(
         caption = (
             "<b>Готово!</b>\n"
             "<i>сгенерировано при помощи Shard Creator</i>\n"
-            f"<i>Режим админа — {CREDITS_COIN_TG_HTML} кредиты не списывались.</i>{cache_note}"
+            f"<i>Режим админа — {CREDITS_COIN_TG_HTML} кредиты не списывались.</i>{cache_note}\n"
+            f"{brand_bq}"
         )
     else:
         balance = await get_credits(user_id)
@@ -2092,7 +2099,8 @@ async def _send_result_photo_with_regen(
             "<b>Готово!</b>\n"
             "<i>сгенерировано при помощи Shard Creator</i>\n"
             f"{spent}"
-            f'<blockquote><i>{CREDITS_COIN_TG_HTML} кредиты:</i> <b>{esc(balance)}</b></blockquote>{day_note}'
+            f'<blockquote><i>{CREDITS_COIN_TG_HTML} кредиты:</i> <b>{esc(balance)}</b></blockquote>{day_note}\n'
+            f"{brand_bq}"
         )
     # Для готовых идей: сначала отдельное фото с бренд-подписью, затем отдельное сообщение с действиями.
     if usage_kind == "ready" and refs_file_ids:
@@ -2306,127 +2314,6 @@ def _overlay_minecraft_nick(image_bytes: bytes, username: str | None) -> bytes:
             return out.getvalue()
     except Exception:
         logging.warning("minecraft nick overlay failed", exc_info=True)
-        return image_bytes
-
-
-def _overlay_shard_creator_quote_badge(image_bytes: bytes) -> bytes:
-    """Плашка «цитата»: тёмный скруглённый фон, оранжевая полоска слева, 🔥 + Made in Shard Creator”."""
-    if Image is None or ImageDraw is None or ImageFont is None:
-        logging.warning("Pillow is not available; skip Shard Creator image badge")
-        return image_bytes
-
-    def _try_italic(size: int) -> ImageFont.FreeTypeFont:
-        for path in (
-            "C:/Windows/Fonts/ariali.ttf",
-            "C:/Windows/Fonts/arial.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf",
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        ):
-            try:
-                return ImageFont.truetype(path, size=size)
-            except OSError:
-                continue
-        return ImageFont.load_default()
-
-    def _try_emoji(size: int) -> ImageFont.FreeTypeFont | None:
-        for path in (
-            "C:/Windows/Fonts/seguiemj.ttf",
-            "C:/Windows/Fonts/seguihis.ttf",
-            "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
-        ):
-            try:
-                return ImageFont.truetype(path, size=size)
-            except OSError:
-                continue
-        return None
-
-    try:
-        with Image.open(BytesIO(image_bytes)) as im:
-            rgba = im.convert("RGBA")
-            w, h = rgba.size
-            if w < 120 or h < 80:
-                return image_bytes
-
-            scale = max(0.7, min(1.35, min(w, h) / 900.0))
-            pad = max(8, int(10 * scale))
-            radius = max(8, int(12 * scale))
-            accent_w = max(3, int(4 * scale))
-            gap = max(6, int(8 * scale))
-            mid = max(4, int(6 * scale))
-            emoji_size = max(16, int(20 * scale))
-            text_size = max(13, int(17 * scale))
-
-            text_line = f"Made in Shard Creator\u201d"
-            fire = "\U0001f525"
-
-            font_text = _try_italic(text_size)
-            font_emoji = _try_emoji(emoji_size)
-            draw_m = ImageDraw.Draw(rgba)
-
-            def _tw_th(txt: str, font: ImageFont.ImageFont) -> tuple[int, int]:
-                bb = draw_m.textbbox((0, 0), txt, font=font)
-                return max(1, bb[2] - bb[0]), max(1, bb[3] - bb[1])
-
-            if font_emoji is not None:
-                tw_e, th_e = _tw_th(fire, font_emoji)
-            else:
-                tw_e, th_e = emoji_size, emoji_size  # ниже для плейсхолдера-круга подменим tw_e
-            tw_t, th_t = _tw_th(text_line, font_text)
-            row_h = max(th_e, th_t)
-            inner_w = accent_w + gap + tw_e + mid + tw_t
-            inner_h = row_h + 6
-            badge_w = inner_w + pad * 2
-            badge_h = inner_h + pad * 2
-
-            margin_x = max(10, int(w * 0.022))
-            margin_y = max(10, int(h * 0.022))
-            x0 = margin_x
-            y0 = h - margin_y - badge_h
-            y_mid = y0 + badge_h // 2
-
-            layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-            d = ImageDraw.Draw(layer)
-            if hasattr(d, "rounded_rectangle"):
-                d.rounded_rectangle(
-                    (x0, y0, x0 + badge_w, y0 + badge_h),
-                    radius=radius,
-                    fill=(22, 22, 26, 220),
-                )
-            else:
-                d.rectangle((x0, y0, x0 + badge_w, y0 + badge_h), fill=(22, 22, 26, 220))
-
-            acc_x0 = x0 + pad
-            acc_y0 = y0 + pad
-            acc_h = badge_h - 2 * pad
-            d.rectangle(
-                (acc_x0, acc_y0, acc_x0 + accent_w, acc_y0 + acc_h),
-                fill=(255, 94, 42, 255),
-            )
-
-            x_cursor = acc_x0 + accent_w + gap
-            if font_emoji is not None:
-                try:
-                    d.text((x_cursor, y_mid), fire, font=font_emoji, anchor="lm", embedded_color=True)
-                except TypeError:
-                    d.text((x_cursor, y_mid), fire, font=font_emoji, anchor="lm", fill=(255, 255, 255, 255))
-            else:
-                rr = max(5, emoji_size // 3)
-                d.ellipse(
-                    (x_cursor, y_mid - rr, x_cursor + rr * 2, y_mid + rr),
-                    fill=(255, 120, 40, 255),
-                )
-                tw_e = rr * 2
-            x_cursor += tw_e + mid
-            d.text((x_cursor, y_mid), text_line, font=font_text, anchor="lm", fill=(255, 255, 255, 255))
-
-            rgba = Image.alpha_composite(rgba, layer)
-            out = BytesIO()
-            rgba.convert("RGB").save(out, format="PNG")
-            return out.getvalue()
-    except Exception:
-        logging.warning("shard creator quote badge overlay failed", exc_info=True)
         return image_bytes
 
 
