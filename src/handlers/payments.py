@@ -72,6 +72,7 @@ from src.formatting import (
 from src.handlers.commands import (
     edit_or_send_nav_message,
     _is_generated_image_result_message,
+    replace_nav_screen_in_message,
 )
 from src.keyboards.callback_data import (
     CB_MENU_BACK_START,
@@ -769,27 +770,28 @@ async def send_subscription_menu(
     if replace_previous and pricing_img and pricing_img.is_file():
         caption = _plans_menu_photo_caption()
         kb = _plans_keyboard(back_callback=back_callback, bonus_menu_callback=bonus_menu_callback)
-        if message.photo and not _is_generated_image_result_message(message):
-            try:
-                await message.edit_media(
-                    media=InputMediaPhoto(
-                        media=FSInputFile(pricing_img),
-                        caption=caption,
-                        parse_mode=HTML,
-                    ),
-                    reply_markup=kb,
-                )
-                return
-            except Exception:
-                logger.debug(
-                    "send_subscription_menu: edit_media на баннер тарифов не удался, fallback delete+send",
-                    exc_info=True,
-                )
+        if _is_generated_image_result_message(message):
+            await bot.send_photo(
+                chat_id,
+                photo=FSInputFile(pricing_img),
+                caption=caption,
+                reply_markup=kb,
+                parse_mode=HTML,
+            )
+            return
+        ok = await replace_nav_screen_in_message(
+            message,
+            caption_html=caption,
+            reply_markup=kb,
+            new_media_path=pricing_img,
+        )
+        if ok:
+            return
         try:
             await message.delete()
         except Exception:
             logger.debug(
-                "send_subscription_menu: не удалось удалить сообщение перед баннером тарифов",
+                "send_subscription_menu: не удалось удалить сообщение перед баннером тарифов (fallback)",
                 exc_info=True,
             )
         await bot.send_photo(

@@ -75,6 +75,7 @@ from src.image_gen_gate import image_generation_slot
 from src.handlers.commands import (
     _is_generated_image_result_message,
     edit_or_send_nav_message,
+    replace_nav_screen_in_message,
     restore_main_menu_message,
 )
 from src.keyboards.main_menu import menu_hub_keyboard, start_menu_keyboard
@@ -2765,12 +2766,20 @@ async def _send_ready_ideas_screen(
                     parse_mode=HTML,
                 )
             else:
-                await _edit_ready_nav_message(
+                listing = _ready_categories_listing_photo()
+                ok = await replace_nav_screen_in_message(
                     message,
-                    caption=_IMAGE_GEN_MISSING_TEXT,
+                    caption_html=_IMAGE_GEN_MISSING_TEXT,
                     reply_markup=_missing_config_kb(back_callback),
-                    listing_photo=_ready_categories_listing_photo(),
+                    new_media_path=listing if listing is not None and listing.is_file() else None,
                 )
+                if not ok:
+                    await bot.send_message(
+                        chat_id,
+                        _IMAGE_GEN_MISSING_TEXT,
+                        reply_markup=_missing_config_kb(back_callback),
+                        parse_mode=HTML,
+                    )
         else:
             await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
         return
@@ -2783,29 +2792,32 @@ async def _send_ready_ideas_screen(
     listing_photo = ok_paths[0] if ok_paths else _ready_categories_listing_photo()
 
     if edit:
-        if message.photo and not _is_generated_image_result_message(message):
-            edited = await _edit_ready_nav_message(
-                message,
-                caption=cap,
-                reply_markup=kb,
-                listing_photo=listing_photo,
+        if _is_generated_image_result_message(message):
+            first, album_ids = await _send_ready_hub_messages(bot, chat_id, cap, kb, paths)
+            await state.update_data(_ready_back_cb=back_callback, _ready_category_album_ids=album_ids)
+            await _set_img_flow_anchor(state, first)
+            return
+        media_path = listing_photo if listing_photo is not None and listing_photo.is_file() else None
+        ok = await replace_nav_screen_in_message(
+            message,
+            caption_html=cap,
+            reply_markup=kb,
+            new_media_path=media_path,
+        )
+        if ok:
+            await state.update_data(
+                _ready_back_cb=back_callback,
+                _ready_category_album_ids=[message.message_id],
             )
-            if edited is not None:
-                await state.update_data(
-                    _ready_back_cb=back_callback,
-                    _ready_category_album_ids=[edited.message_id],
-                )
-                await _set_img_flow_anchor(state, edited)
-                return
-        # Сообщение с готовой картинкой не удаляем — шлём хаб новым сообщением (как edit_or_send_nav_message).
-        if not _is_generated_image_result_message(message):
-            try:
-                await message.delete()
-            except Exception:
-                logging.debug(
-                    "_send_ready_ideas_screen: не удалось удалить сообщение перед хабом (fallback)",
-                    exc_info=True,
-                )
+            await _set_img_flow_anchor(state, message)
+            return
+        try:
+            await message.delete()
+        except Exception:
+            logging.debug(
+                "_send_ready_ideas_screen: не удалось удалить сообщение перед хабом (fallback)",
+                exc_info=True,
+            )
 
     first, album_ids = await _send_ready_hub_messages(bot, chat_id, cap, kb, paths)
     await state.update_data(_ready_back_cb=back_callback, _ready_category_album_ids=album_ids)

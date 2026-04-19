@@ -198,6 +198,77 @@ def _is_generated_image_result_message(message: Message) -> bool:
     return False
 
 
+async def replace_nav_screen_in_message(
+    message: Message,
+    *,
+    caption_html: str,
+    reply_markup: InlineKeyboardMarkup | None,
+    new_media_path: Path | None = None,
+) -> bool:
+    """Заменить экран в том же сообщении: edit_media → edit_caption → edit_text. Без delete+send.
+
+    Не трогает сообщения с результатом генерации. Если задан ``new_media_path`` и он есть на диске,
+    при фото-сообщении сначала меняется картинка; при сбое пробуем только подпись на старом фото.
+    Для текстового главного меню — ``edit_text``. Возвращает True при успехе.
+    """
+    if _is_generated_image_result_message(message):
+        return False
+    parse_mode = HTML
+    if new_media_path is not None and new_media_path.is_file():
+        if message.photo:
+            try:
+                await message.edit_media(
+                    media=InputMediaPhoto(
+                        media=FSInputFile(new_media_path),
+                        caption=caption_html,
+                        parse_mode=parse_mode,
+                    ),
+                    reply_markup=reply_markup,
+                )
+                return True
+            except Exception:
+                logging.debug("replace_nav_screen_in_message: edit_media failed", exc_info=True)
+            try:
+                await message.edit_caption(
+                    caption=caption_html,
+                    reply_markup=reply_markup,
+                    parse_mode=parse_mode,
+                )
+                return True
+            except Exception:
+                logging.debug("replace_nav_screen_in_message: edit_caption after media failed", exc_info=True)
+        try:
+            await message.edit_text(
+                caption_html,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode,
+            )
+            return True
+        except Exception:
+            logging.debug("replace_nav_screen_in_message: edit_text (with media path) failed", exc_info=True)
+            return False
+    if message.photo:
+        try:
+            await message.edit_caption(
+                caption=caption_html,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode,
+            )
+            return True
+        except Exception:
+            logging.debug("replace_nav_screen_in_message: edit_caption (no new file) failed", exc_info=True)
+    try:
+        await message.edit_text(
+            caption_html,
+            reply_markup=reply_markup,
+            parse_mode=parse_mode,
+        )
+        return True
+    except Exception:
+        logging.debug("replace_nav_screen_in_message: edit_text failed", exc_info=True)
+        return False
+
+
 async def edit_or_send_nav_message(
     message: Message | None,
     *,
