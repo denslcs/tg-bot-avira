@@ -519,19 +519,23 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     "celebrities": [
         (
             _RONALDO_PHOTO_TITLE,
-            "Фото с Криштиану Роналдо на стадионе Аль-Наср.",
-            "CRITICAL IDENTITY LOCK: image #1 (uploaded by user) is the ONLY source of the user's identity. "
-            "Preserve exact face geometry, skin texture, age cues, hairline, and recognizable likeness with high fidelity. "
-            "No beautification drift, no lookalike replacement, no identity mixing. "
-            "SCENE: photorealistic night scene at Al-Nassr stadium, full crowd in stands, bright green grass, cinematic stadium spotlights, eye-level composition. "
-            "SUBJECTS: the user and Cristiano Ronaldo stand side by side in the center of the frame, smiling naturally. "
-            "The user wraps one arm around Ronaldo. "
-            "WARDROBE (UNISEX, mandatory): both subjects wear Al-Nassr team jerseys adapted naturally to body/presentation from the reference; "
-            "no gender stereotypes, realistic fit. The user may wear dark blue jeans. "
-            "PROP ACTION (mandatory): both hold one Al-Nassr jersey stretched toward camera, showing the back with readable text \"RONALDO\" and number \"7\". "
-            "CRISTIANO RONALDO LOCK: keep Ronaldo clearly recognizable and realistic, no face distortions, no substitution. "
-            "COMPOSITION: medium-wide eye-level sports-photo framing, both figures visible at least knee-up, natural perspective. "
-            "QUALITY: high-end realistic sports photography, coherent shadows/reflections, no watermark, no random text overlays.",
+            "Динамичный кадр матча с Роналдо на поле — 9:16, кинематографичный спорт.",
+            "CRITICAL IDENTITY LOCK: image #1 (uploaded by the user) is the ONLY source of the user's face and identity. "
+            "Preserve exact facial geometry, skin texture, age cues, hairline, and recognizable likeness with maximum fidelity — "
+            "sharp, high-detail, photorealistic; no beautification drift, no lookalike replacement, no identity mixing. "
+            "FACE QUALITY (strict): the user's face must stay as clear and readable as possible in a live match; "
+            "motion blur may affect background, grass, or limbs, but the face must remain crisp and identifiable (no accidental face blur, no plastic skin). "
+            "POSE / GAME READ: the user is in active play — running, competing for the ball; eyes and head oriented toward the ball while moving, natural athletic expression. "
+            "UNISEX KIT: infer gender presentation from image #1. For male-presenting — standard professional football shorts; "
+            "for female-presenting — the same Real Madrid kit with cycling shorts / tight athletic bike shorts instead of loose men's shorts, "
+            "plus appropriate socks/boots for a pro look; for ambiguous presentation — neutral professional football shorts that fit the body naturally. "
+            "A realistic action photo of a soccer match on a grass field featuring the user (face from image #1). "
+            "The user wears a white Real Madrid FC home jersey with the Emirates FLY BETTER sponsor, number 9, and the captain's armband. "
+            "They are running to tackle or contest the ball against Cristiano Ronaldo, who plays for Al Nassr in a yellow and blue Al Nassr jersey with the KAFD sponsor. "
+            "Background: stadium full of blurred spectators. Style: cinematic sports photography with controlled motion blur (environment/limbs), sunlight on the field; "
+            "highly realistic professional sports photo. Output aspect ratio: 9:16 portrait. "
+            "CRISTIANO RONALDO LOCK: keep Ronaldo clearly recognizable and realistic — no substitution, no distorted celebrity face. "
+            "NEGATIVE: watermark, random text overlays, wrong kit colors, identity swap, cartoon look, unreadable user face.",
             1,
         ),
         (
