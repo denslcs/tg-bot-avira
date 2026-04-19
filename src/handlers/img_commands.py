@@ -1110,6 +1110,35 @@ async def _set_img_flow_anchor(state: FSMContext, msg: Message | None) -> None:
     )
 
 
+async def _strip_ready_flow_inline_keyboards(bot, chat_id: int, data: dict) -> None:
+    """Убирает inline-клавиатуры с экрана выбора идеи, хаба и сообщений «скинь ещё фото» после загрузки фото."""
+    ach = data.get("_img_flow_anchor_chat_id")
+    ids: list[int] = []
+    if isinstance(ach, int) and ach == chat_id:
+        aid = data.get("_img_flow_anchor_message_id")
+        if isinstance(aid, int):
+            ids.append(aid)
+    for mid in data.get("_ready_category_album_ids") or []:
+        try:
+            m = int(mid)
+        except (TypeError, ValueError):
+            continue
+        if m not in ids:
+            ids.append(m)
+    for mid in data.get("_ready_strip_markup_message_ids") or []:
+        try:
+            m = int(mid)
+        except (TypeError, ValueError):
+            continue
+        if m not in ids:
+            ids.append(m)
+    for mid in ids:
+        try:
+            await bot.edit_message_reply_markup(chat_id=chat_id, message_id=mid, reply_markup=None)
+        except Exception:
+            logging.debug("strip ready flow markup mid=%s", mid, exc_info=True)
+
+
 def _gen_progress_caption(pct: int) -> str:
     pct = max(0, min(100, int(pct)))
     n = 10
@@ -3104,6 +3133,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
             _ready_poster_text="",
             _ready_beard_size="",
             _ready_fantasy_color="",
+            _ready_strip_markup_message_ids=[],
         )
         if photos_required == 0 and (title or "").strip() == _FANTASY_3D_GAME_TITLE:
             await state.set_state(ImageGenState.ready_waiting_fantasy_headline)
@@ -3209,11 +3239,14 @@ async def ready_need_photo_hint(message: Message, state: FSMContext) -> None:
         received=len(photos),
         idea_title=_ready_title_from_state_data(data),
     )
-    await message.answer(
+    sent = await message.answer(
         f"{hint}\nКогда соберем нужное количество, появится подтверждение.",
         reply_markup=_ready_wait_photo_keyboard_for_state(data),
         parse_mode=HTML,
     )
+    extras = list(data.get("_ready_strip_markup_message_ids") or [])
+    extras.append(sent.message_id)
+    await state.update_data(_ready_strip_markup_message_ids=extras)
 
 
 @router.message(ImageGenState.ready_waiting_photos, F.photo)
@@ -3224,6 +3257,8 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
     need = int(data.get("_ready_need") or 1)
     photos = list(data.get("_ready_photos") or [])
     if len(photos) >= need:
+        data_full = await state.get_data()
+        await _strip_ready_flow_inline_keyboards(message.bot, message.chat.id, data_full)
         await message.answer("Фото уже загружены. Нажми «Подтвердить» или «Отмена».", reply_markup=_ready_confirm_keyboard())
         return
     ph = message.photo[-1]
@@ -3232,18 +3267,23 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
         return
     photos.append(ph.file_id)
     await state.update_data(_ready_photos=photos)
+    data_after = await state.get_data()
+    await _strip_ready_flow_inline_keyboards(message.bot, message.chat.id, data_after)
     if len(photos) < need:
         hint = _ready_photo_upload_hint(
-            category=str(data.get("_ready_category") or ""),
+            category=str(data_after.get("_ready_category") or ""),
             need=need,
             received=len(photos),
-            idea_title=_ready_title_from_state_data(data),
+            idea_title=_ready_title_from_state_data(data_after),
         )
-        await message.answer(
+        sent = await message.answer(
             hint,
-            reply_markup=_ready_wait_photo_keyboard_for_state(data),
+            reply_markup=_ready_wait_photo_keyboard_for_state(data_after),
             parse_mode=HTML,
         )
+        extras = list(data_after.get("_ready_strip_markup_message_ids") or [])
+        extras.append(sent.message_id)
+        await state.update_data(_ready_strip_markup_message_ids=extras)
         return
     data = await state.get_data()
     if str(data.get("_ready_redo_prompt") or "").strip():
