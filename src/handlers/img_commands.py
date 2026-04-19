@@ -72,7 +72,11 @@ from src.database import (
 )
 from src.formatting import CREDITS_COIN_TG_HTML, HTML, esc, plans_premium_sequence_html
 from src.image_gen_gate import image_generation_slot
-from src.handlers.commands import edit_or_send_nav_message, restore_main_menu_message
+from src.handlers.commands import (
+    _is_generated_image_result_message,
+    edit_or_send_nav_message,
+    restore_main_menu_message,
+)
 from src.keyboards.main_menu import menu_hub_keyboard, start_menu_keyboard
 from src.keyboards.callback_data import (
     CB_BACK_IMAGE_MODELS,
@@ -847,6 +851,20 @@ async def _purge_prior_ready_hub_ui(
             await anchor.delete()
         except Exception:
             logging.debug("purge hub anchor", exc_info=True)
+
+
+async def _purge_ready_category_album_messages_only(bot, chat_id: int, prior_data: dict) -> None:
+    """Только старые id альбома «готовых идей»; якорное сообщение (меню) не трогаем — его можно отредактировать."""
+    ids = list(prior_data.get("_ready_category_album_ids") or [])
+    seen: set[int] = set()
+    for mid in ids:
+        if mid in seen:
+            continue
+        seen.add(mid)
+        try:
+            await bot.delete_message(chat_id, mid)
+        except Exception:
+            logging.debug("purge ready album only mid=%s", mid, exc_info=True)
 
 
 async def _send_ready_hub_messages(
@@ -2733,20 +2751,26 @@ async def _send_ready_ideas_screen(
     prior = await state.get_data()
     chat_id = message.chat.id
     bot = message.bot
-    if edit:
-        await _purge_prior_ready_hub_ui(bot, chat_id, message, prior)
-    else:
-        await _purge_prior_ready_hub_ui(bot, chat_id, None, prior)
+    # Не удаляем якорь главного меню: сначала пробуем edit_media / подпись на том же сообщении.
+    await _purge_ready_category_album_messages_only(bot, chat_id, prior)
 
     await state.clear()
     if not is_openrouter_image_configured():
         if edit:
-            await bot.send_message(
-                chat_id,
-                _IMAGE_GEN_MISSING_TEXT,
-                reply_markup=_missing_config_kb(),
-                parse_mode=HTML,
-            )
+            if _is_generated_image_result_message(message):
+                await bot.send_message(
+                    chat_id,
+                    _IMAGE_GEN_MISSING_TEXT,
+                    reply_markup=_missing_config_kb(back_callback),
+                    parse_mode=HTML,
+                )
+            else:
+                await _edit_ready_nav_message(
+                    message,
+                    caption=_IMAGE_GEN_MISSING_TEXT,
+                    reply_markup=_missing_config_kb(back_callback),
+                    listing_photo=_ready_categories_listing_photo(),
+                )
         else:
             await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
         return
@@ -2755,6 +2779,34 @@ async def _send_ready_ideas_screen(
     cap = _ready_category_caption()
     kb = _ready_categories_keyboard(back_callback=back_callback)
     paths = _ready_ideas_category_hub_photo_paths()
+    ok_paths = [p for p in paths if p.is_file()]
+    listing_photo = ok_paths[0] if ok_paths else _ready_categories_listing_photo()
+
+    if edit:
+        if message.photo and not _is_generated_image_result_message(message):
+            edited = await _edit_ready_nav_message(
+                message,
+                caption=cap,
+                reply_markup=kb,
+                listing_photo=listing_photo,
+            )
+            if edited is not None:
+                await state.update_data(
+                    _ready_back_cb=back_callback,
+                    _ready_category_album_ids=[edited.message_id],
+                )
+                await _set_img_flow_anchor(state, edited)
+                return
+        # Сообщение с готовой картинкой не удаляем — шлём хаб новым сообщением (как edit_or_send_nav_message).
+        if not _is_generated_image_result_message(message):
+            try:
+                await message.delete()
+            except Exception:
+                logging.debug(
+                    "_send_ready_ideas_screen: не удалось удалить сообщение перед хабом (fallback)",
+                    exc_info=True,
+                )
+
     first, album_ids = await _send_ready_hub_messages(bot, chat_id, cap, kb, paths)
     await state.update_data(_ready_back_cb=back_callback, _ready_category_album_ids=album_ids)
     await _set_img_flow_anchor(state, first)
