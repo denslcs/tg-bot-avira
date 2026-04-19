@@ -1635,8 +1635,20 @@ def _ready_wait_photo_keyboard(
 
 
 def _ready_wait_photo_keyboard_for_state(data: dict) -> InlineKeyboardMarkup:
+    # Стартовый шорткат (сейчас только «Фото с Роналдо»): не связан с листингом категорий — только выход в главное меню.
     if bool(data.get("_ready_include_hidden_start_only")):
-        return _ready_wait_photo_keyboard(back_text="Назад", back_callback=CB_MENU_BACK_START)
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="Отмена",
+                        callback_data=CB_IMG_CANCEL,
+                        style=BTN_DANGER,
+                        icon_custom_emoji_id="6302868067407890482",
+                    )
+                ],
+            ]
+        )
     return _ready_wait_photo_keyboard()
 
 
@@ -3046,7 +3058,8 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
     action, idx_raw = parts[0], parts[1]
     data = await state.get_data()
     category = str(data.get("_ready_category") or "").strip().lower()
-    ideas = _ideas_for_category(category)
+    include_hidden = bool(data.get("_ready_include_hidden_start_only"))
+    ideas = _ideas_for_category(category, include_hidden_start_only=include_hidden)
     if not ideas:
         await callback.answer("Категория недоступна.", show_alert=True)
         return
@@ -3078,6 +3091,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
             await state.set_state(ImageGenState.ready_waiting_fantasy_headline)
             list_ph = _ready_idea_listing_photo_path(title)
             req0 = _ready_idea_requirement_line(title=title, photos_required=0)
+            data_nav = await state.get_data()
             await _edit_ready_nav_message(
                 callback.message,
                 caption=(
@@ -3086,7 +3100,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
                     f"<b>{esc(req0)}</b>\n"
                     f"✍️ Пришли <b>текст заголовка</b> для логотипа (до {_FANTASY_HEADLINE_MAX_LEN} символов)."
                 ),
-                reply_markup=_ready_wait_photo_keyboard(),
+                reply_markup=_ready_wait_photo_keyboard_for_state(data_nav),
                 listing_photo=list_ph if list_ph is not None else _ready_categories_listing_photo(),
             )
             await callback.answer()
@@ -3098,6 +3112,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
         first_hint = _ready_photo_upload_hint(
             category=category, need=photos_required, received=0, idea_title=title
         )
+        data_nav = await state.get_data()
         await _edit_ready_nav_message(
             callback.message,
             caption=(
@@ -3106,7 +3121,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
                 f"{first_hint}\n"
                 '<tg-emoji emoji-id="5235837920081887219">📸</tg-emoji> Скинь фото, после загрузки появится кнопка подтверждения.'
             ),
-            reply_markup=_ready_wait_photo_keyboard(),
+            reply_markup=_ready_wait_photo_keyboard_for_state(data_nav),
             listing_photo=_ready_idea_listing_photo_path(title) or _ready_categories_listing_photo(),
         )
         await callback.answer()
@@ -3125,21 +3140,24 @@ async def ready_photo_back(callback: CallbackQuery, state: FSMContext) -> None:
         category = str(data.get("_ready_category") or "").strip().lower()
         need = int(data.get("_ready_need") or 1)
         photos = list(data.get("_ready_photos") or [])
-        title = _ready_title_from_state_data(data) or _MELLSTROY_PHOTO_TITLE
+        title = _ready_title_from_state_data(data) or _RONALDO_PHOTO_TITLE
         hint = _ready_photo_upload_hint(
             category=category,
             need=need,
             received=len(photos),
             idea_title=title,
         )
+        mellstroy_note = ""
+        if (title or "").strip() == _MELLSTROY_PHOTO_TITLE:
+            mellstroy_note = "\n<blockquote><i>Попал на скрытую тусовку к Мелу.</i></blockquote>"
         await state.set_state(ImageGenState.ready_waiting_photos)
         await _edit_ready_nav_message(
             callback.message,
             caption=(
                 f"<b>Выбрано:</b> {esc(title)}\n"
                 f"{_ready_generation_cost_html()}\n"
-                f"{hint}\n"
-                "<blockquote><i>Попал на скрытую тусовку к Мелу.</i></blockquote>"
+                f"{hint}"
+                f"{mellstroy_note}"
             ),
             reply_markup=_ready_wait_photo_keyboard_for_state(data),
             listing_photo=_ready_idea_listing_photo_path(title) or _ready_categories_listing_photo(),
