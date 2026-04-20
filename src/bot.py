@@ -9,6 +9,7 @@ from aiogram.types import BotCommand, BotCommandScopeChat, BotCommandScopeChatAd
 
 from src.config import ADMIN_IDS, SUPPORT_CHAT_ID, TELEGRAM_BOT_TOKEN
 from src.database import init_db
+from src.inline_panel_exclusive import apply_exclusive_inline_panels
 from src.handlers.routers import register_routers
 from src.selfcheck import run_self_check
 
@@ -77,6 +78,7 @@ async def main() -> None:
     await init_db()
 
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
+    apply_exclusive_inline_panels()
     await _register_bot_commands(bot)
     dp = Dispatcher(storage=MemoryStorage())
     register_routers(dp)
