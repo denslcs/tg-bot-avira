@@ -46,6 +46,8 @@ CB_READY_CONFIRM = "img:idea_confirm"
 CB_REGEN = "img:regen"
 CB_REGEN_READY_REDO = "img:regen_ready_redo"
 CB_BACK_TO_READY_IDEAS = "img:back_ready_ideas"
+# Результат готовой идеи (шорткат Роналдо): в меню вместо «К готовым идеям»
+CB_READY_RESULT_MAIN_MENU = "img:ready_result_main_menu"
 CB_IMG_OK = "img:ok"
 CB_IMG_CANCEL = "img:cancel"
 # Выбор модели для подписчиков: img:m:0, img:m:1, ...
@@ -119,4 +121,5 @@ __all__ = [
     "CB_REGEN",
     "CB_REGEN_READY_REDO",
     "CB_BACK_TO_READY_IDEAS",
+    "CB_READY_RESULT_MAIN_MENU",
 ]

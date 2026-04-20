@@ -79,6 +79,7 @@ from src.keyboards.callback_data import (
     CB_MENU_SUPPORT,
     CB_MENU_SUPPORT_HUB,
     CB_BACK_TO_READY_IDEAS,
+    CB_READY_RESULT_MAIN_MENU,
     CB_REGEN,
     CB_REGEN_READY_REDO,
 )
@@ -193,7 +194,14 @@ def _is_generated_image_result_message(message: Message) -> bool:
         for row in kb.inline_keyboard:
             for btn in row:
                 cd = getattr(btn, "callback_data", None)
-                if cd in (CB_REGEN, CB_REGEN_READY_REDO, CB_BACK_TO_READY_IDEAS, CB_IMG_OK, "img:save"):
+                if cd in (
+                    CB_REGEN,
+                    CB_REGEN_READY_REDO,
+                    CB_BACK_TO_READY_IDEAS,
+                    CB_READY_RESULT_MAIN_MENU,
+                    CB_IMG_OK,
+                    "img:save",
+                ):
                     return True
     return False
 

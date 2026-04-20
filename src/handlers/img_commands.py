@@ -96,6 +96,7 @@ from src.keyboards.callback_data import (
     CB_READY_NAV_PREFIX,
     CB_READY_PHOTO_BACK,
     CB_BACK_TO_READY_IDEAS,
+    CB_READY_RESULT_MAIN_MENU,
     CB_REGEN,
     CB_REGEN_READY_REDO,
 )
@@ -1110,7 +1111,7 @@ async def _set_img_flow_anchor(state: FSMContext, msg: Message | None) -> None:
     )
 
 
-async def _strip_ready_flow_inline_keyboards(bot, chat_id: int, data: dict) -> None:
+async def _strip_ready_flow_inline_keyboards(bot, chat_id: int, data: dict, *extra_mids: int) -> None:
     """Убирает inline-клавиатуры с экрана выбора идеи, хаба и сообщений «скинь ещё фото» после загрузки фото."""
     ach = data.get("_img_flow_anchor_chat_id")
     ids: list[int] = []
@@ -1131,6 +1132,9 @@ async def _strip_ready_flow_inline_keyboards(bot, chat_id: int, data: dict) -> N
         except (TypeError, ValueError):
             continue
         if m not in ids:
+            ids.append(m)
+    for m in extra_mids:
+        if isinstance(m, int) and m not in ids:
             ids.append(m)
     for mid in ids:
         try:
@@ -2004,7 +2008,25 @@ def _regen_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def _ready_idea_result_keyboard(*, redo_label: str) -> InlineKeyboardMarkup:
+def _ready_idea_result_keyboard(
+    *,
+    redo_label: str,
+    ready_idea_title: str | None = None,
+) -> InlineKeyboardMarkup:
+    second = (
+        InlineKeyboardButton(
+            text="В меню",
+            callback_data=CB_READY_RESULT_MAIN_MENU,
+            style=BTN_PRIMARY,
+            icon_custom_emoji_id="5256247952564825322",
+        )
+        if (ready_idea_title or "").strip() == _RONALDO_PHOTO_TITLE
+        else InlineKeyboardButton(
+            text="💡 К готовым идеям",
+            callback_data=CB_BACK_TO_READY_IDEAS,
+            style=BTN_PRIMARY,
+        )
+    )
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -2015,13 +2037,7 @@ def _ready_idea_result_keyboard(*, redo_label: str) -> InlineKeyboardMarkup:
                     icon_custom_emoji_id="5244758760429213978",
                 ),
             ],
-            [
-                InlineKeyboardButton(
-                    text="💡 К готовым идеям",
-                    callback_data=CB_BACK_TO_READY_IDEAS,
-                    style=BTN_PRIMARY,
-                ),
-            ],
+            [second],
         ],
     )
 
@@ -2160,10 +2176,17 @@ async def _send_result_photo_with_regen(
                 f"{CREDITS_COIN_TG_HTML} кредиты: <b>{esc(balance_after)}</b>.",
                 parse_mode=HTML,
             )
+        flow_data = await state.get_data() if state is not None else {}
+        await _strip_ready_flow_inline_keyboards(
+            message.bot, message.chat.id, flow_data, message.message_id
+        )
         redo_lbl = await _redo_more_button_label(user_id, cost)
         await message.answer(
             'Готово <tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Выбери действие:',
-            reply_markup=_ready_idea_result_keyboard(redo_label=redo_lbl),
+            reply_markup=_ready_idea_result_keyboard(
+                redo_label=redo_lbl,
+                ready_idea_title=ready_idea_title,
+            ),
             parse_mode=HTML,
         )
     else:
@@ -4172,6 +4195,14 @@ async def ready_redo_from_button(callback: CallbackQuery, state: FSMContext) -> 
         await callback.answer()
         return
     await callback.answer()
+    try:
+        await callback.message.edit_text(
+            '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> <b>Выбрано:</b> <i>Ещё раз</i>',
+            parse_mode=HTML,
+            reply_markup=None,
+        )
+    except Exception:
+        logging.debug("ready_redo_from_button: mark panel failed", exc_info=True)
     ctx = await get_last_image_context(callback.from_user.id)
     if not ctx or ctx.usage_kind != "ready":
         await callback.message.answer("Нет данных для повтора. Открой «Готовые идеи» в меню.")
@@ -4185,17 +4216,42 @@ async def ready_redo_from_button(callback: CallbackQuery, state: FSMContext) -> 
     )
 
 
+@router.callback_query(F.data == CB_READY_RESULT_MAIN_MENU)
+async def ready_result_main_menu(callback: CallbackQuery, state: FSMContext) -> None:
+    """Шорткат Роналдо: из результата — в главное меню (не в листинг готовых идей)."""
+    if not callback.from_user or not callback.message:
+        await callback.answer()
+        return
+    await callback.answer()
+    try:
+        await callback.message.edit_text(
+            '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> <b>Выбрано:</b> <i>В меню</i>',
+            parse_mode=HTML,
+            reply_markup=None,
+        )
+    except Exception:
+        logging.debug("ready_result_main_menu: edit failed", exc_info=True)
+    await state.clear()
+    await restore_main_menu_message(
+        callback.message, callback.from_user.id, callback.from_user.username
+    )
+
+
 @router.callback_query(F.data == CB_BACK_TO_READY_IDEAS)
 async def back_to_ready_ideas_from_result(callback: CallbackQuery, state: FSMContext) -> None:
     if not callback.from_user or not callback.message:
         await callback.answer()
         return
     await callback.answer()
-    await state.clear()
     try:
-        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.message.edit_text(
+            '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> <b>Выбрано:</b> <i>К готовым идеям</i>',
+            parse_mode=HTML,
+            reply_markup=None,
+        )
     except Exception:
-        logging.debug("back_ready_ideas: strip kb failed", exc_info=True)
+        logging.debug("back_ready_ideas: edit panel failed", exc_info=True)
+    await state.clear()
     await _send_ready_ideas_screen(
         callback.message,
         state,
