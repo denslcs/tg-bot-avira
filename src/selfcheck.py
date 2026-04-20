@@ -60,10 +60,12 @@ def _check_ready_ideas() -> tuple[list[str], list[str]]:
                 )
     checks.append("Ready idea tuples validated (title/preview/prompt/photos_required).")
 
-    for title, path in _READY_IDEA_STATIC_REF_BY_TITLE.items():
-        p = Path(path)
-        if not p.is_file():
-            errors.append(f"Static reference for '{title}' does not exist: {path}")
+    for title, path_or_paths in _READY_IDEA_STATIC_REF_BY_TITLE.items():
+        ref_list = [path_or_paths] if isinstance(path_or_paths, str) else list(path_or_paths)
+        for path in ref_list:
+            p = Path(path)
+            if not p.is_file():
+                errors.append(f"Static reference for '{title}' does not exist: {path}")
     checks.append("Static reference files exist.")
 
     mc_listing = PROJECT_ROOT / "assets" / "ready_ideas" / "minecraft_preview.png"

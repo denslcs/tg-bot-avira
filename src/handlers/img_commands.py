@@ -760,9 +760,15 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
 
 # Доп. изображения для API (extra_refs): только лицо Мухаммада Али для соответствующей идеи — не путать с *_preview ниже.
 _READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str | list[str]] = {
-    "Победа над Мухаммадом Али на ринге": r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_114b8c4714b8b9b1196d51ad8d72a-1b94cd0d-73ba-44de-b3da-08a08fade423.png",
-    "Absolute Cinema": r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_image-12bb8ef0-9f93-46b6-9971-188e07110cf6.png",
-    _MMORPG_HERO_TITLE: r"C:\Users\puma1\.cursor\projects\c-Users-puma1-Tg-bot-AVIRA\assets\c__Users_puma1_AppData_Roaming_Cursor_User_workspaceStorage_30e373e7c0bd4c0e8bda9500b3b60435_images_image-26619a18-9d1f-481a-bc31-f9dd8e46575d.png",
+    "Победа над Мухаммадом Али на ринге": str(
+        PROJECT_ROOT / "assets" / "ready_ideas" / "muhammad_ali_victory_preview.png"
+    ),
+    "Absolute Cinema": str(
+        PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "absolute_cinema_preview.png"
+    ),
+    _MMORPG_HERO_TITLE: str(
+        PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "mmorpg_hero_custom_preview.png"
+    ),
     _MELLSTROY_PHOTO_TITLE: [
         str(PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "mellstroy_ref.png"),
         str(PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "mellstroy_cat_ref.png"),
