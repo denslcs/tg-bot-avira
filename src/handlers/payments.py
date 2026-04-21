@@ -5,7 +5,8 @@ from __future__ import annotations
 
 Автоматическая запись подписки в БД — только при успешной оплате Telegram Stars
 (SUCCESSFUL_PAYMENT): срок подписки + кредиты; при активной подписке — продление срока
-(extend) и бонус к кредитам за раннее продление. Оплата по внешним ссылкам
+(extend) и бонус к кредитам за продление (включая окно 2 дня после окончания).
+Оплата по внешним ссылкам
 (карта РФ/INTL, крипта) в этом боте только ведёт на кассу; продление в users делается
 вручную или отдельным процессом на стороне платежки.
 """
@@ -47,14 +48,8 @@ from src.config import (
 )
 from src.database import (
     add_credits_with_reason,
-    add_budget_history_event,
     ensure_user,
-    queue_subscription_bonus_credits,
     get_user_admin_profile,
-    mark_starter_trial_purchased,
-    record_subscription_purchase_now,
-    extend_subscription,
-    reset_subscription_days,
     release_star_payment_claim,
     subscription_can_purchase_plan,
     subscription_is_active,
@@ -105,10 +100,22 @@ from src.subscription_catalog import (
     SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS,
     SubscriptionPlan,
 )
+from src.services.payments_apply import (
+    apply_plan_purchase_from_stars,
+    repeat_plan_bonus_extra_credits,
+)
 
 router = Router(name="payments")
 
 logger = logging.getLogger(__name__)
+
+
+def _log_payment_event(event: str, **kwargs: object) -> None:
+    """Единый формат логов платежей для инцидентов и сверок."""
+    parts = [f"event={event}"]
+    for k, v in kwargs.items():
+        parts.append(f"{k}={v!r}")
+    logger.info("payment_event %s", " ".join(parts))
 
 # Перки по тарифам — как в img_commands._model_choices_for_subscription_plan, _image_gen_priority_from_user_id,
 # _user_eligible_redo_half_price, _repeat_plan_bonus_extra_credits, скидка −15% на бонус-пакеты при активной Universe.
@@ -133,7 +140,9 @@ _PLAN_PAY_PERKS_HTML: dict[str, str] = {
     "universe": (
         "<b>Universe.</b> Все модели (Klein, Nano Banana, GPT Image 1.5, FLUX Pro, Nano Banana 2, GPT‑5 Image). "
         "<b>Приоритет</b> очереди. Повтор готовой идеи — <b>−50%</b>, до раза в сутки (UTC). "
-        "При раннем продлении — <b>+10%</b> к бонусным кредитам (вместо +5%). С активной Universe — <b>−15%</b> на пакеты бонусов."
+        "При продлении того же тарифа — <b>+10%</b> к бонусным кредитам "
+        "(если подписка активна или прошло не более 2 дней после окончания). "
+        "С активной Universe — <b>−15%</b> на пакеты бонусов."
     ),
 }
 
@@ -154,15 +163,16 @@ _PLAN_PAY_PERKS_PHOTO_HTML: dict[str, str] = {
         "<blockquote><i><b>Galaxy:</b> Klein + Nano Banana + GPT 1.5; приоритет; −50% на повтор готовой идеи (раз/сутки).</i></blockquote>\n"
     ),
     "universe": (
-        "<blockquote><i><b>Universe:</b> все модели; приоритет; −50% на повтор готовой идеи; раннее продление +10% к кр.; "
+        "<blockquote><i><b>Universe:</b> все модели; приоритет; −50% на повтор готовой идеи; "
+        "за продление того же тарифа +10% к кр. (при активной подписке или до 2 дней после окончания); "
         "−15% на бонус-паки.</i></blockquote>\n"
     ),
 }
 
 _COOLDOWN_PHOTO_HTML = (
     f"<blockquote><i>После окончания подписки следующий <b>полный</b> тариф — не раньше чем через "
-    f"<b>{esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дн. Продление того же тарифа суммирует дни (+5% к кр.; "
-    f"у {plan_subscription_title_html('universe')} при раннем продлении +10%).</i></blockquote>\n"
+    f"<b>{esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дн. Продление того же тарифа суммирует дни. "
+    "Бонус за продление: +5% (для Universe +10%) при активной подписке или в течение 2 дней после окончания.</i></blockquote>\n"
 )
 
 
@@ -347,6 +357,22 @@ async def _has_active_starter_or_universe(user_id: int) -> bool:
     return (prof.subscription_plan or "").strip().lower() in ("starter", "universe")
 
 
+async def _expected_stars_amount(*, kind: str, item_id: str, user_id: int) -> int | None:
+    """Ожидаемая сумма Stars для payload (plan/pack) с учётом скидок."""
+    if kind == "plan":
+        p = PLANS.get(item_id)
+        return int(p.stars) if p else None
+    if kind == "pack":
+        if item_id not in BONUS_PACKS:
+            return None
+        universe_discount = await _has_active_starter_or_universe(user_id)
+        _rub, _usd, stars, _disc = _discount_pack_values(
+            item_id, apply_universe_discount=universe_discount
+        )
+        return int(stars)
+    return None
+
+
 def _discount_pack_values(pack_id: str, *, apply_universe_discount: bool) -> tuple[int, float, int, bool]:
     """Цена пакета с учётом перка Universe: −15% на все бонус-паки (₽, $, ⭐)."""
     p = BONUS_PACKS[pack_id]
@@ -360,12 +386,12 @@ def _discount_pack_values(pack_id: str, *, apply_universe_discount: bool) -> tup
 
 
 def _repeat_plan_bonus_extra_credits(*, plan_id: str, base_credits: int, early_renewal: bool) -> int:
-    """Бонус за повторную покупку того же тарифа: обычно +5%; Universe при раннем продлении +10%."""
-    if base_credits <= 0:
-        return 0
-    if early_renewal and plan_id == "universe":
-        return int(base_credits * 0.10)
-    return int(base_credits * 0.05)
+    """Совместимость: прокси к сервисной логике начисления бонуса за продление."""
+    return repeat_plan_bonus_extra_credits(
+        plan_id=plan_id,
+        base_credits=base_credits,
+        renewal_eligible=early_renewal,
+    )
 
 
 def _subscriptions_pricing_image_path() -> Path | None:
@@ -449,8 +475,8 @@ def _plans_menu_caption() -> str:
         f"Ограничений на число генераций по подписке нет — списываются {CREDITS_COIN_TG_HTML} кредиты.\n\n"
         f"<blockquote><i>Продление и пауза:</i> после <b>окончания</b> подписки следующую покупку полного тарифа можно оформить "
         f"не раньше чем через <b>{esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дней. Пока подписка ещё действует, заранее можно "
-        f"продлить только <b>тот же</b> тариф — дни суммируются; при повторе того же тарифа к кредитам <b>+5%</b>, "
-        f"для {u_h} при раннем продлении <b>+10%</b>.</blockquote>\n\n"
+        f"продлить только <b>тот же</b> тариф — дни суммируются; бонус за продление того же тарифа: <b>+5%</b>, "
+        f"для {u_h} — <b>+10%</b> (если подписка активна или прошло не более 2 дней после окончания).</blockquote>\n\n"
         f"<blockquote><i>Если подписка не активна:</i> за один цикл — до <b>{esc(NONSUB_IMAGE_WINDOW_MAX)}</b> картинок; "
         f"когда все слоты цикла израсходованы, новый цикл откроется через <b>{esc(NONSUB_IMAGE_WINDOW_DAYS)}</b> суток "
         f"от этого момента (UTC). {CREDITS_COIN_TG_HTML} Кредиты этот лимит не обходят — сначала действует лимит цикла.</blockquote>"
@@ -585,7 +611,8 @@ def _pay_methods_text(plan_id: str, *, for_photo_caption: bool = False) -> str:
     cooldown_block = (
         f"<blockquote><i>После <b>окончания</b> подписки следующую покупку полного тарифа можно оформить не раньше чем через "
         f"<b>{esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дней. Пока срок идёт — продлевается только <b>тот же</b> тариф "
-        f"(дни суммируются; за повтор — <b>+5%</b> к кредитам, у {plan_subscription_title_html('universe')} при раннем продлении <b>+10%</b>). "
+        f"(дни суммируются; за продление того же тарифа — <b>+5%</b> к кредитам, у {plan_subscription_title_html('universe')} — <b>+10%</b>; "
+        "бонус действует при активной подписке или в течение 2 дней после её окончания). "
         f'Оплата <tg-emoji emoji-id="5267500801240092311">⭐️</tg-emoji> учитывается автоматически.</i></blockquote>\n'
     )
     if plan_id == "starter":
@@ -1354,8 +1381,8 @@ async def pre_checkout(q: PreCheckoutQuery) -> None:
     if int(parts[1]) != q.from_user.id:
         await q.answer(ok=False, error_message="Платёж не подходит к этому аккаунту. Запроси счёт заново.")
         return
-    item_id = parts[2]
-    if parts[0] == "plan":
+    kind, item_id = parts[0], parts[2]
+    if kind == "plan":
         if item_id not in PLANS:
             await q.answer(ok=False, error_message="Неизвестный тариф. Запроси новый счёт.")
             return
@@ -1363,16 +1390,10 @@ async def pre_checkout(q: PreCheckoutQuery) -> None:
         if not allowed:
             await q.answer(ok=False, error_message=(reason or "Покупка подписки сейчас недоступна.")[:250])
             return
-        amount_expected = PLANS[item_id].stars
-    else:
-        if item_id not in BONUS_PACKS:
-            await q.answer(ok=False, error_message="Неизвестный пакет. Запроси новый счёт.")
-            return
-        universe_discount = await _has_active_starter_or_universe(q.from_user.id)
-        _rub, _usd, stars, _disc = _discount_pack_values(
-            item_id, apply_universe_discount=universe_discount
-        )
-        amount_expected = stars
+    amount_expected = await _expected_stars_amount(kind=kind, item_id=item_id, user_id=q.from_user.id)
+    if amount_expected is None:
+        await q.answer(ok=False, error_message="Неизвестный товар. Запроси новый счёт.")
+        return
     if (q.currency or "").upper() != "XTR" or int(q.total_amount or 0) != amount_expected:
         await q.answer(ok=False, error_message="Сумма или валюта счёта не совпадают. Запроси новый счёт.")
         return
@@ -1398,6 +1419,12 @@ async def successful_payment(message: Message) -> None:
     await ensure_user(message.from_user.id, message.from_user.username)
     charge_id = (sp.telegram_payment_charge_id or "").strip()
     if not await try_claim_star_payment(charge_id, message.from_user.id):
+        _log_payment_event(
+            "duplicate_claim",
+            user_id=message.from_user.id,
+            charge_id=charge_id,
+            payload=payload,
+        )
         await message.answer(
             f"Этот платёж уже учтён. Если подписка или {CREDITS_COIN_TG_HTML} кредиты не отображаются — напиши в поддержку.",
             parse_mode=HTML,
@@ -1407,6 +1434,29 @@ async def successful_payment(message: Message) -> None:
         if item_id not in PLANS:
             await release_star_payment_claim(charge_id)
             await message.answer("Оплата получена, но тариф не найден. Напиши в поддержку.")
+            return
+        stars_expected = await _expected_stars_amount(
+            kind="plan", item_id=item_id, user_id=message.from_user.id
+        )
+        if stars_expected is None:
+            await release_star_payment_claim(charge_id)
+            await message.answer("Оплата получена, но тариф не найден. Напиши в поддержку.")
+            return
+        if (sp.currency or "").upper() != "XTR" or int(sp.total_amount or 0) != stars_expected:
+            _log_payment_event(
+                "plan_amount_mismatch",
+                user_id=message.from_user.id,
+                item_id=item_id,
+                expected=int(stars_expected),
+                got=int(sp.total_amount or 0),
+                currency=(sp.currency or "").upper(),
+                charge_id=charge_id,
+            )
+            await release_star_payment_claim(charge_id)
+            await message.answer(
+                "Оплата получена, но сумма или валюта счёта не совпали с тарифом. "
+                "Напиши в поддержку — проверим и оформим вручную."
+            )
             return
         allowed, reason = await subscription_can_purchase_plan(message.from_user.id, item_id)
         if not allowed:
@@ -1418,105 +1468,57 @@ async def successful_payment(message: Message) -> None:
                 parse_mode=HTML,
             )
             return
-        p = PLANS[item_id]
-        prof_before = await get_user_admin_profile(message.from_user.id)
-        prev_plan_id = (prof_before.subscription_plan or "").strip().lower() if prof_before else ""
-        same_plan_repeat = bool(prev_plan_id and prev_plan_id == item_id)
-        had_active_renewal = bool(
-            prof_before
-            and subscription_is_active(prof_before.subscription_ends_at)
-            and item_id != "starter"
+        apply_result = await apply_plan_purchase_from_stars(
+            user_id=message.from_user.id,
+            item_id=item_id,
         )
-        renewal_extra = (
-            _repeat_plan_bonus_extra_credits(
-                plan_id=item_id,
-                base_credits=p.bonus_credits,
-                early_renewal=had_active_renewal,
+        if apply_result is None:
+            _log_payment_event(
+                "plan_apply_failed",
+                user_id=message.from_user.id,
+                item_id=item_id,
+                charge_id=charge_id,
             )
-            if (item_id != "starter" and same_plan_repeat)
-            else 0
-        )
-        renewal_release_at: str | None = None
-        if item_id == "starter":
-            new_end = await reset_subscription_days(message.from_user.id, p.period_days, item_id)
-        elif had_active_renewal:
-            renewal_release_at = str(prof_before.subscription_ends_at or "").strip() or None
-            new_end = await extend_subscription(message.from_user.id, p.period_days, item_id)
-        else:
-            new_end = await reset_subscription_days(message.from_user.id, p.period_days, item_id)
-        if not new_end:
             await release_star_payment_claim(charge_id)
             await message.answer(
                 "Ошибка записи подписки в базу. Сохрани это сообщение и напиши в поддержку — проверим оплату."
             )
             return
-        if item_id == "starter":
-            await mark_starter_trial_purchased(message.from_user.id)
-        else:
-            await record_subscription_purchase_now(message.from_user.id)
-        total_bonus_credits = p.bonus_credits + renewal_extra
-        prof_verify = await get_user_admin_profile(message.from_user.id)
-        sub_active_ok = bool(
-            prof_verify and subscription_is_active(prof_verify.subscription_ends_at)
-        )
-        if not sub_active_ok:
-            logger.error(
-                "Stars plan purchase: subscription still inactive after DB write uid=%s new_end=%s profile_end=%s",
-                message.from_user.id,
-                new_end,
-                getattr(prof_verify, "subscription_ends_at", None),
-            )
-        if had_active_renewal and renewal_release_at:
-            credited = await queue_subscription_bonus_credits(
-                message.from_user.id,
-                total_bonus_credits,
-                release_at_utc=renewal_release_at,
-                details=f"plan {item_id} renewal bonus",
-            )
-        else:
-            credited = await add_credits_with_reason(
-                message.from_user.id,
-                total_bonus_credits,
-                source="subscription_bonus",
-                details=f"plan {item_id}" + (" renewal" if renewal_extra else ""),
-            )
-        await add_budget_history_event(
-            message.from_user.id,
-            source="subscription_purchase",
-            details=f"plan {item_id}",
-            delta=0,
-        )
-        end_h = format_subscription_ends_at(new_end)
+        end_h = format_subscription_ends_at(apply_result.new_end)
         q_lines = [
-            f"<i>Срок:</i> <b>{esc(p.period_days)}</b> дн.; действует до <b>{esc(end_h)}</b>",
+            f"<i>Срок:</i> <b>{esc(apply_result.period_days)}</b> дн.; действует до <b>{esc(end_h)}</b>",
         ]
-        if had_active_renewal and item_id != "starter":
+        if apply_result.had_active_renewal and item_id != "starter":
             q_lines.append(
                 "<blockquote><i>Подписка продлена заранее — к текущему сроку добавлены дни тарифа.</i></blockquote>"
             )
-            if renewal_release_at:
+            if apply_result.renewal_release_at:
                 q_lines.append(
                     "<blockquote><i>Кредиты по этому продлению начислятся после окончания текущего периода подписки.</i></blockquote>"
                 )
-        if renewal_extra > 0:
+        if apply_result.renewal_extra > 0:
             q_lines.append(
-                f"<i>Бонус за повтор этого же тарифа:</i> <b>+{esc(renewal_extra)}</b> кредитов"
+                f"<i>Бонус за повтор этого же тарифа:</i> <b>+{esc(apply_result.renewal_extra)}</b> кредитов"
             )
-        elif item_id != "starter" and (not same_plan_repeat):
+        elif item_id != "starter" and (not apply_result.same_plan_repeat):
             q_lines.append(
                 "<i>Смена тарифа: бонус за продление не применяется.</i>"
             )
-        if credited:
+        elif item_id != "starter" and apply_result.same_plan_repeat and not apply_result.renewal_bonus_eligible:
+            q_lines.append(
+                "<i>Бонус продления действует только при активной подписке или в течение 2 дней после её окончания.</i>"
+            )
+        if apply_result.credited:
             q_lines.append(
                 (
-                    f"<i>{'Запланировано к начислению' if had_active_renewal else 'Начислено на баланс'} "
-                    f"(тариф{(' + продление' if renewal_extra else '')}):</i> "
-                    f"<b>+{esc(total_bonus_credits)}</b> кредитов"
+                    f"<i>{'Запланировано к начислению' if apply_result.had_active_renewal else 'Начислено на баланс'} "
+                    f"(тариф{(' + продление' if apply_result.renewal_extra else '')}):</i> "
+                    f"<b>+{esc(apply_result.total_bonus_credits)}</b> кредитов"
                 )
             )
         else:
             q_lines.append(
-                f"<i>Бонус +{esc(total_bonus_credits)} не начислен — напиши в поддержку.</i>"
+                f"<i>Бонус +{esc(apply_result.total_bonus_credits)} не начислен — напиши в поддержку.</i>"
             )
         quote_inner = "\n".join(q_lines)
         starter_tail = ""
@@ -1528,7 +1530,7 @@ async def successful_payment(message: Message) -> None:
                 f"{plan_subscription_title_html('starter')} купить нельзя.</i></blockquote>"
             )
         verify_tail = ""
-        if not sub_active_ok:
+        if not apply_result.sub_active_ok:
             verify_tail = (
                 "\n\n<blockquote><i>Если в</i> <code>/profile</code> <i>подписка всё ещё «не активна», "
                 "обнови меню или напиши в поддержку — проверим запись.</i></blockquote>"
@@ -1545,8 +1547,8 @@ async def successful_payment(message: Message) -> None:
         cur = (sp.currency or "XTR").upper()
         credit_ok = (
             "запланировано после окончания текущего срока"
-            if (had_active_renewal and credited)
-            else ("да" if credited else "нет (проверить вручную)")
+            if (apply_result.had_active_renewal and apply_result.credited)
+            else ("да" if apply_result.credited else "нет (проверить вручную)")
         )
         pay_kind = _payment_type_label(sp)
         admin_txt = (
@@ -1554,8 +1556,8 @@ async def successful_payment(message: Message) -> None:
             f"<b>Тип оплаты:</b> {pay_kind}\n"
             f"Тариф: {plan_subscription_title_html(item_id)} · <code>{esc(item_id)}</code>\n"
             f"Пользователь: {_user_line_html(message.from_user)}\n"
-            f'<tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты: <b>+{esc(total_bonus_credits)}</b>'
-            f"{(' (в т.ч. продление +' + str(renewal_extra) + ')' if renewal_extra else '')}"
+            f'<tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты: <b>+{esc(apply_result.total_bonus_credits)}</b>'
+            f"{(' (в т.ч. продление +' + str(apply_result.renewal_extra) + ')' if apply_result.renewal_extra else '')}"
             f" · начислено: <i>{esc(credit_ok)}</i>\n"
             f"До (UTC): <code>{esc(end_h)}</code>\n"
             f"Сумма: <b>{esc(stars_amt)}</b> {esc(cur)}\n"
@@ -1566,6 +1568,16 @@ async def successful_payment(message: Message) -> None:
             thread_id=_admin_sales_thread_for_plan(item_id),
             text=admin_txt,
         )
+        _log_payment_event(
+            "plan_applied",
+            user_id=message.from_user.id,
+            item_id=item_id,
+            charge_id=charge_id,
+            amount=int(sp.total_amount or 0),
+            currency=(sp.currency or "XTR").upper(),
+            renewal_extra=int(apply_result.renewal_extra),
+            credited=bool(apply_result.credited),
+        )
         return
     if item_id not in BONUS_PACKS:
         await release_star_payment_claim(charge_id)
@@ -1573,10 +1585,26 @@ async def successful_payment(message: Message) -> None:
         return
     b = BONUS_PACKS[item_id]
     universe_discount = await _has_active_starter_or_universe(message.from_user.id)
-    _rub, _usd, stars_expected, discounted = _discount_pack_values(
+    _rub, _usd, _stars_dummy, discounted = _discount_pack_values(
         item_id, apply_universe_discount=universe_discount
     )
-    if (sp.currency or "").upper() != "XTR" or int(sp.total_amount or 0) != stars_expected:
+    stars_expected = await _expected_stars_amount(
+        kind="pack", item_id=item_id, user_id=message.from_user.id
+    )
+    if stars_expected is None:
+        await release_star_payment_claim(charge_id)
+        await message.answer("Оплата получена, но пакет не найден. Напиши в поддержку.")
+        return
+    if (sp.currency or "").upper() != "XTR" or int(sp.total_amount or 0) != int(stars_expected):
+        _log_payment_event(
+            "pack_amount_mismatch",
+            user_id=message.from_user.id,
+            item_id=item_id,
+            expected=int(stars_expected),
+            got=int(sp.total_amount or 0),
+            currency=(sp.currency or "").upper(),
+            charge_id=charge_id,
+        )
         await release_star_payment_claim(charge_id)
         await message.answer(
             "Оплата получена, но сумма пакета не совпала с текущими условиями. "
@@ -1613,7 +1641,23 @@ async def successful_payment(message: Message) -> None:
             thread_id=ADMIN_SALES_THREAD_BONUS_PACKS,
             text=admin_txt,
         )
+        _log_payment_event(
+            "pack_applied",
+            user_id=message.from_user.id,
+            item_id=item_id,
+            charge_id=charge_id,
+            amount=int(sp.total_amount or 0),
+            currency=(sp.currency or "XTR").upper(),
+            credits=int(b.credits),
+            discounted=bool(discounted),
+        )
     else:
+        _log_payment_event(
+            "pack_credit_apply_failed",
+            user_id=message.from_user.id,
+            item_id=item_id,
+            charge_id=charge_id,
+        )
         await release_star_payment_claim(charge_id)
         await message.answer(
             f"Оплата получена, но {CREDITS_COIN_TG_HTML} кредиты не удалось начислить автоматически. "

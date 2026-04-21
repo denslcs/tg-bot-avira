@@ -119,6 +119,34 @@ sudo systemctl restart shard-creator-main-bot shard-creator-support-bot
 
 ---
 
+## Чеклист безопасного релиза
+
+Перед `restart` на сервере:
+
+```bash
+cd /root/shard-creator-bot
+source venv/bin/activate
+python -m compileall -q src tests
+python -m src.selfcheck
+python -m unittest tests.test_subscription_flows tests.test_payments_stars_rules -v
+```
+
+После перезапуска:
+
+```bash
+sudo systemctl status shard-creator-main-bot --no-pager
+sudo systemctl status shard-creator-support-bot --no-pager
+sudo journalctl -u shard-creator-main-bot -n 80 --no-pager
+```
+
+Проверить в боте вручную:
+- экран `/start` и меню открываются без ошибок;
+- покупка Stars отрабатывает и шлёт сообщение пользователю;
+- в админ-чат продаж приходит уведомление;
+- профиль отражает новый срок подписки/кредиты.
+
+---
+
 ## Правка `.env` на сервере
 
 ```bash

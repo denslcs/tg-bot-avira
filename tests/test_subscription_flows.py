@@ -9,7 +9,11 @@ from datetime import datetime, timedelta, timezone
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test-token")
 
 from src import database as db  # noqa: E402
-from src.handlers.payments import _discount_pack_values, _has_active_starter_or_universe  # noqa: E402
+from src.handlers.payments import (  # noqa: E402
+    _discount_pack_values,
+    _has_active_starter_or_universe,
+    _repeat_plan_bonus_extra_credits,
+)
 from src.subscription_catalog import (  # noqa: E402
     BONUS_PACKS,
     BONUS_PACKS_ORDER,
@@ -139,6 +143,52 @@ class SubscriptionFlowsTests(unittest.IsolatedAsyncioTestCase):
         end = await db.reset_subscription_days(self.uid, 3, "starter")
         self.assertIsNotNone(end)
         self.assertTrue(await _has_active_starter_or_universe(self.uid))
+
+    async def test_same_plan_allowed_within_two_days_after_end(self) -> None:
+        end = await db.reset_subscription_days(self.uid, 30, "nova")
+        self.assertIsNotNone(end)
+        await db.record_subscription_purchase_now(self.uid)
+        just_expired = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        async with db.open_db() as conn:
+            await conn.execute(
+                "UPDATE users SET subscription_ends_at = ? WHERE user_id = ?",
+                (just_expired, self.uid),
+            )
+            await conn.commit()
+        can_buy, reason = await db.subscription_can_purchase_plan(self.uid, "nova")
+        self.assertTrue(can_buy, msg=reason)
+
+    async def test_same_plan_blocked_after_two_days_window(self) -> None:
+        end = await db.reset_subscription_days(self.uid, 30, "nova")
+        self.assertIsNotNone(end)
+        await db.record_subscription_purchase_now(self.uid)
+        expired_long_ago = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+        async with db.open_db() as conn:
+            await conn.execute(
+                "UPDATE users SET subscription_ends_at = ? WHERE user_id = ?",
+                (expired_long_ago, self.uid),
+            )
+            await conn.commit()
+        can_buy, _reason = await db.subscription_can_purchase_plan(self.uid, "nova")
+        self.assertFalse(can_buy)
+
+    async def test_universe_repeat_bonus_is_ten_percent_when_eligible(self) -> None:
+        self.assertEqual(
+            _repeat_plan_bonus_extra_credits(
+                plan_id="universe",
+                base_credits=1000,
+                early_renewal=True,
+            ),
+            100,
+        )
+        self.assertEqual(
+            _repeat_plan_bonus_extra_credits(
+                plan_id="universe",
+                base_credits=1000,
+                early_renewal=False,
+            ),
+            0,
+        )
 
 
 if __name__ == "__main__":

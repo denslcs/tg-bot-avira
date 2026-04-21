@@ -16,6 +16,7 @@ from src.handlers.img_commands import (
     _READY_IDEA_STATIC_REF_BY_TITLE,
 )
 from src.handlers.routers import register_routers
+from src.subscription_catalog import BONUS_PACKS, BONUS_PACKS_ORDER, PLANS, PLANS_ORDER
 
 
 @dataclass
@@ -255,6 +256,37 @@ def _check_ready_ideas() -> tuple[list[str], list[str]]:
     return checks, errors
 
 
+def _check_subscription_catalog() -> tuple[list[str], list[str]]:
+    checks: list[str] = []
+    errors: list[str] = []
+
+    for pid in PLANS_ORDER:
+        if pid not in PLANS:
+            errors.append(f"Plan '{pid}' is missing in PLANS map.")
+            continue
+        p = PLANS[pid]
+        if int(getattr(p, "period_days", 0)) <= 0:
+            errors.append(f"Plan '{pid}' has non-positive period_days.")
+        if int(getattr(p, "bonus_credits", 0)) <= 0:
+            errors.append(f"Plan '{pid}' has non-positive bonus_credits.")
+        if int(getattr(p, "stars", 0)) <= 0:
+            errors.append(f"Plan '{pid}' has non-positive stars price.")
+    checks.append("Subscription plans validated (period/credits/stars > 0).")
+
+    for pack_id in BONUS_PACKS_ORDER:
+        if pack_id not in BONUS_PACKS:
+            errors.append(f"Bonus pack '{pack_id}' is missing in BONUS_PACKS map.")
+            continue
+        b = BONUS_PACKS[pack_id]
+        if int(getattr(b, "credits", 0)) <= 0:
+            errors.append(f"Bonus pack '{pack_id}' has non-positive credits.")
+        if int(getattr(b, "stars", 0)) <= 0:
+            errors.append(f"Bonus pack '{pack_id}' has non-positive stars price.")
+    checks.append("Bonus packs validated (credits/stars > 0).")
+
+    return checks, errors
+
+
 async def run_self_check() -> SelfCheckResult:
     checks: list[str] = []
     errors: list[str] = []
@@ -279,6 +311,9 @@ async def run_self_check() -> SelfCheckResult:
     idea_checks, idea_errors = _check_ready_ideas()
     checks.extend(idea_checks)
     errors.extend(idea_errors)
+    catalog_checks, catalog_errors = _check_subscription_catalog()
+    checks.extend(catalog_checks)
+    errors.extend(catalog_errors)
 
     return SelfCheckResult(ok=not errors, checks=checks, errors=errors)
 

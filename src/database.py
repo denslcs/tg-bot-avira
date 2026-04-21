@@ -13,6 +13,13 @@ from zoneinfo import ZoneInfo
 import aiosqlite
 
 from src.config import ADMIN_IDS, DB_PATH, START_CREDITS
+from src.services.subscription_time import (
+    is_within_subscription_renewal_grace as _is_within_subscription_renewal_grace_service,
+    normalize_subscription_ends_at_value as _normalize_subscription_ends_at_value_service,
+    parse_dt_utc as _parse_dt_utc_service,
+    subscription_cooldown_days_remaining as _subscription_cooldown_days_remaining_service,
+    subscription_is_active as _subscription_is_active_service,
+)
 from src.subscription_catalog import (
     NONSUB_IMAGE_WINDOW_DAYS,
     NONSUB_IMAGE_WINDOW_MAX,
@@ -610,6 +617,7 @@ async def _release_due_subscription_bonus_credits(user_id: int) -> None:
     """Начислить все отложенные бонусы, чей release_at_utc уже наступил."""
     now_iso = datetime.now(timezone.utc).isoformat()
     async with open_db() as db:
+        await db.execute("BEGIN IMMEDIATE")
         async with db.execute(
             """
             SELECT id, credits, details
@@ -621,6 +629,7 @@ async def _release_due_subscription_bonus_credits(user_id: int) -> None:
         ) as cur:
             rows = await cur.fetchall()
         if not rows:
+            await db.rollback()
             return
         total = 0
         ids: list[int] = []
@@ -1148,39 +1157,12 @@ async def update_ticket_thread(ticket_id: int, thread_id: int, username: str | N
 
 
 def _parse_dt_utc(raw: str | datetime) -> datetime:
-    if isinstance(raw, datetime):
-        dt = raw
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        else:
-            dt = dt.astimezone(timezone.utc)
-        return dt
-    s = str(raw).replace("Z", "+00:00")
-    dt = datetime.fromisoformat(s)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt
+    return _parse_dt_utc_service(raw)
 
 
 def normalize_subscription_ends_at_value(raw: object | None) -> str | None:
     """Значение subscription_ends_at из БД: в единый ISO UTC str или None (пробелы, datetime, пустые)."""
-    if raw is None:
-        return None
-    if isinstance(raw, datetime):
-        dt = raw
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        else:
-            dt = dt.astimezone(timezone.utc)
-        return dt.isoformat()
-    if isinstance(raw, (bytes, bytearray)):
-        try:
-            s = raw.decode("utf-8").strip()
-        except UnicodeDecodeError:
-            return None
-        return s if s else None
-    s = str(raw).strip()
-    return s if s else None
+    return _normalize_subscription_ends_at_value_service(raw)
 
 
 def _normalize_subscription_plan_value(raw: object | None) -> str | None:
@@ -1192,13 +1174,7 @@ def _normalize_subscription_plan_value(raw: object | None) -> str | None:
 
 
 def subscription_is_active(ends_at: object | None) -> bool:
-    normalized = normalize_subscription_ends_at_value(ends_at)
-    if not normalized:
-        return False
-    try:
-        return _parse_dt_utc(normalized) > datetime.now(timezone.utc)
-    except (ValueError, TypeError):
-        return False
+    return _subscription_is_active_service(ends_at)
 
 
 async def _migrate_subscription_ends_at_canonical(db: aiosqlite.Connection) -> None:
@@ -1236,20 +1212,11 @@ async def _migrate_subscription_ends_at_canonical(db: aiosqlite.Connection) -> N
 
 
 def subscription_cooldown_days_remaining(last_purchase_iso: str | None) -> int:
-    """0 — можно оформить новую подписку; иначе оценка дней до следующей покупки."""
-    raw = normalize_subscription_ends_at_value(last_purchase_iso)
-    if not raw:
-        return 0
-    try:
-        dt = _parse_dt_utc(raw)
-    except (ValueError, TypeError):
-        return 0
-    now = datetime.now(timezone.utc)
-    end = dt + timedelta(days=SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)
-    if now >= end:
-        return 0
-    left = end - now
-    return max(1, math.ceil(left.total_seconds() / 86400))
+    return _subscription_cooldown_days_remaining_service(last_purchase_iso)
+
+
+def is_within_subscription_renewal_grace(ends_at: object | None, *, grace_days: int = 2) -> bool:
+    return _is_within_subscription_renewal_grace_service(ends_at, grace_days=grace_days)
 
 
 def _month_utc_now() -> str:
@@ -2122,6 +2089,14 @@ async def subscription_can_purchase_plan(user_id: int, plan_id: str) -> tuple[bo
                 "Пока подписка активна, заранее можно продлить только текущий тариф. "
                 "Сменить тариф можно после окончания срока."
             )
+        return True, None
+
+    # После окончания подписки есть 2 дня на покупку того же тарифа как «продление».
+    # В этот период кулдаун по повторной покупке не применяем.
+    current_plan = (profile.subscription_plan or "").strip().lower()
+    if current_plan and current_plan == plan_id and is_within_subscription_renewal_grace(
+        profile.subscription_ends_at, grace_days=2
+    ):
         return True, None
 
     rem = subscription_cooldown_days_remaining(profile.subscription_last_purchase_at)

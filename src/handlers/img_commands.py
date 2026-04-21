@@ -1497,7 +1497,7 @@ async def _prepare_image_charge_and_daily_slot(
             return False, None
         meta.nonsub_quota_reserved = True
         if charge:
-            ok = await take_credits_with_reason(user_id, cost, source="ready_idea_generate", details="ready idea")
+            ok = await take_credits_with_reason(user_id, cost, source="image_generate", details="manual prompt")
             if not ok:
                 await release_nonsub_image_quota_slot(user_id)
                 balance = await get_credits(user_id)
@@ -2057,16 +2057,16 @@ _SHARD_IMAGE_BADGE_TG_EMOJI_ID = "5389038097860144794"
 
 
 async def _shard_creator_brand_blockquote_html(message: Message) -> str:
-    """Строка бренда в виде цитаты: премиум 🔥 + Made in Shard Creator, при наличии — ссылка на бота."""
+    """Строка бренда в виде цитаты: премиум 🔥 + Made in Shard Creator; ссылка только на текст, не на эмодзи."""
     eid = _SHARD_IMAGE_BADGE_TG_EMOJI_ID
-    inner = f'<tg-emoji emoji-id="{eid}">🔥</tg-emoji> Made in Shard Creator'
+    emoji_html = f'<tg-emoji emoji-id="{eid}">🔥</tg-emoji>'
+    inner = f"{emoji_html} Made in Shard Creator"
     try:
         me = await message.bot.get_me()
         if me and me.username:
             inner = (
-                f'<a href="https://t.me/{me.username}">'
-                f'<tg-emoji emoji-id="{eid}">🔥</tg-emoji> Made in Shard Creator'
-                "</a>"
+                f"{emoji_html} "
+                f'<a href="https://t.me/{me.username}">Made in Shard Creator</a>'
             )
     except Exception:
         logging.debug("shard_creator_brand_blockquote: get_me failed", exc_info=True)
@@ -3653,6 +3653,12 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
     if callback.from_user is None or callback.message is None:
         await callback.answer("Ошибка запроса.", show_alert=True)
         return
+    data_pre = await state.get_data()
+    back_callback = str(data_pre.get("_ready_back_cb") or CB_MENU_BACK_START)
+    if bool(data_pre.get("_ready_confirm_inflight")):
+        await callback.answer("Запуск уже идёт…", show_alert=False)
+        return
+    await state.update_data(_ready_confirm_inflight=True)
     # Сразу снимаем «часики» у кнопки, чтобы клик всегда ощущался.
     await callback.answer()
     try:
@@ -3665,7 +3671,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             )
             return
         data = await state.get_data()
-        back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
+        back_callback = str(data.get("_ready_back_cb") or back_callback)
         redo_prompt = str(data.get("_ready_redo_prompt") or "").strip()
         if redo_prompt:
             photos_redo = list(data.get("_ready_photos") or [])
@@ -4023,6 +4029,12 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             edit=True,
             back_callback=back_callback,
         )
+    finally:
+        try:
+            if await state.get_state() is not None:
+                await state.update_data(_ready_confirm_inflight=False)
+        except Exception:
+            logging.debug("ready_confirm_and_generate: inflight reset failed", exc_info=True)
 
 
 @router.message(ImageGenState.ready_choosing_category)
