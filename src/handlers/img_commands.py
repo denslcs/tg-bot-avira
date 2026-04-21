@@ -521,26 +521,16 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             _RONALDO_PHOTO_TITLE,
             "Динамичный кадр матча с Роналдо на поле — 9:16, кинематографичный спорт.",
-            "CRITICAL IDENTITY LOCK: image #1 (uploaded by the user) is the ONLY source of the user's face and identity. "
-            "Preserve exact facial geometry, skin texture, age cues, hairline, and recognizable likeness with maximum fidelity — "
-            "sharp, high-detail, photorealistic; no beautification drift, no lookalike replacement, no identity mixing. "
-            "FACE QUALITY (strict): the user's face must stay as clear and readable as possible in a live match; "
-            "motion blur may affect background, grass, or limbs, but the face must remain crisp and identifiable (no accidental face blur, no plastic skin). "
-            "ANTI-DISTORTION (mandatory): do not warp, bend, stretch, or caricature the user's face — preserve natural facial proportions and symmetry as in image #1; "
-            "no fisheye or ultra-wide distortion on the head, no pinched/narrow face from bad perspective, no elongated or squashed features, no asymmetry introduced by rendering; "
-            "the face must look anatomically correct from the chosen camera angle (slight foreshortening allowed only as in a normal sports telephoto, not grotesque). "
-            "POSE / GAME READ: the user is in active play — running, competing for the ball; eyes and head oriented toward the ball while moving, natural athletic expression. "
-            "UNISEX KIT: infer gender presentation from image #1. For male-presenting — standard professional football shorts; "
-            "for female-presenting — the same Real Madrid kit with cycling shorts / tight athletic bike shorts instead of loose men's shorts, "
-            "plus appropriate socks/boots for a pro look; for ambiguous presentation — neutral professional football shorts that fit the body naturally. "
-            "A realistic action photo of a soccer match on a grass field featuring the user (face from image #1). "
-            "The user wears a white Real Madrid FC home jersey with the Emirates FLY BETTER sponsor, number 9, and the captain's armband. "
-            "They are running to tackle or contest the ball against Cristiano Ronaldo, who plays for Al Nassr in a yellow and blue Al Nassr jersey with the KAFD sponsor. "
-            "Background: stadium full of blurred spectators. Style: cinematic sports photography with controlled motion blur (environment/limbs), sunlight on the field; "
-            "highly realistic professional sports photo. Output aspect ratio: 9:16 portrait. "
-            "CRISTIANO RONALDO LOCK: keep Ronaldo clearly recognizable and realistic — no substitution, no distorted celebrity face. "
-            "NEGATIVE: watermark, random text overlays, wrong kit colors, identity swap, cartoon look, unreadable user face, "
-            "warped or twisted user face, bent facial features, disproportionate head, ugly perspective distortion on the face, merged or smeared facial features.",
+            "CRITICAL IDENTITY LOCK: image #1 = user face/identity only — keep likeness photoreal; no face warp, caricature, or identity mixing with the opponent. "
+            "User face stays sharp; motion blur only on background/grass/limbs if needed. "
+            "Active play: user running, contesting the ball; eyes/head toward the action. "
+            "UNISEX kit from image #1: male-presenting — normal pro shorts; female-presenting — same Real Madrid home jersey + cycling/tight athletic shorts + boots; "
+            "ambiguous — neutral pro shorts that fit. "
+            "Photoreal soccer match on grass: user in white Real Madrid FC home jersey (Emirates FLY BETTER), number 9, captain's armband; "
+            "vs Cristiano Ronaldo in Al Nassr yellow and blue kit with KAFD sponsor — both contesting the ball. "
+            "Blurred stadium crowd, cinematic sports photo, sunlight on pitch, 9:16 portrait. "
+            "CRISTIANO RONALDO LOCK: clearly recognizable, realistic — no substitute, no distorted celebrity face. "
+            "NEGATIVE: watermark, random text, wrong kit colors, identity swap, cartoon, plastic user face, warped user face, bad facial proportions.",
             1,
         ),
         (
@@ -558,7 +548,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Победа над Мухаммадом Али на ринге",
             "Выпал шанс прославиться на ринге, как Мухаммад Али, но ты его выиграл...",
-            "Create a highly photorealistic boxing match result scene inspired by a real sports photo. IMPORTANT REFERENCE MAPPING: image #1 is user identity reference, image #2 is Muhammad Ali identity reference. CRITICAL IDENTITY LOCK FOR BOTH: preserve Muhammad Ali and user faces from their references with high fidelity (same facial structure, eyes, nose, lips, skin texture, and age). Do not replace Muhammad Ali with another person and do not distort either face. Keep both faces clearly visible and recognizable. Final moment: the user is the winner and Muhammad Ali is the loser. Composition should look like an authentic post-fight ring photo with a referee between fighters raising the user's hand. Arena environment must feel premium and massive: an enormous sold-out stadium packed with thousands of cheering spectators, mostly dark surroundings, and powerful cinematic spotlights/floodlights cutting through the darkness and focusing on the ring like a world-title mega event. Add realistic light beams, subtle haze, dramatic contrast, and elite pay-per-view broadcast atmosphere. No country flags, no national symbols, no flag patches on outfits. Keep natural body proportions, realistic gloves and uniforms, documentary sports photography style, and clean high-detail realism.",
+            "Create a highly photorealistic boxing match result scene inspired by a real sports photo. IMPORTANT REFERENCE MAPPING: image #1 is the ONLY attached reference — the USER identity (face, skin, age, hair). There is NO second reference image: synthesize Muhammad Ali from this text only — lean heavyweight build, 1960s–70s iconic boxer look, short hair, expressive face, realistic sweat and glove marks; photoreal recognizable likeness, not a random extra. CRITICAL USER IDENTITY LOCK (strict): preserve the user's face from image #1 with maximum fidelity — same facial structure, eyes, nose, lips, skin texture, age; no warping, no caricature, no face blend with the opponent, no beauty-filter drift. CRITICAL OPPONENT LOCK: Muhammad Ali must look like himself (era-accurate), clearly distinct from the user, both faces fully visible. Final moment: the user is the winner and Muhammad Ali is the loser. Composition should look like an authentic post-fight ring photo with a referee between fighters raising the user's hand. Arena environment must feel premium and massive: an enormous sold-out stadium packed with thousands of cheering spectators, mostly dark surroundings, and powerful cinematic spotlights/floodlights cutting through the darkness and focusing on the ring like a world-title mega event. Add realistic light beams, subtle haze, dramatic contrast, and elite pay-per-view broadcast atmosphere. No country flags, no national symbols, no flag patches on outfits. Keep natural body proportions, realistic gloves and uniforms, documentary sports photography style, and clean high-detail realism.",
             1,
         ),
         (
@@ -758,11 +748,8 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     ],
 }
 
-# Доп. изображения для API (extra_refs): только лицо Мухаммада Али для соответствующей идеи — не путать с *_preview ниже.
+# Доп. изображения для API (extra_refs). Превью листинга — отдельные *_LISTING_IMAGE / _ready_idea_listing_photo_path.
 _READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str | list[str]] = {
-    "Победа над Мухаммадом Али на ринге": str(
-        PROJECT_ROOT / "assets" / "ready_ideas" / "muhammad_ali_victory_preview.png"
-    ),
     "Absolute Cinema": str(
         PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "absolute_cinema_preview.png"
     ),
@@ -3888,7 +3875,10 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
                     f"{pick_suffix}"
                 )
             if title == "Победа над Мухаммадом Али на ринге":
-                refs_hint = "Reference mapping: image #1 is user identity photo. Image #2 is Muhammad Ali identity photo."
+                refs_hint = (
+                    "Reference mapping: image #1 is the USER identity only — face and likeness from this upload. "
+                    "No second reference image: render Muhammad Ali (era-accurate boxer look) from the base prompt text only."
+                )
             if title == "Absolute Cinema":
                 refs_hint = (
                     "Reference mapping: image #1 is the USER identity photo (face/likeness to preserve). "
