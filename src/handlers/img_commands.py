@@ -521,16 +521,21 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             _RONALDO_PHOTO_TITLE,
             "Динамичный кадр матча с Роналдо на поле — 9:16, кинематографичный спорт.",
-            "CRITICAL IDENTITY LOCK: image #1 = user face/identity only — keep likeness photoreal; no face warp, caricature, or identity mixing with the opponent. "
-            "User face stays sharp; motion blur only on background/grass/limbs if needed. "
-            "Active play: user running, contesting the ball; eyes/head toward the action. "
-            "UNISEX kit from image #1: male-presenting — normal pro shorts; female-presenting — same Real Madrid home jersey + cycling/tight athletic shorts + boots; "
-            "ambiguous — neutral pro shorts that fit. "
-            "Photoreal soccer match on grass: user in white Real Madrid FC home jersey (Emirates FLY BETTER), number 9, captain's armband; "
-            "vs Cristiano Ronaldo in Al Nassr yellow and blue kit with KAFD sponsor — both contesting the ball. "
-            "Blurred stadium crowd, cinematic sports photo, sunlight on pitch, 9:16 portrait. "
-            "CRISTIANO RONALDO LOCK: clearly recognizable, realistic — no substitute, no distorted celebrity face. "
-            "NEGATIVE: watermark, random text, wrong kit colors, identity swap, cartoon, plastic user face, warped user face, bad facial proportions.",
+            "CRITICAL IDENTITY LOCK: use the face from the uploaded image only — photoreal, recognizable; do not warp the user's face or blend it with Cristiano Ronaldo. "
+            "UNISEX KIT (mandatory): infer gender presentation from the upload. "
+            "Male-presenting: standard men's Real Madrid home kit with normal pro football shorts. "
+            "Female-presenting: authentic women's Real Madrid home kit — same white jersey, Emirates FLY BETTER sponsor, number 9, captain's armband, "
+            "with women's football shorts (or fitted athletic/cycling-style shorts) and boots; natural female athletic proportions. "
+            "If ambiguous: neutral professional kit that fits the body naturally. "
+            "A realistic action photo of a soccer match featuring the user (use face from uploaded image). "
+            "The person is wearing a white Real Madrid FC home jersey with the Emirates FLY BETTER sponsor, number 9, and the captain's armband. "
+            "They are running to tackle the ball from Cristiano Ronaldo, who is playing for Al Nassr on a grass field. "
+            "Cristiano Ronaldo is wearing a yellow and blue Al Nassr jersey with the KAFD sponsor. "
+            "The background is a stadium full of blurred spectators. "
+            "The style is cinematic sports photography with motion blur effects and sunlight on the field. "
+            "The photo should be highly realistic, a professional sports photo. The photo ratio should be 9:16 portrait. "
+            "Keep Cristiano Ronaldo clearly recognizable and realistic. "
+            "NEGATIVE: watermark, random text overlays, wrong kit colors, identity swap, cartoon look, distorted user face.",
             1,
         ),
         (
