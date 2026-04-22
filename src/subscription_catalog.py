@@ -95,35 +95,33 @@ PLANS: dict[str, SubscriptionPlan] = {
     "nova": SubscriptionPlan(
         id="nova",
         title="✨ Nova",
-        price_rub=279,
-        price_usd=3.48,
-        stars=_stars_from_usd(3.48),
+        price_rub=299,
+        price_usd=3.99,
+        stars=289,
         bonus_credits=450,
     ),
     "supernova": SubscriptionPlan(
         id="supernova",
         title="🌟 SuperNova",
         price_rub=499,
-        price_usd=6.22,
-        stars=_stars_from_usd(6.22),
+        price_usd=6.59,
+        stars=479,
         bonus_credits=820,
     ),
     "galaxy": SubscriptionPlan(
         id="galaxy",
         title="🌌 Galaxy",
-        price_rub=929,
-        price_usd=11.58,
-        stars=_stars_from_usd(11.58),
+        price_rub=999,
+        price_usd=13.29,
+        stars=969,
         bonus_credits=1550,
     ),
     "universe": SubscriptionPlan(
         id="universe",
         title="🌍 Universe",
-        # Верхний тариф: приоритет очереди, −50% на повтор «готовой идеи», бонус при раннем продлении.
-        # USD/⭐: тот же коэффициент к ₽, что и раньше (21.18/1699).
-        price_rub=1799,
-        price_usd=round(21.18 * 1799 / 1699, 2),
-        stars=_stars_from_usd(round(21.18 * 1799 / 1699, 2)),
+        price_rub=1899,
+        price_usd=25.29,
+        stars=1829,
         bonus_credits=2850,
     ),
 }
@@ -149,8 +147,12 @@ PLAN_PREMIUM_EMOJI_FALLBACK: dict[str, str] = {
 
 BONUS_PACKS_ORDER: tuple[str, ...] = ("pack300", "pack500", "pack1000")
 
-# −15% к цене бонус-пака (₽, $, ⭐) при активной подписке Starter или Universe — см. payments._discount_pack_values.
-UNIVERSE_BONUS_PACK_DISCOUNT_MULTIPLIER: float = 0.85
+# Скидки на бонус-паки (₽, $, ⭐) при активной подписке.
+BONUS_PACK_DISCOUNT_MULTIPLIER_BY_PLAN: dict[str, float] = {
+    "starter": 0.85,
+    "galaxy": 0.95,
+    "universe": 0.85,
+}
 
 BONUS_PACKS: dict[str, BonusPack] = {
     "pack300": BonusPack(

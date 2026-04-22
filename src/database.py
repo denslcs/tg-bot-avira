@@ -919,8 +919,32 @@ async def apply_referral(invitee_user_id: int, inviter_user_id: int) -> bool:
                 (inviter_user_id,),
             )
             await db.execute(
+                """
+                INSERT INTO user_budget_history (user_id, delta, source, details)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    inviter_user_id,
+                    20,
+                    "referral_inviter_bonus",
+                    f"invitee={invitee_user_id}",
+                ),
+            )
+            await db.execute(
                 "UPDATE users SET credits = credits + 10 WHERE user_id = ?",
                 (invitee_user_id,),
+            )
+            await db.execute(
+                """
+                INSERT INTO user_budget_history (user_id, delta, source, details)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    invitee_user_id,
+                    10,
+                    "referral_invitee_welcome",
+                    f"inviter={inviter_user_id}",
+                ),
             )
             async with db.execute(
                 "SELECT COUNT(*) FROM user_referrals WHERE inviter_user_id = ?",
@@ -941,6 +965,18 @@ async def apply_referral(invitee_user_id: int, inviter_user_id: int) -> bool:
                     await db.execute(
                         "UPDATE users SET credits = credits + 10 WHERE user_id = ?",
                         (inviter_user_id,),
+                    )
+                    await db.execute(
+                        """
+                        INSERT INTO user_budget_history (user_id, delta, source, details)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                        (
+                            inviter_user_id,
+                            10,
+                            "referral_pair_sub_bonus",
+                            f"invites={n_inv}",
+                        ),
                     )
                 else:
                     await db.execute(
@@ -970,6 +1006,92 @@ async def get_referral_count(inviter_user_id: int) -> int:
         ) as cur:
             row = await cur.fetchone()
     return int(row[0]) if row else 0
+
+
+async def get_referral_paid_count(inviter_user_id: int) -> int:
+    """
+    Кол-во приглашённых, у которых была хотя бы одна покупка подписки.
+    Учитываем:
+      - subscription_last_purchase_at (обычные тарифы);
+      - starter_trial_used = 1 (Starter-покупка).
+    """
+    async with open_db() as db:
+        async with db.execute(
+            """
+            SELECT COUNT(*)
+            FROM user_referrals r
+            JOIN users u ON u.user_id = r.invitee_user_id
+            WHERE r.inviter_user_id = ?
+              AND (
+                    u.subscription_last_purchase_at IS NOT NULL
+                 OR COALESCE(u.starter_trial_used, 0) = 1
+              )
+            """,
+            (inviter_user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    return int(row[0]) if row else 0
+
+
+async def credit_referrer_subscription_bonus(
+    *,
+    invitee_user_id: int,
+    purchased_plan_id: str,
+    purchased_plan_bonus_credits: int,
+    percent: int = 5,
+) -> tuple[int | None, int]:
+    """
+    Начислить рефереру бонус за покупку подписки приглашённым:
+    bonus = floor(plan_bonus_credits * percent / 100).
+    Возвращает фактически начисленный бонус (0, если не начислено).
+    """
+    base = int(purchased_plan_bonus_credits)
+    pct = int(percent)
+    if base <= 0 or pct <= 0:
+        return None, 0
+    bonus = int(base * pct / 100)
+    if bonus <= 0:
+        return None, 0
+    async with open_db() as db:
+        async with db.execute(
+            "SELECT inviter_user_id FROM user_referrals WHERE invitee_user_id = ?",
+            (invitee_user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return None, 0
+    inviter_user_id = int(row[0])
+    if inviter_user_id <= 0 or inviter_user_id == int(invitee_user_id):
+        return None, 0
+    ok = await add_credits_with_reason(
+        inviter_user_id,
+        bonus,
+        source="referral_subscription_bonus",
+        details=(
+            f"invitee={invitee_user_id}; "
+            f"plan={purchased_plan_id}; "
+            f"base={base}; "
+            f"percent={pct}"
+        ),
+    )
+    return inviter_user_id, (bonus if ok else 0)
+
+
+async def get_referral_subscription_bonus_total(inviter_user_id: int) -> int:
+    """Сумма всех начислений 5% за покупки подписок приглашёнными."""
+    async with open_db() as db:
+        async with db.execute(
+            """
+            SELECT COALESCE(SUM(delta), 0)
+            FROM user_budget_history
+            WHERE user_id = ?
+              AND source = 'referral_subscription_bonus'
+              AND delta > 0
+            """,
+            (inviter_user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    return int(row[0] or 0) if row else 0
 
 
 async def create_support_ticket(user_id: int, username: str, thread_id: int) -> int:

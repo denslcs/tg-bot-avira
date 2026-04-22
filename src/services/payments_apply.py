@@ -4,6 +4,7 @@ import logging
 from dataclasses import dataclass
 
 from src.database import (
+    credit_referrer_subscription_bonus,
     add_budget_history_event,
     add_credits_with_reason,
     extend_subscription,
@@ -41,6 +42,8 @@ class PlanPurchaseApplyResult:
     renewal_release_at: str | None
     credited: bool
     sub_active_ok: bool
+    referral_inviter_user_id: int | None
+    referral_bonus_credited: int
 
 
 async def apply_plan_purchase_from_stars(*, user_id: int, item_id: str) -> PlanPurchaseApplyResult | None:
@@ -114,6 +117,30 @@ async def apply_plan_purchase_from_stars(*, user_id: int, item_id: str) -> PlanP
             source="subscription_bonus",
             details=f"plan {item_id}" + (" renewal" if renewal_extra else ""),
         )
+    # Реф-бонус пригласившему: +5% от базовых кредитов купленного тарифа (без накопительных/renewal-добавок).
+    inviter_uid: int | None = None
+    ref_bonus = 0
+    try:
+        inviter_uid, ref_bonus = await credit_referrer_subscription_bonus(
+            invitee_user_id=user_id,
+            purchased_plan_id=item_id,
+            purchased_plan_bonus_credits=p.bonus_credits,
+            percent=5,
+        )
+        if ref_bonus > 0:
+            logger.info(
+                "Referral subscription bonus credited: invitee=%s plan=%s base=%s bonus=%s",
+                user_id,
+                item_id,
+                p.bonus_credits,
+                ref_bonus,
+            )
+    except Exception:
+        logger.exception(
+            "Referral subscription bonus failed: invitee=%s plan=%s",
+            user_id,
+            item_id,
+        )
     await add_budget_history_event(
         user_id,
         source="subscription_purchase",
@@ -131,5 +158,7 @@ async def apply_plan_purchase_from_stars(*, user_id: int, item_id: str) -> PlanP
         renewal_release_at=renewal_release_at,
         credited=credited,
         sub_active_ok=sub_active_ok,
+        referral_inviter_user_id=inviter_uid,
+        referral_bonus_credited=ref_bonus,
     )
 

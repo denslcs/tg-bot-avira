@@ -43,6 +43,8 @@ from src.database import (
     get_daily_image_generation_usage,
     get_nonsub_image_quota_status,
     get_referral_count,
+    get_referral_subscription_bonus_total,
+    get_referral_paid_count,
     get_user_admin_profile,
     subscription_is_active,
     take_credits_with_reason,
@@ -131,6 +133,10 @@ def _budget_source_label(source: str) -> str:
         "subscription_bonus": "Бонус подписки",
         "bonus_pack": "Бонус-пакет",
         "subscription_purchase": "Покупка подписки",
+        "referral_subscription_bonus": "Реф-бонус за подписку друга",
+        "referral_inviter_bonus": "Реф-бонус за приглашение",
+        "referral_pair_sub_bonus": "Реф-бонус за 2 приглашения (с подпиской)",
+        "referral_invitee_welcome": "Приветственный реф-бонус",
     }
     return labels.get(source, source or "Операция")
 
@@ -811,6 +817,16 @@ async def _build_referral_message(
         logging.warning("_build_referral_message: get_referral_count failed", exc_info=True)
         invited = 0
     try:
+        invited_paid = await get_referral_paid_count(user_id)
+    except Exception:
+        logging.warning("_build_referral_message: get_referral_paid_count failed", exc_info=True)
+        invited_paid = 0
+    try:
+        referral_sub_bonus_total = await get_referral_subscription_bonus_total(user_id)
+    except Exception:
+        logging.warning("_build_referral_message: get_referral_subscription_bonus_total failed", exc_info=True)
+        referral_sub_bonus_total = 0
+    try:
         balance = await get_credits(user_id)
     except Exception:
         logging.warning("_build_referral_message: get_credits failed", exc_info=True)
@@ -831,11 +847,19 @@ async def _build_referral_message(
         f'<i><tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты:</i> <b>{esc(balance)}</b>\n'
         f'<i><tg-emoji emoji-id="5452155223550223362">💎</tg-emoji> Бонусных запусков «Готовых идей»:</i> <b>{esc(ready_bonus_uses)}</b>\n'
         f'<i><tg-emoji emoji-id="5472239203590888751">📩</tg-emoji> Приглашения:</i> <b>{esc(invited)}</b>'
+        f"\n"
+        f'<i><tg-emoji emoji-id="5452155223550223362">💎</tg-emoji> Купили подписку:</i> <b>{esc(invited_paid)}</b>'
+        f"\n"
+        f'<i><tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Накоплено с приглашённых:</i> '
+        f"<b>{esc(invited * 20 + referral_sub_bonus_total)}</b> "
+        f"<i>(база +20 за каждого: {esc(invited * 20)}; бонус 5%: {esc(referral_sub_bonus_total)})</i>"
         "</blockquote>\n\n"
         "<blockquote><i>"
         "За каждого приглашённого — <b>+20</b> кредитов тебе; новому пользователю при первом <code>/start</code> по твоей ссылке — <b>+10</b> кредитов. "
         "За каждых <b>двух</b> приглашённых: без подписки — <b>+1</b> бонусный запуск «Готовых идей»; "
-        "при активной подписке — <b>+10</b> кредитов вместо запуска."
+        "при активной подписке — <b>+10</b> кредитов вместо запуска.\n"
+        "Если приглашённый покупает подписку — тебе дополнительно начисляется <b>+5%</b> "
+        "от кредитов этой подписки (именно бонус, не полная сумма)."
         "</i></blockquote>\n\n"
         "<b>🔗 Твоя ссылка</b>\n"
         f"<code>{esc(ref_link)}</code>"

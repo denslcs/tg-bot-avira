@@ -4,7 +4,7 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from src.config import OPENROUTER_IMAGE_COST_CREDITS, OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS
+from src.config import OPENROUTER_IMAGE_COST_CREDITS
 from src.formatting import (
     CREDITS_COIN_TG_HTML,
     CREDITS_PREMIUM_EMOJI_ID,
@@ -43,7 +43,7 @@ _WARN_HEAD_TG = f'<tg-emoji emoji-id="{_FAQ_WARNING_PREMIUM_EMOJI_ID}">⚠️</t
 
 _READY_LIMITS_FAQ_BODY = (
     f"{_READY_IDEA_HEAD_TG} «Готовые идеи» — отдельный режим от обычной генерации.\n"
-    f"За запуск списывается {OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS} {CREDITS_COIN_TG_HTML} кредитов.\n\n"
+    f"Стоимость зависит от подписки: без подписки и Nova — 45, SuperNova — 40, Galaxy — 35, Universe/Starter — 30 {CREDITS_COIN_TG_HTML}.\n\n"
     f"{PROFILE_SUBSCRIPTION_LABEL_TG_HTML} С подпиской: лимита по «Готовым идеям» нет.\n"
     f"{PROFILE_VALID_UNTIL_LABEL_TG_HTML} Без подписки: 1 запуск за цикл, новый цикл через 30 суток после исчерпания.\n"
     f"{_GIFT_HEAD_TG} Рефералка /ref: без подписки — +1 бонусный запуск за каждых 2 друзей; "
@@ -53,7 +53,7 @@ _READY_LIMITS_FAQ_BODY = (
 _CREDITS_FAQ_BODY = (
     "Кредиты тратятся только на генерацию изображений.\n\n"
     f"• «Создать картинку» — {OPENROUTER_IMAGE_COST_CREDITS} кредитов за 1 генерацию.\n"
-    f"• «Готовые идеи» — {OPENROUTER_IMAGE_READY_IDEAS_COST_CREDITS} кредитов за 1 генерацию.\n"
+    f"• «Готовые идеи» — от 30 до 45 кредитов (по подписке).\n"
     f"• Обычные сообщения и навигация {CREDITS_COIN_TG_HTML} кредиты не списывают.\n\n"
     "Профиль и лимиты смотри в /profile."
 )
