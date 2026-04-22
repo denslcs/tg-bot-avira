@@ -130,6 +130,10 @@ OPENROUTER_IMAGE_GEMINI_PREVIEW_COST_CREDITS: int = max(
 )
 # Опциональная Pro-модель для ready-флоу с референсами (если задана — приоритетнее Banana 2).
 OPENROUTER_IMAGE_GEMINI_PRO_MODEL: str = os.getenv("OPENROUTER_IMAGE_GEMINI_PRO_MODEL", "").strip()
+OPENROUTER_IMAGE_GPT54_IMAGE2_MODEL: str = (
+    os.getenv("OPENROUTER_IMAGE_GPT54_IMAGE2_MODEL", "openai/gpt-5.4-image-2").strip()
+    or "openai/gpt-5.4-image-2"
+)
 # В API уходит aspect_ratio 1:1 (~1024×1024, ~1 Мп по доке OpenRouter).
 # Значение вроде «1K» у FLUX на OpenRouter может давать больше мегапикселей и цену ~2.5× к тарифу «$ за Мп».
 # Пустой OPENROUTER_IMAGE_OUTPUT_SIZE — не передаём image_size (только 1:1), ближе к одному мегапикселю в биллинге.

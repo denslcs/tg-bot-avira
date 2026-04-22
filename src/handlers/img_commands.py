@@ -35,6 +35,7 @@ from src.config import (
     OPENROUTER_IMAGE_GEMINI_PRO_MODEL,
     OPENROUTER_IMAGE_GEMINI_PREVIEW_COST_CREDITS,
     OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL,
+    OPENROUTER_IMAGE_GPT54_IMAGE2_MODEL,
     OPENROUTER_IMAGE_MODEL,
     OPENROUTER_IMAGE_MODEL_ALT,
     POLZA_IMAGE_GPT5_IMAGE_COST_CREDITS,
@@ -89,6 +90,7 @@ from src.keyboards.callback_data import (
     CB_READY_CONFIRM,
     CB_READY_IDEAS,
     CB_READY_IDEAS_HUB,
+    CB_READY_MODE_PREFIX,
     CB_READY_NAV_PREFIX,
     CB_READY_PHOTO_BACK,
     CB_BACK_TO_READY_IDEAS,
@@ -1580,6 +1582,7 @@ def _ready_browser_keyboard(
     back_callback: str = CB_MENU_BACK_START,
     *,
     category_slug: str | None = None,
+    selected_mode: str = _READY_MODE_DEFAULT,
     single_shortcut_mode: bool = False,
 ) -> InlineKeyboardMarkup:
     prev_i = (index - 1) % total
@@ -1613,6 +1616,24 @@ def _ready_browser_keyboard(
                 ],
             ]
         )
+    mode = _ready_mode_normalize(selected_mode)
+    modes_row = [
+        InlineKeyboardButton(
+            text=("✅ ⚡ Fast" if mode == _READY_MODE_FAST else "⚡ Fast"),
+            callback_data=f"{CB_READY_MODE_PREFIX}{_READY_MODE_FAST}",
+            style=BTN_PRIMARY,
+        ),
+        InlineKeyboardButton(
+            text=("✅ 🚀 Medium" if mode == _READY_MODE_MEDIUM else "🚀 Medium"),
+            callback_data=f"{CB_READY_MODE_PREFIX}{_READY_MODE_MEDIUM}",
+            style=BTN_PRIMARY,
+        ),
+        InlineKeyboardButton(
+            text=("✅ 💎 Premium" if mode == _READY_MODE_PREMIUM else "💎 Premium"),
+            callback_data=f"{CB_READY_MODE_PREFIX}{_READY_MODE_PREMIUM}",
+            style=BTN_PRIMARY,
+        ),
+    ]
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -1635,6 +1656,7 @@ def _ready_browser_keyboard(
                     icon_custom_emoji_id="5260450573768990626",
                 ),
             ],
+            modes_row,
             [InlineKeyboardButton(**cats_btn)],
             [
                 InlineKeyboardButton(
@@ -1753,8 +1775,9 @@ def _ready_category_caption() -> str:
     return (
         '<b><tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> Готовые идеи</b>\n'
         "Выбери категорию и идею, затем нажми «Выбрать».\n"
+        "Доступны режимы: ⚡ fast / 🚀 medium / 💎 premium.\n"
         "Дальше бот подскажет, что отправить: фото, текст или оба шага.\n"
-        '<tg-emoji emoji-id="5330320040883411678">🗺</tg-emoji> Стоимость одной генерации: <b>30–45 кр.</b> (зависит от подписки).'
+        '<tg-emoji emoji-id="5330320040883411678">🗺</tg-emoji> Стоимость: <b>15–65 кр.</b> (зависит от режима и подписки).'
     )
 
 
@@ -1767,16 +1790,83 @@ _READY_IDEA_COST_BY_PLAN: dict[str, int] = {
 }
 _READY_IDEA_DEFAULT_COST: int = 45
 
+_READY_MODE_FAST = "fast"
+_READY_MODE_MEDIUM = "medium"
+_READY_MODE_PREMIUM = "premium"
+_READY_MODE_DEFAULT = _READY_MODE_FAST
+_READY_MODE_ALLOWED = {_READY_MODE_FAST, _READY_MODE_MEDIUM, _READY_MODE_PREMIUM}
+
+_READY_MODE_MODEL_BY_ID: dict[str, str] = {
+    _READY_MODE_FAST: "google/gemini-3.1-flash-image-preview",
+    _READY_MODE_MEDIUM: "google/gemini-3-pro-image-preview",
+    _READY_MODE_PREMIUM: "openai/gpt-5.4-image-2",
+}
+
+_READY_MODE_COST_BY_PLAN: dict[str, dict[str, int]] = {
+    _READY_MODE_FAST: {"starter": 15, "universe": 15, "galaxy": 20, "supernova": 25, "nova": 30},
+    _READY_MODE_MEDIUM: {"starter": 30, "universe": 30, "galaxy": 35, "supernova": 40, "nova": 45},
+    _READY_MODE_PREMIUM: {"starter": 50, "universe": 50, "galaxy": 55, "supernova": 60, "nova": 65},
+}
+
+_READY_MODE_DEFAULT_COST: dict[str, int] = {
+    _READY_MODE_FAST: 30,
+    _READY_MODE_MEDIUM: 45,
+    _READY_MODE_PREMIUM: 65,
+}
+
+
+def _ready_mode_normalize(mode: str | None) -> str:
+    m = (mode or "").strip().lower()
+    return m if m in _READY_MODE_ALLOWED else _READY_MODE_DEFAULT
+
+
+def _ready_mode_emoji(mode: str) -> str:
+    m = _ready_mode_normalize(mode)
+    return {"fast": "⚡", "medium": "🚀", "premium": "💎"}.get(m, "⚡")
+
+
+def _ready_mode_line(mode: str) -> str:
+    m = _ready_mode_normalize(mode)
+    return f"Режим: {_ready_mode_emoji(m)} <b>{esc(m)}</b>"
+
+
+def _ready_mode_model(mode: str) -> str:
+    m = _ready_mode_normalize(mode)
+    if m == _READY_MODE_FAST:
+        return (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or _READY_MODE_MODEL_BY_ID[m]
+    if m == _READY_MODE_MEDIUM:
+        return (OPENROUTER_IMAGE_GEMINI_PRO_MODEL or "").strip() or _READY_MODE_MODEL_BY_ID[m]
+    return (OPENROUTER_IMAGE_GPT54_IMAGE2_MODEL or "").strip() or _READY_MODE_MODEL_BY_ID[_READY_MODE_PREMIUM]
+
+
+def _ready_mode_model_human(mode: str) -> str:
+    m = _ready_mode_normalize(mode)
+    if m == _READY_MODE_FAST:
+        return "Nano Banana 2"
+    if m == _READY_MODE_MEDIUM:
+        return "Nano Banana Pro"
+    return "Chat Gpt Image 2"
+
+
+def _ready_idea_cost_for_plan_and_mode(plan_id: str | None, mode: str | None) -> int:
+    m = _ready_mode_normalize(mode)
+    p = (plan_id or "").strip().lower()
+    return _READY_MODE_COST_BY_PLAN.get(m, {}).get(p, _READY_MODE_DEFAULT_COST[m])
+
 
 def _ready_idea_cost_for_plan(plan_id: str | None) -> int:
     return _READY_IDEA_COST_BY_PLAN.get((plan_id or "").strip().lower(), _READY_IDEA_DEFAULT_COST)
 
 
 async def _ready_idea_cost_for_user(user_id: int) -> int:
+    return await _ready_idea_cost_for_user_mode(user_id, _READY_MODE_DEFAULT)
+
+
+async def _ready_idea_cost_for_user_mode(user_id: int, mode: str | None) -> int:
     prof = await get_user_admin_profile(user_id)
     if not prof or not subscription_is_active(prof.subscription_ends_at):
-        return _READY_IDEA_DEFAULT_COST
-    return _ready_idea_cost_for_plan(prof.subscription_plan)
+        return _ready_idea_cost_for_plan_and_mode(None, mode)
+    return _ready_idea_cost_for_plan_and_mode(prof.subscription_plan, mode)
 
 
 def _ready_generation_cost_html(cost: int | None = None) -> str:
@@ -1793,17 +1883,22 @@ def _ready_idea_caption(
     total: int,
     photos_required: int,
     cost: int,
+    mode: str,
     show_category_title: bool = True,
 ) -> str:
     req = _ready_idea_requirement_line(title=title, photos_required=photos_required)
     recommendation = _ready_idea_recommendation_line(title=title, photos_required=photos_required)
     recommendation_part = f"\n{recommendation}" if recommendation else ""
     category_part = f"{_ready_category_title_html(category)}\n" if show_category_title else ""
+    mode_line = _ready_mode_line(mode)
+    if (title or "").strip() == _RONALDO_PHOTO_TITLE:
+        mode_line = "Режим: 🚀 <b>medium</b> (фиксировано для этой идеи)"
     return (
         f"{category_part}"
         f'<tg-emoji emoji-id="5397782960512444700">📌</tg-emoji> Вариант: <b>{esc(index + 1)}/{esc(total)}</b>\n'
         f"<b>{esc(title)}</b>\n"
         f"{esc(preview)}\n"
+        f"{mode_line}\n"
         f"{_ready_generation_cost_html(cost)}\n"
         f"<b>{esc(req)}</b>"
         f"{recommendation_part}"
@@ -2382,6 +2477,7 @@ async def _execute_ready_with_refs_generation(
     ready_idea_title: str | None = None,
     mark_redo_half_after_success: bool = False,
 ) -> None:
+    _ = strict_refs
     await ensure_user(user_id, username)
     is_admin = user_id in ADMIN_IDS
     charge = not is_admin
@@ -2435,24 +2531,11 @@ async def _execute_ready_with_refs_generation(
                     use_cache=True,
                 )
                 return img, cached
-            try:
-                img = await openrouter_text_and_refs_to_image_bytes(
-                    prompt,
-                    refs=refs,
-                    model=model,
-                )
-            except Exception:
-                # Иногда модель/провайдер отказывает именно на сочетании "scene ref + user ref".
-                # Делаем безопасный повтор с фото пользователя, чтобы сценарий не ломался.
-                if (not strict_refs) and extra_refs and user_refs:
-                    logging.warning("Ready refs primary call failed; retrying with user refs only", exc_info=True)
-                    img = await openrouter_text_and_refs_to_image_bytes(
-                        prompt,
-                        refs=user_refs,
-                        model=model,
-                    )
-                else:
-                    raise
+            img = await openrouter_text_and_refs_to_image_bytes(
+                prompt,
+                refs=refs,
+                model=model,
+            )
             return img, False
 
         image_bytes, from_cache = await _await_generation_with_progress(
@@ -2867,6 +2950,7 @@ async def _send_ready_ideas_screen(
             await state.update_data(
                 _ready_back_cb=back_callback,
                 _ready_user_id=user_id,
+                _ready_mode=_READY_MODE_DEFAULT,
                 _ready_category_album_ids=[message.message_id],
             )
             await _set_img_flow_anchor(state, message)
@@ -2880,7 +2964,12 @@ async def _send_ready_ideas_screen(
             )
 
     first, album_ids = await _send_ready_hub_messages(bot, chat_id, cap, kb, paths)
-    await state.update_data(_ready_back_cb=back_callback, _ready_user_id=user_id, _ready_category_album_ids=album_ids)
+    await state.update_data(
+        _ready_back_cb=back_callback,
+        _ready_user_id=user_id,
+        _ready_mode=_READY_MODE_DEFAULT,
+        _ready_category_album_ids=album_ids,
+    )
     await _set_img_flow_anchor(state, first)
 
 
@@ -2977,9 +3066,12 @@ async def _open_ready_card(
         hub_cleared = True
     back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
     include_hidden = bool(data.get("_ready_include_hidden_start_only"))
+    ready_mode = _ready_mode_normalize(str(data.get("_ready_mode") or _READY_MODE_DEFAULT))
     ready_user_id = int(data.get("_ready_user_id") or 0)
     ready_cost = (
-        await _ready_idea_cost_for_user(ready_user_id) if ready_user_id > 0 else _READY_IDEA_DEFAULT_COST
+        await _ready_idea_cost_for_user_mode(ready_user_id, ready_mode)
+        if ready_user_id > 0
+        else _ready_idea_cost_for_plan_and_mode(None, ready_mode)
     )
     ideas = _ideas_for_category(category, include_hidden_start_only=include_hidden)
     if not ideas:
@@ -3010,15 +3102,22 @@ async def _open_ready_card(
         total=total,
         photos_required=photos_required,
         cost=ready_cost,
+        mode=ready_mode,
         show_category_title=not single_shortcut_mode,
     )
-    await state.update_data(_ready_category=category, _ready_index=idx, _ready_cost=ready_cost)
+    await state.update_data(
+        _ready_category=category,
+        _ready_index=idx,
+        _ready_cost=ready_cost,
+        _ready_mode=ready_mode,
+    )
     await state.set_state(ImageGenState.ready_browsing_idea)
     kb = _ready_browser_keyboard(
         idx,
         total,
         back_callback=back_callback,
         category_slug=category,
+        selected_mode=ready_mode,
         single_shortcut_mode=single_shortcut_mode,
     )
     photo_path = _ready_idea_listing_photo_path(title)
@@ -3082,6 +3181,29 @@ async def ready_pick_category(callback: CallbackQuery, state: FSMContext) -> Non
     await callback.answer()
     category = callback.data.replace(CB_READY_CAT_PREFIX, "", 1).strip().lower()
     await _open_ready_card(callback.message, state, category=category, index=0, edit=True)
+
+
+@router.callback_query(F.data.startswith(CB_READY_MODE_PREFIX))
+async def ready_pick_mode(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.from_user is None or callback.message is None or not callback.data:
+        await callback.answer("Ошибка запроса.", show_alert=True)
+        return
+    mode = _ready_mode_normalize(callback.data.replace(CB_READY_MODE_PREFIX, "", 1))
+    data = await state.get_data()
+    category = str(data.get("_ready_category") or "").strip().lower()
+    idx = int(data.get("_ready_index") or 0)
+    if not category:
+        await callback.answer("Сначала выбери идею.", show_alert=True)
+        return
+    await state.update_data(_ready_mode=mode, _ready_user_id=callback.from_user.id)
+    await _open_ready_card(callback.message, state, category=category, index=idx, edit=True)
+    await callback.answer()
+    await callback.message.answer(
+        "<b>Выбран режим:</b> "
+        f"<b>{esc(mode)}</b>\n"
+        f"Генерирует: <b>{esc(_ready_mode_model_human(mode))}</b>",
+        parse_mode=HTML,
+    )
 
 
 @router.callback_query(F.data.startswith(CB_READY_NAV_PREFIX))
@@ -3150,11 +3272,13 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
         return
     if action == "pick":
         title, _preview, _prompt, photos_required = ideas[idx]
-        ready_cost = await _ready_idea_cost_for_user(callback.from_user.id)
+        ready_mode = _ready_mode_normalize(str(data.get("_ready_mode") or _READY_MODE_DEFAULT))
+        ready_cost = await _ready_idea_cost_for_user_mode(callback.from_user.id, ready_mode)
         await state.update_data(
             _ready_category=category,
             _ready_index=idx,
             _ready_cost=ready_cost,
+            _ready_mode=ready_mode,
             _ready_photos=[],
             _ready_need=photos_required,
             _ready_overlay_nick="",
@@ -3172,6 +3296,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
                 callback.message,
                 caption=(
                     f'<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> <b>{esc(title)}</b>\n'
+                    f"{_ready_mode_line(ready_mode)}\n"
                     f"{_ready_generation_cost_html(ready_cost)}\n"
                     f"<b>{esc(req0)}</b>\n"
                     f"✍️ Пришли <b>текст заголовка</b> для логотипа (до {_FANTASY_HEADLINE_MAX_LEN} символов)."
@@ -3193,6 +3318,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
             callback.message,
             caption=(
                 f'<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> <b>{esc(title)}</b>\n'
+                f"{_ready_mode_line(ready_mode)}\n"
                 f"{_ready_generation_cost_html(ready_cost)}\n"
                 f"{first_hint}\n"
                 '<tg-emoji emoji-id="5235837920081887219">📸</tg-emoji> Скинь фото, после загрузки появится кнопка подтверждения.'
@@ -3213,6 +3339,7 @@ async def ready_photo_back(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
     data = await state.get_data()
     ready_cost = int(data.get("_ready_cost") or _READY_IDEA_DEFAULT_COST)
+    ready_mode = _ready_mode_normalize(str(data.get("_ready_mode") or _READY_MODE_DEFAULT))
     if bool(data.get("_ready_include_hidden_start_only")):
         category = str(data.get("_ready_category") or "").strip().lower()
         need = int(data.get("_ready_need") or 1)
@@ -3232,6 +3359,7 @@ async def ready_photo_back(callback: CallbackQuery, state: FSMContext) -> None:
             callback.message,
             caption=(
                 f"<b>Выбрано:</b> {esc(title)}\n"
+                f"{_ready_mode_line(ready_mode)}\n"
                 f"{_ready_generation_cost_html(ready_cost)}\n"
                 f"{hint}"
                 f"{mellstroy_note}"
@@ -3284,6 +3412,8 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
     if not message.from_user:
         return
     data = await state.get_data()
+    ready_cost = int(data.get("_ready_cost") or _READY_IDEA_DEFAULT_COST)
+    ready_mode = _ready_mode_normalize(str(data.get("_ready_mode") or _READY_MODE_DEFAULT))
     need = int(data.get("_ready_need") or 1)
     photos = list(data.get("_ready_photos") or [])
     if len(photos) >= need:
@@ -3382,6 +3512,7 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
             (
                 f"{_ready_photo_upload_hint(category=category, need=need, received=len(photos), idea_title=title)}\n"
                 "<b>Фото зафиксированы.</b>\n"
+                f"{_ready_mode_line(ready_mode)}\n"
                 f"{_ready_generation_cost_html(ready_cost)}\n"
                 f"{head_hint}"
             ),
@@ -3394,6 +3525,7 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
         (
             f"{_ready_photo_upload_hint(category=category, need=need, received=len(photos), idea_title=title)}\n"
             f"<b>Фото зафиксированы:</b> <b>{esc(len(photos))}</b>\n"
+            f"{_ready_mode_line(ready_mode)}\n"
             f"{_ready_generation_cost_html(ready_cost)}\n"
             "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
         ),
@@ -3425,6 +3557,7 @@ async def ready_poster_text_need_text(message: Message, state: FSMContext) -> No
 async def ready_collect_poster_text(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     ready_cost = int(data.get("_ready_cost") or _READY_IDEA_DEFAULT_COST)
+    ready_mode = _ready_mode_normalize(str(data.get("_ready_mode") or _READY_MODE_DEFAULT))
     title = _ready_title_from_state_data(data)
     max_len = _headline_max_len_for_title(title)
     raw = message.text or ""
@@ -3449,6 +3582,7 @@ async def ready_collect_poster_text(message: Message, state: FSMContext) -> None
     await message.answer(
         (
             f"<b>{esc(label)}:</b> <code>{esc(raw)}</code>\n"
+            f"{_ready_mode_line(ready_mode)}\n"
             f"{_ready_generation_cost_html(ready_cost)}\n"
             "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
         ),
@@ -3522,6 +3656,7 @@ async def ready_collect_fantasy_color(message: Message, state: FSMContext) -> No
         return
     data = await state.get_data()
     ready_cost = int(data.get("_ready_cost") or _READY_IDEA_DEFAULT_COST)
+    ready_mode = _ready_mode_normalize(str(data.get("_ready_mode") or _READY_MODE_DEFAULT))
     headline = str(data.get("_ready_poster_text") or "")
     await state.update_data(_ready_fantasy_color=color)
     await state.set_state(ImageGenState.ready_waiting_confirm)
@@ -3529,6 +3664,7 @@ async def ready_collect_fantasy_color(message: Message, state: FSMContext) -> No
         (
             f"<b>Заголовок:</b> <code>{esc(headline)}</code>\n"
             f"<b>Цвет:</b> <code>{esc(color)}</code>\n"
+            f"{_ready_mode_line(ready_mode)}\n"
             f"{_ready_generation_cost_html(ready_cost)}\n"
             "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
         ),
@@ -3549,11 +3685,13 @@ async def ready_collect_minecraft_nick(message: Message, state: FSMContext) -> N
         return
     data = await state.get_data()
     ready_cost = int(data.get("_ready_cost") or _READY_IDEA_DEFAULT_COST)
+    ready_mode = _ready_mode_normalize(str(data.get("_ready_mode") or _READY_MODE_DEFAULT))
     await state.update_data(_ready_overlay_nick=nick)
     await state.set_state(ImageGenState.ready_waiting_confirm)
     await message.answer(
         (
             f"<b>Ник сохранён:</b> <code>@{esc(nick)}</code>\n"
+            f"{_ready_mode_line(ready_mode)}\n"
             f"{_ready_generation_cost_html(ready_cost)}\n"
             "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
         ),
@@ -3580,12 +3718,14 @@ async def ready_pick_beard_size(callback: CallbackQuery, state: FSMContext) -> N
     await callback.answer()
     data = await state.get_data()
     ready_cost = int(data.get("_ready_cost") or _READY_IDEA_DEFAULT_COST)
+    ready_mode = _ready_mode_normalize(str(data.get("_ready_mode") or _READY_MODE_DEFAULT))
     await state.update_data(_ready_beard_size=raw)
     await state.set_state(ImageGenState.ready_waiting_confirm)
     await _edit_ready_nav_message(
         callback.message,
         caption=(
             f"<b>Размер бороды:</b> <code>{esc(label)}</code>\n"
+            f"{_ready_mode_line(ready_mode)}\n"
             f"{_ready_generation_cost_html(ready_cost)}\n"
             "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
         ),
@@ -3727,6 +3867,8 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             )
             return
         title, _preview, base_prompt, need = ideas[idx]
+        ready_mode = _ready_mode_normalize(str(data.get("_ready_mode") or _READY_MODE_DEFAULT))
+        is_ronaldo_ready = (title or "").strip() == _RONALDO_PHOTO_TITLE
         if len(photos) < need:
             await _edit_ready_nav_message(
                 callback.message,
@@ -4000,17 +4142,28 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             no_reference_images=(is_fantasy_3d_title and not extra_refs),
             style_reference_images_only=(is_fantasy_3d_title and bool(extra_refs)),
         )
-        await state.clear()
         user_id = callback.from_user.id
+        selected_ready_model = (
+            (OPENROUTER_IMAGE_GEMINI_PRO_MODEL or "").strip() or "google/gemini-3-pro-image-preview"
+            if is_ronaldo_ready
+            else _ready_mode_model(ready_mode)
+        )
+        selected_ready_cost = (
+            30
+            if is_ronaldo_ready
+            else await _ready_idea_cost_for_user_mode(user_id, ready_mode)
+        )
+        model_override = selected_ready_model
+        await state.clear()
         await ensure_user(user_id, callback.from_user.username)
-        strict_refs = False
+        strict_refs = True
         await _execute_ready_with_refs_generation(
             callback.message,
             state,
             user_id=user_id,
             username=callback.from_user.username,
             prompt=prompt,
-            cost=await _ready_idea_cost_for_user(user_id),
+            cost=selected_ready_cost,
             refs_file_ids=photos,
             model_override=model_override,
             overlay_nick=overlay_nick,
