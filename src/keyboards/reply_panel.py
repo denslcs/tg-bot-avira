@@ -11,11 +11,6 @@ def quick_panel_keyboard(balance: int | None = None, mode_label: str = "Medium")
         keyboard=[
             [KeyboardButton(text=prof_btn), KeyboardButton(text="🖥 Меню")],
             [KeyboardButton(text="🫂 Реф. система"), KeyboardButton(text=f"🎛 Режим: {mode_label}")],
-            [
-                KeyboardButton(text="⚡ Fast"),
-                KeyboardButton(text="🚀 Medium"),
-                KeyboardButton(text="💎 Premium"),
-            ],
         ],
         resize_keyboard=True,
         is_persistent=True,

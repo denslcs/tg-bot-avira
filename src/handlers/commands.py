@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
@@ -86,6 +87,7 @@ from src.keyboards.callback_data import (
     CB_READY_RESULT_MAIN_MENU,
     CB_REGEN,
     CB_REGEN_READY_REDO,
+    CB_READY_MODE_PREFIX,
 )
 from src.keyboards.main_menu import back_to_main_menu_keyboard, menu_hub_keyboard, start_menu_keyboard
 from src.keyboards.reply_panel import quick_panel_keyboard
@@ -124,6 +126,73 @@ _READY_MODE_LABEL_BY_ID: dict[str, str] = {
 
 def _ready_mode_label(mode: str | None) -> str:
     return _READY_MODE_LABEL_BY_ID.get((mode or "").strip().lower(), "Medium")
+
+
+_READY_MODE_IDS: frozenset[str] = frozenset({"fast", "medium", "premium"})
+_READY_PICKER_QUALITY: dict[str, str] = {"fast": "1K", "medium": "2K", "premium": "4K"}
+
+
+def _ready_mode_picker_normalize(mode: str | None) -> str:
+    m = (mode or "").strip().lower()
+    return m if m in _READY_MODE_IDS else "medium"
+
+
+async def _ready_idea_cost_lazy(user_id: int, mode: str) -> int:
+    from src.handlers import img_commands as img
+
+    m = _ready_mode_picker_normalize(mode)
+    return await img._ready_idea_cost_for_user_mode(user_id, m)
+
+
+def _ready_mode_selected_line(mode: str) -> str:
+    m = _ready_mode_picker_normalize(mode)
+    if m == "fast":
+        return "⚡ Fast"
+    if m == "medium":
+        return "🚀 Medium"
+    return "💎 PRO"
+
+
+def _ready_mode_picker_body_html(*, balance: int, mode: str, cost: int) -> str:
+    m = _ready_mode_picker_normalize(mode)
+    sel = _ready_mode_selected_line(m)
+    qual = _READY_PICKER_QUALITY[m]
+    return (
+        "<b>🎛 Выбери режим генерации</b>\n"
+        f"Баланс: <b>{esc(str(balance))}</b> {CREDITS_COIN_TG_HTML}\n"
+        f"Выбрано: <b>{sel}</b>\n"
+        f"Качество: <b>{esc(qual)}</b>\n"
+        f"Стоимость за генерацию: <b>{esc(str(cost))}</b> {CREDITS_COIN_TG_HTML}"
+    )
+
+
+def _ready_mode_picker_markup(current_mode: str) -> InlineKeyboardMarkup:
+    cur = _ready_mode_picker_normalize(current_mode)
+    row: list[InlineKeyboardButton] = []
+    for mode_id, label in (
+        ("fast", "Fast"),
+        ("medium", "Medium"),
+        ("premium", "💎 PRO"),
+    ):
+        selected = mode_id == cur
+        text = f"{label} ✅" if selected else label
+        kw: dict = {
+            "text": text[:64],
+            "callback_data": f"{CB_READY_MODE_PREFIX}{mode_id}",
+        }
+        if selected:
+            kw["style"] = BTN_PRIMARY
+        row.append(InlineKeyboardButton(**kw))
+    return InlineKeyboardMarkup(inline_keyboard=[row])
+
+
+async def _send_ready_mode_picker(message: Message, user_id: int) -> None:
+    mode = await get_user_ready_mode(user_id)
+    m = _ready_mode_picker_normalize(mode)
+    balance = await get_credits(user_id)
+    cost = await _ready_idea_cost_lazy(user_id, m)
+    body = _ready_mode_picker_body_html(balance=balance, mode=m, cost=cost)
+    await message.answer(body, parse_mode=HTML, reply_markup=_ready_mode_picker_markup(m))
 
 
 async def _refresh_quick_panel(bot: Bot, chat_id: int, user_id: int) -> None:
@@ -632,13 +701,33 @@ async def quick_panel_ready_mode_select(message: Message) -> None:
 async def quick_panel_ready_mode_hint(message: Message) -> None:
     if not message.from_user:
         return
-    mode = await get_user_ready_mode(message.from_user.id)
-    await message.answer(
-        "Выбери режим кнопками ниже:\n"
-        "⚡ Fast / 🚀 Medium / 💎 Premium\n"
-        f"Текущий: <b>{_ready_mode_label(mode)}</b>",
-        parse_mode=HTML,
-    )
+    await _send_ready_mode_picker(message, message.from_user.id)
+
+
+@router.callback_query(F.data.startswith(CB_READY_MODE_PREFIX))
+async def quick_panel_ready_mode_inline(callback: CallbackQuery) -> None:
+    if not callback.from_user or not callback.message:
+        await callback.answer()
+        return
+    suffix = (callback.data or "")[len(CB_READY_MODE_PREFIX) :].strip().lower()
+    if suffix not in _READY_MODE_IDS:
+        await callback.answer("Неверный режим", show_alert=True)
+        return
+    mode = await set_user_ready_mode(callback.from_user.id, suffix)
+    balance = await get_credits(callback.from_user.id)
+    cost = await _ready_idea_cost_lazy(callback.from_user.id, mode)
+    body = _ready_mode_picker_body_html(balance=balance, mode=mode, cost=cost)
+    kb = _ready_mode_picker_markup(mode)
+    msg = callback.message
+    try:
+        await msg.edit_text(body, parse_mode=HTML, reply_markup=kb)
+    except TelegramBadRequest:
+        try:
+            await msg.edit_caption(caption=body, parse_mode=HTML, reply_markup=kb)
+        except TelegramBadRequest:
+            await msg.answer(body, parse_mode=HTML, reply_markup=kb)
+    await callback.answer()
+    await _refresh_quick_panel(callback.bot, msg.chat.id, callback.from_user.id)
 
 
 @router.message((F.text == "История бюджета") | (F.text == "📊 История бюджета"))
