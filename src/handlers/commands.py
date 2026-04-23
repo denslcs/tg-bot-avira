@@ -32,6 +32,7 @@ from src.config import (
     SUPPORT_BOT_USERNAME,
 )
 from src.antispam_state import reset_user_spam
+from src.handlers.global_errors import USER_GENERIC_ERROR
 from src.private_rate_limit import reset_private_rate
 from src.database import (
     add_credits_with_reason,
@@ -131,6 +132,46 @@ def _ready_mode_label(mode: str | None) -> str:
 
 _READY_MODE_IDS: frozenset[str] = frozenset({"fast", "medium", "premium"})
 
+# Клиенты Telegram часто добавляют U+FE0F к эмодзи в тексте кнопки (🎛️ vs 🎛) — фильтры без нормализации не срабатывают.
+_U_FE0F = "\ufe0f"
+
+
+def _panel_plain_text(text: str | None) -> str:
+    return (text or "").replace(_U_FE0F, "").strip()
+
+
+def _is_quick_panel_ready_mode_hint(text: str | None) -> bool:
+    t = _panel_plain_text(text)
+    return t.startswith("🎛") and "Режим:" in t[:40]
+
+
+def _is_quick_panel_menu_button(text: str | None) -> bool:
+    return _panel_plain_text(text) in ("🖥 Меню", "📋 Меню")
+
+
+def _is_quick_panel_speed_mode_row(text: str | None) -> bool:
+    return _panel_plain_text(text).lower() in ("⚡ fast", "🚀 medium", "💎 premium")
+
+
+def _is_quick_panel_profile_button(text: str | None) -> bool:
+    t = _panel_plain_text(text)
+    return t.startswith("👤 Профиль") or t.startswith("🐷 Баланс") or t.startswith("💰 Баланс")
+
+
+def _is_quick_panel_ref_button(text: str | None) -> bool:
+    return _panel_plain_text(text) in ("🫂 Реф. система", "👥 Реф. система", "🎥 Реф. система")
+
+
+def _read_ready_mode_picker_generation(data: dict) -> int | None:
+    v = data.get("_ready_mode_picker_gen")
+    if v is None:
+        return None
+    try:
+        g = int(v)
+    except (TypeError, ValueError):
+        return None
+    return g if g > 0 else None
+
 
 def _parse_ready_mode_panel_callback(data: str | None) -> tuple[str | None, int | None]:
     """(suffix, gen) для ``menu:ready_mode:`` — либо ``{gen}:{mode}``, либо устаревший ``{mode}``."""
@@ -226,15 +267,29 @@ async def _send_ready_mode_picker(message: Message, user_id: int, state: FSMCont
             await message.bot.edit_message_reply_markup(old_chat, old_mid, reply_markup=None)
         except TelegramBadRequest:
             logging.debug("strip old ready mode picker keyboard", exc_info=True)
-    gen = int(data.get("_ready_mode_picker_gen") or 0) + 1
+    prev = _read_ready_mode_picker_generation(data)
+    gen = (prev or 0) + 1
     mode = await get_user_ready_mode(user_id)
     m = _ready_mode_picker_normalize(mode)
     balance = await get_credits(user_id)
     cost = await _ready_idea_cost_lazy(user_id, m)
     body = _ready_mode_picker_body_html(balance=balance, mode=m, cost=cost)
-    sent = await message.answer(
-        body, parse_mode=HTML, reply_markup=_ready_mode_picker_markup(m, gen=gen)
-    )
+    try:
+        sent = await message.answer(
+            body, parse_mode=HTML, reply_markup=_ready_mode_picker_markup(m, gen=gen)
+        )
+    except TelegramBadRequest:
+        logging.warning("ready mode picker: answer with inline keyboard failed", exc_info=True)
+        await message.answer(
+            "<b>Не удалось показать выбор режима.</b>\n"
+            "<blockquote><i>Попробуй ещё раз или нажми «🖥 Меню».</i></blockquote>",
+            parse_mode=HTML,
+        )
+        return
+    except Exception:
+        logging.exception("ready mode picker: unexpected error")
+        await message.answer(USER_GENERIC_ERROR)
+        return
     await state.update_data(
         _ready_mode_picker_gen=gen,
         _ready_mode_picker_message_id=sent.message_id,
@@ -696,18 +751,14 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         await message.answer(ann_text[:4096])
 
 
-@router.message(
-    F.text.startswith("👤 Профиль")
-    | F.text.startswith("🐷 Баланс")
-    | F.text.startswith("💰 Баланс")
-)
+@router.message(F.text.func(_is_quick_panel_profile_button))
 async def quick_panel_profile(message: Message) -> None:
     if not message.from_user:
         return
     await send_profile_card(message, message.from_user.id, message.from_user.username)
 
 
-@router.message((F.text == "🖥 Меню") | (F.text == "📋 Меню"))
+@router.message(F.text.func(_is_quick_panel_menu_button))
 async def quick_panel_menu(message: Message) -> None:
     bal: int | None = None
     if message.from_user:
@@ -724,18 +775,14 @@ async def quick_panel_support(message: Message) -> None:
     await cmd_support(message)
 
 
-@router.message(
-    (F.text == "🫂 Реф. система")
-    | (F.text == "👥 Реф. система")
-    | (F.text == "🎥 Реф. система")
-)
+@router.message(F.text.func(_is_quick_panel_ref_button))
 async def quick_panel_ref(message: Message) -> None:
     if not message.from_user:
         return
     await deliver_referral_screen(message.bot, message.from_user.id, message.from_user.username, message)
 
 
-@router.message((F.text == "⚡ Fast") | (F.text == "🚀 Medium") | (F.text == "💎 Premium"))
+@router.message(F.text.func(_is_quick_panel_speed_mode_row))
 async def quick_panel_ready_mode_select(message: Message, state: FSMContext) -> None:
     if not message.from_user:
         return
@@ -755,7 +802,7 @@ async def quick_panel_ready_mode_select(message: Message, state: FSMContext) -> 
     )
 
 
-@router.message(F.text.startswith("🎛 Режим:"))
+@router.message(F.text.func(_is_quick_panel_ready_mode_hint))
 async def quick_panel_ready_mode_hint(message: Message, state: FSMContext) -> None:
     if not message.from_user:
         return
@@ -789,14 +836,16 @@ async def quick_panel_ready_mode_inline(callback: CallbackQuery, state: FSMConte
         await callback.answer("Неверный режим", show_alert=True)
         return
     data = await state.get_data()
-    stored_gen = data.get("_ready_mode_picker_gen")
+    stored_gen = _read_ready_mode_picker_generation(data)
     stored_mid = data.get("_ready_mode_picker_message_id")
     stored_chat = data.get("_ready_mode_picker_chat_id")
     cur = callback.message
+    mid_ok = isinstance(stored_mid, int) and isinstance(stored_chat, int)
     if stored_gen is not None:
         if (
             tap_gen is None
-            or int(tap_gen) != int(stored_gen)
+            or tap_gen != stored_gen
+            or not mid_ok
             or cur.message_id != stored_mid
             or cur.chat.id != stored_chat
         ):
@@ -811,7 +860,7 @@ async def quick_panel_ready_mode_inline(callback: CallbackQuery, state: FSMConte
             show_alert=False,
         )
         return
-    panel_gen = int(stored_gen) if stored_gen is not None else 1
+    panel_gen = stored_gen if stored_gen is not None else 1
     mode = await set_user_ready_mode(callback.from_user.id, suffix)
     balance = await get_credits(callback.from_user.id)
     cost = await _ready_idea_cost_lazy(callback.from_user.id, mode)

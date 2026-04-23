@@ -4259,7 +4259,16 @@ async def ready_choose_category_hint(message: Message, state: FSMContext) -> Non
 
 
 @router.message(ImageGenState.ready_browsing_idea)
-async def ready_browse_hint(message: Message) -> None:
+async def ready_browse_hint(message: Message, state: FSMContext) -> None:
+    """Текст вместо стрелок; кнопка «🎛 Режим» (в т.ч. с U+FE0F в эмодзи) — открыть пикер из commands."""
+    raw = (message.text or "").strip()
+    if raw and message.from_user:
+        plain = raw.replace("\ufe0f", "").strip()
+        if plain.startswith("🎛") and "Режим:" in plain[:40]:
+            from src.handlers.commands import _send_ready_mode_picker
+
+            await _send_ready_mode_picker(message, message.from_user.id, state)
+            return
     await message.answer("Листай идеи стрелками и нажми «Выбрать».")
 
 
