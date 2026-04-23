@@ -35,6 +35,29 @@ from src.support_state import (
 router = Router(name="messages")
 logger = logging.getLogger(__name__)
 
+
+_U_FE0F = "\ufe0f"
+
+
+def _plain_text_for_button_match(text: str | None) -> str:
+    return (text or "").replace(_U_FE0F, "").strip()
+
+
+def _is_quick_panel_text(text: str | None) -> bool:
+    t = _plain_text_for_button_match(text)
+    if not t:
+        return False
+    if t in ("🖥 Меню", "📋 Меню", "💬 Поддержка", "🫂 Реф. система", "👥 Реф. система", "🎥 Реф. система"):
+        return True
+    if t in ("⚡ Fast", "🚀 Medium", "💎 Premium"):
+        return True
+    if t.startswith("👤 Профиль") or t.startswith("🐷 Баланс") or t.startswith("💰 Баланс"):
+        return True
+    if t.startswith("🎛") and "Режим:" in t[:40]:
+        return True
+    return False
+
+
 @router.message(F.chat.id == SUPPORT_CHAT_ID, F.message_thread_id)
 async def support_topic_admin_reply(message: Message) -> None:
     if not MAIN_BOT_RELAY_SUPPORT_TOPICS:
@@ -74,6 +97,9 @@ async def any_message(message: Message, state: FSMContext) -> None:
     text = (message.text or "").strip()
     if not text:
         await message.answer("Я пока понимаю только текст 🙂 (позже добавим фото/видео).")
+        return
+    if _is_quick_panel_text(text):
+        # Кнопка quick panel должна обрабатываться в commands.py и не попадать в общий чат-хендлер.
         return
     if text.startswith("/"):
         return

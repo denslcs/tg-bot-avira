@@ -793,6 +793,12 @@ async def quick_panel_ready_mode_select(message: Message, state: FSMContext) -> 
     elif "premium" in text:
         target = "premium"
     mode = await set_user_ready_mode(message.from_user.id, target)
+    logging.info(
+        "ready_mode/set_from_reply user_id=%s target=%s applied=%s",
+        message.from_user.id,
+        target,
+        mode,
+    )
     await _sync_ready_browsing_after_mode_change(message.bot, state, message.from_user.id)
     balance = await get_credits(message.from_user.id)
     await message.answer(
@@ -820,6 +826,12 @@ async def ready_mode_legacy_inline(callback: CallbackQuery, state: FSMContext) -
         await callback.answer("Неверный режим", show_alert=True)
         return
     mode = await set_user_ready_mode(callback.from_user.id, suffix)
+    logging.info(
+        "ready_mode/set_from_legacy_inline user_id=%s target=%s applied=%s",
+        callback.from_user.id,
+        suffix,
+        mode,
+    )
     await callback.answer("Сохранено")
     await _refresh_quick_panel(callback.bot, callback.message.chat.id, callback.from_user.id)
     await _sync_ready_browsing_after_mode_change(callback.bot, state, callback.from_user.id)
@@ -849,6 +861,14 @@ async def quick_panel_ready_mode_inline(callback: CallbackQuery, state: FSMConte
             or cur.message_id != stored_mid
             or cur.chat.id != stored_chat
         ):
+            logging.info(
+                "ready_mode/ignore_stale_picker user_id=%s tap_gen=%s stored_gen=%s msg=%s stored_msg=%s",
+                callback.from_user.id,
+                tap_gen,
+                stored_gen,
+                cur.message_id,
+                stored_mid,
+            )
             await callback.answer(
                 "Это старое меню. Нажми «🎛 Режим» и выбери режим в последнем сообщении.",
                 show_alert=False,
@@ -862,6 +882,13 @@ async def quick_panel_ready_mode_inline(callback: CallbackQuery, state: FSMConte
         return
     panel_gen = stored_gen if stored_gen is not None else 1
     mode = await set_user_ready_mode(callback.from_user.id, suffix)
+    logging.info(
+        "ready_mode/set_from_inline user_id=%s target=%s applied=%s gen=%s",
+        callback.from_user.id,
+        suffix,
+        mode,
+        panel_gen,
+    )
     balance = await get_credits(callback.from_user.id)
     cost = await _ready_idea_cost_lazy(callback.from_user.id, mode)
     body = _ready_mode_picker_body_html(balance=balance, mode=mode, cost=cost)

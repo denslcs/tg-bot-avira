@@ -1116,6 +1116,54 @@ async def _set_img_flow_anchor(state: FSMContext, msg: Message | None) -> None:
     )
 
 
+async def _remember_ready_ui_message(state: FSMContext, msg: Message | None) -> None:
+    if msg is None:
+        return
+    data = await state.get_data()
+    ids: list[int] = []
+    for v in data.get("_ready_ui_message_ids") or []:
+        try:
+            m = int(v)
+        except (TypeError, ValueError):
+            continue
+        if m not in ids:
+            ids.append(m)
+    if msg.message_id not in ids:
+        ids.append(msg.message_id)
+    # Ограничиваем хвостом, чтобы не раздувать FSM.
+    await state.update_data(_ready_ui_message_ids=ids[-30:])
+
+
+async def _strip_old_ready_ui_keyboards(
+    bot: Bot,
+    chat_id: int,
+    state: FSMContext,
+    *,
+    keep_message_id: int | None = None,
+) -> None:
+    data = await state.get_data()
+    ids: list[int] = []
+    for key in ("_ready_ui_message_ids", "_ready_category_album_ids", "_ready_strip_markup_message_ids"):
+        for v in data.get(key) or []:
+            try:
+                m = int(v)
+            except (TypeError, ValueError):
+                continue
+            if m not in ids:
+                ids.append(m)
+    ach = data.get("_img_flow_anchor_chat_id")
+    aid = data.get("_img_flow_anchor_message_id")
+    if isinstance(ach, int) and ach == chat_id and isinstance(aid, int) and aid not in ids:
+        ids.append(aid)
+    for mid in ids:
+        if keep_message_id is not None and mid == keep_message_id:
+            continue
+        try:
+            await bot.edit_message_reply_markup(chat_id=chat_id, message_id=mid, reply_markup=None)
+        except Exception:
+            logging.debug("strip old ready ui markup mid=%s", mid, exc_info=True)
+
+
 async def _strip_ready_flow_inline_keyboards(bot, chat_id: int, data: dict, *extra_mids: int) -> None:
     """Убирает inline-клавиатуры с экрана выбора идеи, хаба и сообщений «скинь ещё фото» после загрузки фото."""
     ach = data.get("_img_flow_anchor_chat_id")
@@ -2898,6 +2946,8 @@ async def _send_ready_ideas_screen(
     prior = await state.get_data()
     chat_id = message.chat.id
     bot = message.bot
+    keep_mid = message.message_id if edit else None
+    await _strip_old_ready_ui_keyboards(bot, chat_id, state, keep_message_id=keep_mid)
     # Не удаляем якорь главного меню: сначала пробуем edit_media / подпись на том же сообщении.
     await _purge_ready_category_album_messages_only(bot, chat_id, prior)
 
@@ -2957,8 +3007,14 @@ async def _send_ready_ideas_screen(
     if edit:
         if _is_generated_image_result_message(message):
             first, album_ids = await _send_ready_hub_messages(bot, chat_id, cap, kb, paths)
-            await state.update_data(_ready_back_cb=back_callback, _ready_category_album_ids=album_ids)
+            await state.update_data(
+                _ready_back_cb=back_callback,
+                _ready_user_id=user_id,
+                _ready_mode=await get_user_ready_mode(user_id),
+                _ready_category_album_ids=album_ids,
+            )
             await _set_img_flow_anchor(state, first)
+            await _remember_ready_ui_message(state, first)
             try:
                 await _refresh_quick_panel(bot, chat_id, user_id)
             except Exception:
@@ -2979,6 +3035,7 @@ async def _send_ready_ideas_screen(
                 _ready_category_album_ids=[message.message_id],
             )
             await _set_img_flow_anchor(state, message)
+            await _remember_ready_ui_message(state, message)
             try:
                 await _refresh_quick_panel(bot, chat_id, user_id)
             except Exception:
@@ -3000,6 +3057,7 @@ async def _send_ready_ideas_screen(
         _ready_category_album_ids=album_ids,
     )
     await _set_img_flow_anchor(state, first)
+    await _remember_ready_ui_message(state, first)
     try:
         await _refresh_quick_panel(bot, chat_id, user_id)
     except Exception:
@@ -3091,6 +3149,8 @@ async def _open_ready_card(
     data = await state.get_data()
     chat_id = message.chat.id
     bot = message.bot
+    keep_mid = message.message_id if edit else None
+    await _strip_old_ready_ui_keyboards(bot, chat_id, state, keep_message_id=keep_mid)
     hub_cleared = False
     if data.get("_ready_category_album_ids"):
         await _purge_prior_ready_hub_ui(bot, chat_id, message, data)
@@ -3107,6 +3167,16 @@ async def _open_ready_card(
         await _ready_idea_cost_for_user_mode(ready_user_id, ready_mode)
         if ready_user_id > 0
         else _ready_idea_cost_for_plan_and_mode(None, ready_mode)
+    )
+    logging.info(
+        "ready_mode/render_card user_id=%s category=%s idx=%s mode=%s cost=%s state_uid=%s edit=%s",
+        ready_user_id or "-",
+        category,
+        index,
+        ready_mode,
+        ready_cost,
+        data.get("_ready_user_id"),
+        edit,
     )
     ideas = _ideas_for_category(category, include_hidden_start_only=include_hidden)
     if not ideas:
@@ -3173,6 +3243,7 @@ async def _open_ready_card(
                 parse_mode=HTML,
             )
             await _set_img_flow_anchor(state, sent)
+            await _remember_ready_ui_message(state, sent)
             return
         except Exception:
             logging.warning("ready card send_photo failed, fallback", exc_info=True)
@@ -3180,6 +3251,7 @@ async def _open_ready_card(
     if edit:
         edited = await _edit_ready_nav_message(message, caption=cap, reply_markup=kb, listing_photo=photo_path)
         await _set_img_flow_anchor(state, edited or message)
+        await _remember_ready_ui_message(state, edited or message)
     else:
         if photo_path is not None:
             try:
@@ -3199,6 +3271,7 @@ async def _open_ready_card(
                         parse_mode=HTML,
                     )
                 await _set_img_flow_anchor(state, sent)
+                await _remember_ready_ui_message(state, sent)
                 return
             except Exception:
                 logging.warning("ready card answer_photo failed, fallback text", exc_info=True)
@@ -3207,6 +3280,7 @@ async def _open_ready_card(
         else:
             sent = await message.answer(cap, reply_markup=kb, parse_mode=HTML)
         await _set_img_flow_anchor(state, sent)
+        await _remember_ready_ui_message(state, sent)
 
 
 async def refresh_ready_browsing_anchor(bot: Bot, *, user_id: int, state: FSMContext) -> None:
@@ -3230,6 +3304,16 @@ async def refresh_ready_browsing_anchor(bot: Bot, *, user_id: int, state: FSMCon
     ready_mode = await _live_user_ready_mode(user_id)
     ready_cost = await _ready_idea_cost_for_user_mode(user_id, ready_mode)
     await state.update_data(_ready_cost=ready_cost, _ready_mode=ready_mode)
+    logging.info(
+        "ready_mode/refresh_anchor user_id=%s category=%s idx=%s mode=%s cost=%s anchor_chat=%s anchor_mid=%s",
+        user_id,
+        category,
+        idx,
+        ready_mode,
+        ready_cost,
+        data.get("_img_flow_anchor_chat_id"),
+        data.get("_img_flow_anchor_message_id"),
+    )
     cap = _ready_idea_caption(
         category=category,
         title=title,
