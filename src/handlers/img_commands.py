@@ -72,6 +72,7 @@ from src.formatting import CREDITS_COIN_TG_HTML, HTML, esc
 from src.image_gen_gate import image_generation_slot
 from src.handlers.commands import (
     _is_generated_image_result_message,
+    _refresh_quick_panel,
     edit_or_send_nav_message,
     replace_nav_screen_in_message,
     restore_main_menu_message,
@@ -92,6 +93,8 @@ from src.keyboards.callback_data import (
     CB_READY_CONFIRM,
     CB_READY_IDEAS,
     CB_READY_IDEAS_HUB,
+    CB_READY_MODE_LEGACY_PREFIX,
+    CB_READY_MODE_PREFIX,
     CB_READY_NAV_PREFIX,
     CB_READY_PHOTO_BACK,
     CB_BACK_TO_READY_IDEAS,
@@ -1011,6 +1014,7 @@ async def _edit_ready_nav_message(
 
     Если нужна другая картинка, а edit_media не вышел — delete + send_photo, не edit_caption на старом фото.
     """
+    reply_markup = _strip_ready_listing_mode_switch_rows(reply_markup)
     if listing_photo is not None and listing_photo.is_file():
         ok = await replace_nav_screen_in_message(
             message,
@@ -1649,6 +1653,28 @@ def _ready_browser_keyboard(
             ],
         ]
     )
+
+
+def _strip_ready_listing_mode_switch_rows(markup: InlineKeyboardMarkup | None) -> InlineKeyboardMarkup | None:
+    """С карточек листинга убрать ряды выбора режима (только панель «🎛 Режим» / ``menu:ready_mode:``)."""
+    if markup is None or not markup.inline_keyboard:
+        return markup
+
+    def _row_has_mode_switch(row: list[InlineKeyboardButton]) -> bool:
+        for btn in row:
+            cd = getattr(btn, "callback_data", None) or ""
+            if isinstance(cd, str) and (
+                cd.startswith(CB_READY_MODE_PREFIX) or cd.startswith(CB_READY_MODE_LEGACY_PREFIX)
+            ):
+                return True
+        return False
+
+    new_rows = [list(r) for r in markup.inline_keyboard if not _row_has_mode_switch(r)]
+    if len(new_rows) == len(markup.inline_keyboard):
+        return markup
+    if not new_rows:
+        return markup
+    return InlineKeyboardMarkup(inline_keyboard=new_rows)
 
 
 def _ready_wait_photo_keyboard(
@@ -2933,6 +2959,10 @@ async def _send_ready_ideas_screen(
             first, album_ids = await _send_ready_hub_messages(bot, chat_id, cap, kb, paths)
             await state.update_data(_ready_back_cb=back_callback, _ready_category_album_ids=album_ids)
             await _set_img_flow_anchor(state, first)
+            try:
+                await _refresh_quick_panel(bot, chat_id, user_id)
+            except Exception:
+                logging.debug("quick panel after ready ideas hub (from result msg)", exc_info=True)
             return
         media_path = listing_photo if listing_photo is not None and listing_photo.is_file() else None
         ok = await replace_nav_screen_in_message(
@@ -2949,6 +2979,10 @@ async def _send_ready_ideas_screen(
                 _ready_category_album_ids=[message.message_id],
             )
             await _set_img_flow_anchor(state, message)
+            try:
+                await _refresh_quick_panel(bot, chat_id, user_id)
+            except Exception:
+                logging.debug("quick panel after ready ideas hub (edit)", exc_info=True)
             return
         try:
             await message.delete()
@@ -2966,6 +3000,10 @@ async def _send_ready_ideas_screen(
         _ready_category_album_ids=album_ids,
     )
     await _set_img_flow_anchor(state, first)
+    try:
+        await _refresh_quick_panel(bot, chat_id, user_id)
+    except Exception:
+        logging.debug("quick panel after ready ideas hub (send)", exc_info=True)
 
 
 @router.callback_query(F.data == CB_READY_IDEAS)
@@ -3109,12 +3147,14 @@ async def _open_ready_card(
         _ready_mode=ready_mode,
     )
     await state.set_state(ImageGenState.ready_browsing_idea)
-    kb = _ready_browser_keyboard(
-        idx,
-        total,
-        back_callback=back_callback,
-        category_slug=category,
-        single_shortcut_mode=single_shortcut_mode,
+    kb = _strip_ready_listing_mode_switch_rows(
+        _ready_browser_keyboard(
+            idx,
+            total,
+            back_callback=back_callback,
+            category_slug=category,
+            single_shortcut_mode=single_shortcut_mode,
+        )
     )
     photo_path = _ready_idea_listing_photo_path(title)
 
@@ -3202,12 +3242,14 @@ async def refresh_ready_browsing_anchor(bot: Bot, *, user_id: int, state: FSMCon
         show_category_title=not single_shortcut_mode,
     )
     back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
-    kb = _ready_browser_keyboard(
-        idx,
-        len(ideas),
-        back_callback=back_callback,
-        category_slug=category,
-        single_shortcut_mode=single_shortcut_mode,
+    kb = _strip_ready_listing_mode_switch_rows(
+        _ready_browser_keyboard(
+            idx,
+            len(ideas),
+            back_callback=back_callback,
+            category_slug=category,
+            single_shortcut_mode=single_shortcut_mode,
+        )
     )
     ach_mid = data.get("_img_flow_anchor_message_id")
     ach_chat = data.get("_img_flow_anchor_chat_id")
