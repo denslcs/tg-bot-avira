@@ -40,7 +40,10 @@ CB_READY_IDEAS_HUB = "menu:ready_ideas_hub"
 CB_APPLY_READY_PREFIX = "img:idea:"
 CB_READY_CAT_PREFIX = "img:idea_cat:"
 CB_READY_NAV_PREFIX = "img:idea_nav:"
-CB_READY_MODE_PREFIX = "img:idea_mode:"
+# Режим fast/medium/premium для «Готовых идей» — только панель /commands (🎛 Режим), не карточки img:idea_*.
+CB_READY_MODE_PREFIX = "menu:ready_mode:"
+# Старые сообщения с img:idea_mode:* — не менять режим, подсказать открыть панель.
+CB_READY_MODE_LEGACY_PREFIX = "img:idea_mode:"
 CB_READY_BEARD_SIZE_PREFIX = "img:idea_beard_size:"
 CB_READY_PHOTO_BACK = "img:idea_photo_back"
 CB_READY_CONFIRM = "img:idea_confirm"
@@ -73,6 +76,7 @@ __all__ = [
     "CB_READY_CAT_PREFIX",
     "CB_READY_NAV_PREFIX",
     "CB_READY_MODE_PREFIX",
+    "CB_READY_MODE_LEGACY_PREFIX",
     "CB_READY_BEARD_SIZE_PREFIX",
     "CB_READY_PHOTO_BACK",
     "CB_READY_CONFIRM",

@@ -1584,6 +1584,7 @@ def _ready_browser_keyboard(
     category_slug: str | None = None,
     single_shortcut_mode: bool = False,
 ) -> InlineKeyboardMarkup:
+    """Листание карточек готовых идей. Не добавлять сюда fast/medium/premium — режим только из панели (🎛 Режим)."""
     prev_i = (index - 1) % total
     next_i = (index + 1) % total
     cs = (category_slug or "").strip().lower()

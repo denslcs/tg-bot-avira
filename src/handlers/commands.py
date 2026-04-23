@@ -87,6 +87,7 @@ from src.keyboards.callback_data import (
     CB_READY_RESULT_MAIN_MENU,
     CB_REGEN,
     CB_REGEN_READY_REDO,
+    CB_READY_MODE_LEGACY_PREFIX,
     CB_READY_MODE_PREFIX,
 )
 from src.keyboards.main_menu import back_to_main_menu_keyboard, menu_hub_keyboard, start_menu_keyboard
@@ -710,6 +711,15 @@ async def quick_panel_ready_mode_hint(message: Message) -> None:
     if not message.from_user:
         return
     await _send_ready_mode_picker(message, message.from_user.id)
+
+
+@router.callback_query(F.data.startswith(CB_READY_MODE_LEGACY_PREFIX))
+async def ready_mode_legacy_inline_disabled(callback: CallbackQuery) -> None:
+    """Старые inline-кнопки режима на карточках «Готовых идей» (если остались в чате)."""
+    await callback.answer(
+        "Режим для готовых идей выбирается только внизу: кнопка «🎛 Режим» на панели быстрого доступа.",
+        show_alert=True,
+    )
 
 
 @router.callback_query(F.data.startswith(CB_READY_MODE_PREFIX))
