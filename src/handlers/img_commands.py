@@ -1755,7 +1755,7 @@ def _ready_category_caption() -> str:
     return (
         '<b><tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> Готовые идеи</b>\n'
         "Выбери категорию и идею, затем нажми «Выбрать».\n"
-        "Доступны режимы: ⚡ fast / 🚀 medium / 💎 premium.\n"
+        "Модель для готовых идей переключается внизу: кнопка <b>«🎛 Режим»</b> на панели быстрого доступа.\n"
         "Дальше бот подскажет, что отправить: фото, текст или оба шага.\n"
         '<tg-emoji emoji-id="5330320040883411678">🗺</tg-emoji> Стоимость: <b>15–65 кр.</b> (зависит от режима и подписки).'
     )
@@ -1798,6 +1798,19 @@ _READY_MODE_DEFAULT_COST: dict[str, int] = {
 def _ready_mode_normalize(mode: str | None) -> str:
     m = (mode or "").strip().lower()
     return m if m in _READY_MODE_ALLOWED else _READY_MODE_DEFAULT
+
+
+async def _live_user_ready_mode(user_id: int | None) -> str:
+    """Режим готовых идей из профиля (БД), без устаревшего снимка в FSM."""
+    if user_id is None:
+        return _READY_MODE_DEFAULT
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return _READY_MODE_DEFAULT
+    if uid <= 0:
+        return _READY_MODE_DEFAULT
+    return _ready_mode_normalize(await get_user_ready_mode(uid))
 
 
 def _ready_mode_emoji(mode: str) -> str:
@@ -3046,8 +3059,10 @@ async def _open_ready_card(
         hub_cleared = True
     back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
     include_hidden = bool(data.get("_ready_include_hidden_start_only"))
-    ready_mode = _ready_mode_normalize(str(data.get("_ready_mode") or _READY_MODE_DEFAULT))
     ready_user_id = int(data.get("_ready_user_id") or 0)
+    if not ready_user_id and message.from_user:
+        ready_user_id = message.from_user.id
+    ready_mode = await _live_user_ready_mode(ready_user_id) if ready_user_id else _READY_MODE_DEFAULT
     ready_cost = (
         await _ready_idea_cost_for_user_mode(ready_user_id, ready_mode)
         if ready_user_id > 0
@@ -3228,7 +3243,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
         return
     if action == "pick":
         title, _preview, _prompt, photos_required = ideas[idx]
-        ready_mode = _ready_mode_normalize(str(data.get("_ready_mode") or _READY_MODE_DEFAULT))
+        ready_mode = await _live_user_ready_mode(callback.from_user.id)
         ready_cost = await _ready_idea_cost_for_user_mode(callback.from_user.id, ready_mode)
         await state.update_data(
             _ready_category=category,
@@ -3294,8 +3309,9 @@ async def ready_photo_back(callback: CallbackQuery, state: FSMContext) -> None:
         return
     await callback.answer()
     data = await state.get_data()
-    ready_cost = int(data.get("_ready_cost") or _READY_IDEA_DEFAULT_COST)
-    ready_mode = _ready_mode_normalize(str(data.get("_ready_mode") or _READY_MODE_DEFAULT))
+    uid = callback.from_user.id
+    ready_mode = await _live_user_ready_mode(uid)
+    ready_cost = await _ready_idea_cost_for_user_mode(uid, ready_mode)
     if bool(data.get("_ready_include_hidden_start_only")):
         category = str(data.get("_ready_category") or "").strip().lower()
         need = int(data.get("_ready_need") or 1)
@@ -3368,8 +3384,9 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
     if not message.from_user:
         return
     data = await state.get_data()
-    ready_cost = int(data.get("_ready_cost") or _READY_IDEA_DEFAULT_COST)
-    ready_mode = _ready_mode_normalize(str(data.get("_ready_mode") or _READY_MODE_DEFAULT))
+    uid = message.from_user.id
+    ready_mode = await _live_user_ready_mode(uid)
+    ready_cost = await _ready_idea_cost_for_user_mode(uid, ready_mode)
     need = int(data.get("_ready_need") or 1)
     photos = list(data.get("_ready_photos") or [])
     if len(photos) >= need:
@@ -3511,9 +3528,12 @@ async def ready_poster_text_need_text(message: Message, state: FSMContext) -> No
 
 @router.message(ImageGenState.ready_waiting_poster_text)
 async def ready_collect_poster_text(message: Message, state: FSMContext) -> None:
+    if not message.from_user:
+        return
     data = await state.get_data()
-    ready_cost = int(data.get("_ready_cost") or _READY_IDEA_DEFAULT_COST)
-    ready_mode = _ready_mode_normalize(str(data.get("_ready_mode") or _READY_MODE_DEFAULT))
+    uid = message.from_user.id
+    ready_mode = await _live_user_ready_mode(uid)
+    ready_cost = await _ready_idea_cost_for_user_mode(uid, ready_mode)
     title = _ready_title_from_state_data(data)
     max_len = _headline_max_len_for_title(title)
     raw = message.text or ""
@@ -3610,9 +3630,12 @@ async def ready_collect_fantasy_color(message: Message, state: FSMContext) -> No
     if not _has_cyrillic(color):
         await message.answer("Введи цвет по-русски одним словом — например: Синий")
         return
+    if not message.from_user:
+        return
     data = await state.get_data()
-    ready_cost = int(data.get("_ready_cost") or _READY_IDEA_DEFAULT_COST)
-    ready_mode = _ready_mode_normalize(str(data.get("_ready_mode") or _READY_MODE_DEFAULT))
+    uid = message.from_user.id
+    ready_mode = await _live_user_ready_mode(uid)
+    ready_cost = await _ready_idea_cost_for_user_mode(uid, ready_mode)
     headline = str(data.get("_ready_poster_text") or "")
     await state.update_data(_ready_fantasy_color=color)
     await state.set_state(ImageGenState.ready_waiting_confirm)
@@ -3639,9 +3662,12 @@ async def ready_collect_minecraft_nick(message: Message, state: FSMContext) -> N
     if len(nick) > 30:
         await message.answer("Слишком длинный ник. Максимум 30 символов.")
         return
+    if not message.from_user:
+        return
     data = await state.get_data()
-    ready_cost = int(data.get("_ready_cost") or _READY_IDEA_DEFAULT_COST)
-    ready_mode = _ready_mode_normalize(str(data.get("_ready_mode") or _READY_MODE_DEFAULT))
+    uid = message.from_user.id
+    ready_mode = await _live_user_ready_mode(uid)
+    ready_cost = await _ready_idea_cost_for_user_mode(uid, ready_mode)
     await state.update_data(_ready_overlay_nick=nick)
     await state.set_state(ImageGenState.ready_waiting_confirm)
     await message.answer(
@@ -3673,8 +3699,9 @@ async def ready_pick_beard_size(callback: CallbackQuery, state: FSMContext) -> N
         return
     await callback.answer()
     data = await state.get_data()
-    ready_cost = int(data.get("_ready_cost") or _READY_IDEA_DEFAULT_COST)
-    ready_mode = _ready_mode_normalize(str(data.get("_ready_mode") or _READY_MODE_DEFAULT))
+    uid = callback.from_user.id
+    ready_mode = await _live_user_ready_mode(uid)
+    ready_cost = await _ready_idea_cost_for_user_mode(uid, ready_mode)
     await state.update_data(_ready_beard_size=raw)
     await state.set_state(ImageGenState.ready_waiting_confirm)
     await _edit_ready_nav_message(
@@ -3823,7 +3850,8 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             )
             return
         title, _preview, base_prompt, need = ideas[idx]
-        ready_mode = _ready_mode_normalize(str(data.get("_ready_mode") or _READY_MODE_DEFAULT))
+        user_id = callback.from_user.id
+        ready_mode = await _live_user_ready_mode(user_id)
         is_ronaldo_ready = (title or "").strip() == _RONALDO_PHOTO_TITLE
         if len(photos) < need:
             await _edit_ready_nav_message(
@@ -4098,7 +4126,6 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             no_reference_images=(is_fantasy_3d_title and not extra_refs),
             style_reference_images_only=(is_fantasy_3d_title and bool(extra_refs)),
         )
-        user_id = callback.from_user.id
         selected_ready_model = (
             (OPENROUTER_IMAGE_GEMINI_PRO_MODEL or "").strip() or "google/gemini-3-pro-image-preview"
             if is_ronaldo_ready
