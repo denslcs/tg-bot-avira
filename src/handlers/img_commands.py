@@ -13,6 +13,7 @@ from io import BytesIO
 from pathlib import Path
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -3166,6 +3167,73 @@ async def _open_ready_card(
         else:
             sent = await message.answer(cap, reply_markup=kb, parse_mode=HTML)
         await _set_img_flow_anchor(state, sent)
+
+
+async def refresh_ready_browsing_anchor(bot: Bot, *, user_id: int, state: FSMContext) -> None:
+    """Обновить якорь листинга идей: режим и цена из БД и «чистая» клавиатура без чужих рядов."""
+    cur = await state.get_state()
+    if cur is None or not str(cur).endswith("ready_browsing_idea"):
+        return
+    data = await state.get_data()
+    category = str(data.get("_ready_category") or "").strip().lower()
+    if not category:
+        return
+    include_hidden = bool(data.get("_ready_include_hidden_start_only"))
+    ideas = _ideas_for_category(category, include_hidden_start_only=include_hidden)
+    if not ideas:
+        return
+    idx = int(data.get("_ready_index") or 0) % len(ideas)
+    title, preview, _prompt, photos_required = ideas[idx]
+    single_shortcut_mode = (
+        include_hidden and category == "celebrities" and (title or "").strip() == _RONALDO_PHOTO_TITLE
+    )
+    ready_mode = await _live_user_ready_mode(user_id)
+    ready_cost = await _ready_idea_cost_for_user_mode(user_id, ready_mode)
+    await state.update_data(_ready_cost=ready_cost, _ready_mode=ready_mode)
+    cap = _ready_idea_caption(
+        category=category,
+        title=title,
+        preview=preview,
+        index=idx,
+        total=len(ideas),
+        photos_required=photos_required,
+        cost=ready_cost,
+        mode=ready_mode,
+        show_category_title=not single_shortcut_mode,
+    )
+    back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
+    kb = _ready_browser_keyboard(
+        idx,
+        len(ideas),
+        back_callback=back_callback,
+        category_slug=category,
+        single_shortcut_mode=single_shortcut_mode,
+    )
+    ach_mid = data.get("_img_flow_anchor_message_id")
+    ach_chat = data.get("_img_flow_anchor_chat_id")
+    if not isinstance(ach_mid, int) or not isinstance(ach_chat, int):
+        return
+    try:
+        await bot.edit_message_caption(
+            chat_id=ach_chat,
+            message_id=ach_mid,
+            caption=cap,
+            reply_markup=kb,
+            parse_mode=HTML,
+        )
+        return
+    except TelegramBadRequest:
+        pass
+    try:
+        await bot.edit_message_text(
+            chat_id=ach_chat,
+            message_id=ach_mid,
+            text=cap,
+            reply_markup=kb,
+            parse_mode=HTML,
+        )
+    except TelegramBadRequest:
+        logging.debug("refresh_ready_browsing_anchor: edit failed", exc_info=True)
 
 
 @router.callback_query(F.data.startswith(CB_READY_CAT_PREFIX))

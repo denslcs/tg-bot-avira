@@ -41,6 +41,7 @@ CB_APPLY_READY_PREFIX = "img:idea:"
 CB_READY_CAT_PREFIX = "img:idea_cat:"
 CB_READY_NAV_PREFIX = "img:idea_nav:"
 # Режим fast/medium/premium для «Готовых идей» — только панель /commands (🎛 Режим), не карточки img:idea_*.
+# Формат кнопок: ``menu:ready_mode:{gen}:{mode}`` (gen — монотонно на каждое новое меню; устаревшие без gen не принимаются после первого открытия).
 CB_READY_MODE_PREFIX = "menu:ready_mode:"
 # Старые сообщения с img:idea_mode:* — не менять режим, подсказать открыть панель.
 CB_READY_MODE_LEGACY_PREFIX = "img:idea_mode:"

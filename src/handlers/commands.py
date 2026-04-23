@@ -132,6 +132,28 @@ def _ready_mode_label(mode: str | None) -> str:
 _READY_MODE_IDS: frozenset[str] = frozenset({"fast", "medium", "premium"})
 
 
+def _parse_ready_mode_panel_callback(data: str | None) -> tuple[str | None, int | None]:
+    """(suffix, gen) для ``menu:ready_mode:`` — либо ``{gen}:{mode}``, либо устаревший ``{mode}``."""
+    if not data or not data.startswith(CB_READY_MODE_PREFIX):
+        return None, None
+    tail = data[len(CB_READY_MODE_PREFIX) :].strip()
+    if not tail:
+        return None, None
+    if ":" in tail:
+        gen_s, _, rest = tail.partition(":")
+        rest = rest.strip().lower()
+        if rest not in _READY_MODE_IDS:
+            return None, None
+        try:
+            return rest, int(gen_s)
+        except ValueError:
+            return None, None
+    t = tail.lower()
+    if t in _READY_MODE_IDS:
+        return t, None
+    return None, None
+
+
 def _ready_mode_picker_normalize(mode: str | None) -> str:
     m = (mode or "").strip().lower()
     return m if m in _READY_MODE_IDS else "medium"
@@ -175,7 +197,7 @@ def _ready_mode_picker_body_html(*, balance: int, mode: str, cost: int) -> str:
     )
 
 
-def _ready_mode_picker_markup(current_mode: str) -> InlineKeyboardMarkup:
+def _ready_mode_picker_markup(current_mode: str, *, gen: int) -> InlineKeyboardMarkup:
     cur = _ready_mode_picker_normalize(current_mode)
     row: list[InlineKeyboardButton] = []
     for mode_id, label in (
@@ -187,7 +209,7 @@ def _ready_mode_picker_markup(current_mode: str) -> InlineKeyboardMarkup:
         text = f"{label} ✅" if selected else label
         kw: dict = {
             "text": text[:64],
-            "callback_data": f"{CB_READY_MODE_PREFIX}{mode_id}",
+            "callback_data": f"{CB_READY_MODE_PREFIX}{gen}:{mode_id}",
         }
         if selected:
             kw["style"] = BTN_PRIMARY
@@ -195,13 +217,29 @@ def _ready_mode_picker_markup(current_mode: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[row])
 
 
-async def _send_ready_mode_picker(message: Message, user_id: int) -> None:
+async def _send_ready_mode_picker(message: Message, user_id: int, state: FSMContext) -> None:
+    data = await state.get_data()
+    old_mid = data.get("_ready_mode_picker_message_id")
+    old_chat = data.get("_ready_mode_picker_chat_id")
+    if isinstance(old_mid, int) and isinstance(old_chat, int):
+        try:
+            await message.bot.edit_message_reply_markup(old_chat, old_mid, reply_markup=None)
+        except TelegramBadRequest:
+            logging.debug("strip old ready mode picker keyboard", exc_info=True)
+    gen = int(data.get("_ready_mode_picker_gen") or 0) + 1
     mode = await get_user_ready_mode(user_id)
     m = _ready_mode_picker_normalize(mode)
     balance = await get_credits(user_id)
     cost = await _ready_idea_cost_lazy(user_id, m)
     body = _ready_mode_picker_body_html(balance=balance, mode=m, cost=cost)
-    await message.answer(body, parse_mode=HTML, reply_markup=_ready_mode_picker_markup(m))
+    sent = await message.answer(
+        body, parse_mode=HTML, reply_markup=_ready_mode_picker_markup(m, gen=gen)
+    )
+    await state.update_data(
+        _ready_mode_picker_gen=gen,
+        _ready_mode_picker_message_id=sent.message_id,
+        _ready_mode_picker_chat_id=sent.chat.id,
+    )
 
 
 async def _refresh_quick_panel(bot: Bot, chat_id: int, user_id: int) -> None:
@@ -216,6 +254,15 @@ async def _refresh_quick_panel(bot: Bot, chat_id: int, user_id: int) -> None:
         )
     except Exception:
         logging.warning("quick panel refresh failed (reply-клавиатура могла не обновиться)", exc_info=True)
+
+
+async def _sync_ready_browsing_after_mode_change(bot: Bot, state: FSMContext, user_id: int) -> None:
+    try:
+        from src.handlers import img_commands as img
+
+        await img.refresh_ready_browsing_anchor(bot, user_id=user_id, state=state)
+    except Exception:
+        logging.debug("sync ready browsing anchor after mode change failed", exc_info=True)
 
 
 def _budget_source_label(source: str) -> str:
@@ -689,7 +736,7 @@ async def quick_panel_ref(message: Message) -> None:
 
 
 @router.message((F.text == "⚡ Fast") | (F.text == "🚀 Medium") | (F.text == "💎 Premium"))
-async def quick_panel_ready_mode_select(message: Message) -> None:
+async def quick_panel_ready_mode_select(message: Message, state: FSMContext) -> None:
     if not message.from_user:
         return
     text = (message.text or "").strip().lower()
@@ -699,6 +746,7 @@ async def quick_panel_ready_mode_select(message: Message) -> None:
     elif "premium" in text:
         target = "premium"
     mode = await set_user_ready_mode(message.from_user.id, target)
+    await _sync_ready_browsing_after_mode_change(message.bot, state, message.from_user.id)
     balance = await get_credits(message.from_user.id)
     await message.answer(
         _ready_mode_activation_html(mode),
@@ -708,14 +756,14 @@ async def quick_panel_ready_mode_select(message: Message) -> None:
 
 
 @router.message(F.text.startswith("🎛 Режим:"))
-async def quick_panel_ready_mode_hint(message: Message) -> None:
+async def quick_panel_ready_mode_hint(message: Message, state: FSMContext) -> None:
     if not message.from_user:
         return
-    await _send_ready_mode_picker(message, message.from_user.id)
+    await _send_ready_mode_picker(message, message.from_user.id, state)
 
 
 @router.callback_query(F.data.startswith(CB_READY_MODE_LEGACY_PREFIX))
-async def ready_mode_legacy_inline(callback: CallbackQuery) -> None:
+async def ready_mode_legacy_inline(callback: CallbackQuery, state: FSMContext) -> None:
     """Старые ``img:idea_mode:*`` на карточках в чате — применяем режим в БД, не перерисовываем сообщение (это карточка идеи)."""
     if not callback.from_user or not callback.message:
         await callback.answer()
@@ -727,33 +775,78 @@ async def ready_mode_legacy_inline(callback: CallbackQuery) -> None:
     mode = await set_user_ready_mode(callback.from_user.id, suffix)
     await callback.answer("Сохранено")
     await _refresh_quick_panel(callback.bot, callback.message.chat.id, callback.from_user.id)
+    await _sync_ready_browsing_after_mode_change(callback.bot, state, callback.from_user.id)
     await callback.message.answer(_ready_mode_activation_html(mode), parse_mode=HTML)
 
 
 @router.callback_query(F.data.startswith(CB_READY_MODE_PREFIX))
-async def quick_panel_ready_mode_inline(callback: CallbackQuery) -> None:
+async def quick_panel_ready_mode_inline(callback: CallbackQuery, state: FSMContext) -> None:
     if not callback.from_user or not callback.message:
         await callback.answer()
         return
-    suffix = (callback.data or "")[len(CB_READY_MODE_PREFIX) :].strip().lower()
-    if suffix not in _READY_MODE_IDS:
+    suffix, tap_gen = _parse_ready_mode_panel_callback(callback.data)
+    if suffix is None or suffix not in _READY_MODE_IDS:
         await callback.answer("Неверный режим", show_alert=True)
         return
+    data = await state.get_data()
+    stored_gen = data.get("_ready_mode_picker_gen")
+    stored_mid = data.get("_ready_mode_picker_message_id")
+    stored_chat = data.get("_ready_mode_picker_chat_id")
+    cur = callback.message
+    if stored_gen is not None:
+        if (
+            tap_gen is None
+            or int(tap_gen) != int(stored_gen)
+            or cur.message_id != stored_mid
+            or cur.chat.id != stored_chat
+        ):
+            await callback.answer(
+                "Это старое меню. Нажми «🎛 Режим» и выбери режим в последнем сообщении.",
+                show_alert=False,
+            )
+            return
+    elif tap_gen is not None:
+        await callback.answer(
+            "Открой выбор режима заново через «🎛 Режим».",
+            show_alert=False,
+        )
+        return
+    panel_gen = int(stored_gen) if stored_gen is not None else 1
     mode = await set_user_ready_mode(callback.from_user.id, suffix)
     balance = await get_credits(callback.from_user.id)
     cost = await _ready_idea_cost_lazy(callback.from_user.id, mode)
     body = _ready_mode_picker_body_html(balance=balance, mode=mode, cost=cost)
-    kb = _ready_mode_picker_markup(mode)
+    kb = _ready_mode_picker_markup(mode, gen=panel_gen)
     msg = callback.message
+    fallback_used = False
     try:
         await msg.edit_text(body, parse_mode=HTML, reply_markup=kb)
     except TelegramBadRequest:
         try:
             await msg.edit_caption(caption=body, parse_mode=HTML, reply_markup=kb)
         except TelegramBadRequest:
-            await msg.answer(body, parse_mode=HTML, reply_markup=kb)
+            fallback_used = True
+            new_gen = panel_gen + 1
+            kb_new = _ready_mode_picker_markup(mode, gen=new_gen)
+            sent = await msg.answer(body, parse_mode=HTML, reply_markup=kb_new)
+            await state.update_data(
+                _ready_mode_picker_gen=new_gen,
+                _ready_mode_picker_message_id=sent.message_id,
+                _ready_mode_picker_chat_id=sent.chat.id,
+            )
+            try:
+                await msg.edit_reply_markup(reply_markup=None)
+            except TelegramBadRequest:
+                logging.debug("strip picker after fallback send", exc_info=True)
+    if not fallback_used:
+        await state.update_data(
+            _ready_mode_picker_gen=panel_gen,
+            _ready_mode_picker_message_id=cur.message_id,
+            _ready_mode_picker_chat_id=cur.chat.id,
+        )
     await callback.answer()
     await _refresh_quick_panel(callback.bot, msg.chat.id, callback.from_user.id)
+    await _sync_ready_browsing_after_mode_change(callback.bot, state, callback.from_user.id)
     await msg.answer(_ready_mode_activation_html(mode), parse_mode=HTML)
 
 
