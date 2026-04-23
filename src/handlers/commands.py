@@ -143,6 +143,17 @@ async def _ready_idea_cost_lazy(user_id: int, mode: str) -> int:
     return await img._ready_idea_cost_for_user_mode(user_id, m)
 
 
+def _ready_mode_activation_html(mode: str) -> str:
+    from src.handlers import img_commands as img
+
+    label = _ready_mode_label(mode)
+    human = img._ready_mode_model_human(mode)
+    return (
+        f"<b>{esc(label)}</b> активирован.\n"
+        f"<i>Генерирует:</i> <b>{esc(human)}</b>"
+    )
+
+
 def _ready_mode_selected_line(mode: str) -> str:
     m = _ready_mode_picker_normalize(mode)
     if m == "fast":
@@ -688,7 +699,7 @@ async def quick_panel_ready_mode_select(message: Message) -> None:
     mode = await set_user_ready_mode(message.from_user.id, target)
     balance = await get_credits(message.from_user.id)
     await message.answer(
-        f"Режим готовых идей: <b>{_ready_mode_label(mode)}</b>",
+        _ready_mode_activation_html(mode),
         parse_mode=HTML,
         reply_markup=quick_panel_keyboard(balance, mode_label=_ready_mode_label(mode)),
     )
@@ -725,6 +736,7 @@ async def quick_panel_ready_mode_inline(callback: CallbackQuery) -> None:
             await msg.answer(body, parse_mode=HTML, reply_markup=kb)
     await callback.answer()
     await _refresh_quick_panel(callback.bot, msg.chat.id, callback.from_user.id)
+    await msg.answer(_ready_mode_activation_html(mode), parse_mode=HTML)
 
 
 @router.message((F.text == "История бюджета") | (F.text == "📊 История бюджета"))
