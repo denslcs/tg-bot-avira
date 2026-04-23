@@ -212,9 +212,10 @@ async def _refresh_quick_panel(bot: Bot, chat_id: int, user_id: int) -> None:
             chat_id,
             _QUICK_PANEL_STUB,
             reply_markup=quick_panel_keyboard(balance, mode_label=_ready_mode_label(mode)),
+            disable_notification=True,
         )
     except Exception:
-        logging.debug("quick panel refresh failed", exc_info=True)
+        logging.warning("quick panel refresh failed (reply-клавиатура могла не обновиться)", exc_info=True)
 
 
 def _budget_source_label(source: str) -> str:

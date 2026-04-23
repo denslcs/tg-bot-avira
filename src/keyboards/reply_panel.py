@@ -7,10 +7,13 @@ def quick_panel_keyboard(balance: int | None = None, mode_label: str = "Medium")
         if isinstance(balance, int) and balance >= 0
         else "👤 Профиль"
     )
+    # «Режим» на отдельной строке: в одном ряду с «Реф. система» на узких экранах вторая кнопка
+    # иногда не помещается / не рисуется — кажется, что панель пропала.
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=prof_btn), KeyboardButton(text="🖥 Меню")],
-            [KeyboardButton(text="🫂 Реф. система"), KeyboardButton(text=f"🎛 Режим: {mode_label}")],
+            [KeyboardButton(text="🫂 Реф. система")],
+            [KeyboardButton(text=f"🎛 Режим: {mode_label}")],
         ],
         resize_keyboard=True,
         is_persistent=True,
