@@ -1917,6 +1917,44 @@ def _ready_mode_model_human(mode: str) -> str:
     return "Chat Gpt Image 2"
 
 
+def _is_chatgpt_image2_ready_model(model_id: str | None) -> bool:
+    m = (model_id or "").strip().lower()
+    if not m:
+        return False
+    premium_default = (
+        (OPENROUTER_IMAGE_GPT54_IMAGE2_MODEL or "").strip()
+        or _READY_MODE_MODEL_BY_ID[_READY_MODE_PREMIUM]
+    ).lower()
+    if m == premium_default:
+        return True
+    if "gpt" in m and "image" in m and ("2" in m or "54" in m):
+        return True
+    return False
+
+
+def _mmorpg_premium_gpt2_refs_hint_boost() -> str:
+    return (
+        " PREMIUM-GPT2 VARIETY BOOST (apply strictly, do not print as text on image): "
+        "Produce a distinctly different race/class archetype and gear language each run; avoid repeating common outputs "
+        "like similar elf-mage looks. Build identity-diverse silhouettes, race anatomy cues, weapon/focus type, and class-specific "
+        "material language so two consecutive generations are visually non-overlapping. "
+        "HARD NO-CLONE: if composition, race-class read, armor silhouette, or color script resembles a prior common pattern, "
+        "internally re-roll to a contrasting archetype while preserving user identity and base prompt canon."
+    )
+
+
+def _premium_gpt2_face_to_body_integration_boost() -> str:
+    return (
+        " PREMIUM-GPT2 FACE-TO-BODY INTEGRATION (strict): "
+        "Preserve the user's face identity with high fidelity, but integrate it naturally into a newly composed scene/body. "
+        "Do NOT produce a pasted-face look or a near-selfie reconstruction. "
+        "Keep anatomically correct full-body proportions: head size, neck width, shoulder width, torso/limb lengths, hands and posture must be coherent. "
+        "Match neck/jaw transition, skin tone continuity (face-to-neck-to-body), and lighting continuity across the whole character. "
+        "Expression and eye focus must fit the scene mood and pose intent (battle-ready, calm, intense, romantic, etc.), not a neutral reused selfie expression. "
+        "Body language should be purpose-driven for the concept (stance, weight shift, arm/hand placement), while identity remains the same person."
+    )
+
+
 def _ready_idea_cost_for_plan_and_mode(plan_id: str | None, mode: str | None) -> int:
     m = _ready_mode_normalize(mode)
     p = (plan_id or "").strip().lower()
@@ -4311,16 +4349,6 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
                 "Style: childlike uneven hand-drawn street lettering; pastel pink, yellow, blue, orange letters (vary hues across words/letters as in classic courtyard chalk art); must stay fully readable. "
                 "The chalk portrait below must match image #1 per base prompt. No substitute wording, no extra lines of copy beyond this quote, no watermark."
             )
-        is_fantasy_3d_title = (title or "").strip() == _FANTASY_3D_GAME_TITLE
-        prompt = _build_ready_prompt(
-            base_prompt,
-            callback.from_user.username,
-            include_telegram_nick=include_nick,
-            refs_hint=refs_hint,
-            skip_identity_lock_footer=(title.strip() == _OBJECT_IN_SCENE_TITLE),
-            no_reference_images=(is_fantasy_3d_title and not extra_refs),
-            style_reference_images_only=(is_fantasy_3d_title and bool(extra_refs)),
-        )
         selected_ready_model = (
             (OPENROUTER_IMAGE_GEMINI_PRO_MODEL or "").strip() or "google/gemini-3-pro-image-preview"
             if is_ronaldo_ready
@@ -4330,6 +4358,26 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             30
             if is_ronaldo_ready
             else await _ready_idea_cost_for_user_mode(user_id, ready_mode)
+        )
+        if _ready_mode_normalize(ready_mode) == _READY_MODE_PREMIUM and _is_chatgpt_image2_ready_model(
+            selected_ready_model
+        ):
+            refs_hint = f"{refs_hint}{_premium_gpt2_face_to_body_integration_boost()}"
+        if (
+            (title or "").strip() == _MMORPG_HERO_TITLE
+            and _ready_mode_normalize(ready_mode) == _READY_MODE_PREMIUM
+            and _is_chatgpt_image2_ready_model(selected_ready_model)
+        ):
+            refs_hint = f"{refs_hint}{_mmorpg_premium_gpt2_refs_hint_boost()}"
+        is_fantasy_3d_title = (title or "").strip() == _FANTASY_3D_GAME_TITLE
+        prompt = _build_ready_prompt(
+            base_prompt,
+            callback.from_user.username,
+            include_telegram_nick=include_nick,
+            refs_hint=refs_hint,
+            skip_identity_lock_footer=(title.strip() == _OBJECT_IN_SCENE_TITLE),
+            no_reference_images=(is_fantasy_3d_title and not extra_refs),
+            style_reference_images_only=(is_fantasy_3d_title and bool(extra_refs)),
         )
         model_override = selected_ready_model
         await state.clear()
