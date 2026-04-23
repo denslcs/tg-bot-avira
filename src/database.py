@@ -2442,6 +2442,27 @@ async def set_meta(key: str, value: str) -> None:
         await db.commit()
 
 
+_READY_MODE_ALLOWED: frozenset[str] = frozenset({"fast", "medium", "premium"})
+_READY_MODE_DEFAULT: str = "medium"
+
+
+def _normalize_ready_mode(raw: str | None) -> str:
+    value = (raw or "").strip().lower()
+    return value if value in _READY_MODE_ALLOWED else _READY_MODE_DEFAULT
+
+
+async def get_user_ready_mode(user_id: int) -> str:
+    key = f"user_ready_mode:{int(user_id)}"
+    return _normalize_ready_mode(await get_meta(key))
+
+
+async def set_user_ready_mode(user_id: int, mode: str) -> str:
+    normalized = _normalize_ready_mode(mode)
+    key = f"user_ready_mode:{int(user_id)}"
+    await set_meta(key, normalized)
+    return normalized
+
+
 async def count_new_users_days(days: int) -> int:
     async with open_db() as db:
         async with db.execute(

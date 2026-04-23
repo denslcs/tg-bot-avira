@@ -53,6 +53,7 @@ from src.database import (
     get_daily_image_generation_usage,
     get_last_image_context,
     get_nonsub_image_quota_status,
+    get_user_ready_mode,
     get_user_admin_profile,
     increment_user_generated_images_total,
     release_daily_image_generation,
@@ -90,7 +91,6 @@ from src.keyboards.callback_data import (
     CB_READY_CONFIRM,
     CB_READY_IDEAS,
     CB_READY_IDEAS_HUB,
-    CB_READY_MODE_PREFIX,
     CB_READY_NAV_PREFIX,
     CB_READY_PHOTO_BACK,
     CB_BACK_TO_READY_IDEAS,
@@ -1582,7 +1582,6 @@ def _ready_browser_keyboard(
     back_callback: str = CB_MENU_BACK_START,
     *,
     category_slug: str | None = None,
-    selected_mode: str = _READY_MODE_DEFAULT,
     single_shortcut_mode: bool = False,
 ) -> InlineKeyboardMarkup:
     prev_i = (index - 1) % total
@@ -1616,24 +1615,6 @@ def _ready_browser_keyboard(
                 ],
             ]
         )
-    mode = _ready_mode_normalize(selected_mode)
-    modes_row = [
-        InlineKeyboardButton(
-            text=("✅ ⚡ Fast" if mode == _READY_MODE_FAST else "⚡ Fast"),
-            callback_data=f"{CB_READY_MODE_PREFIX}{_READY_MODE_FAST}",
-            style=BTN_PRIMARY,
-        ),
-        InlineKeyboardButton(
-            text=("✅ 🚀 Medium" if mode == _READY_MODE_MEDIUM else "🚀 Medium"),
-            callback_data=f"{CB_READY_MODE_PREFIX}{_READY_MODE_MEDIUM}",
-            style=BTN_PRIMARY,
-        ),
-        InlineKeyboardButton(
-            text=("✅ 💎 Premium" if mode == _READY_MODE_PREMIUM else "💎 Premium"),
-            callback_data=f"{CB_READY_MODE_PREFIX}{_READY_MODE_PREMIUM}",
-            style=BTN_PRIMARY,
-        ),
-    ]
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -1656,7 +1637,6 @@ def _ready_browser_keyboard(
                     icon_custom_emoji_id="5260450573768990626",
                 ),
             ],
-            modes_row,
             [InlineKeyboardButton(**cats_btn)],
             [
                 InlineKeyboardButton(
@@ -1793,7 +1773,7 @@ _READY_IDEA_DEFAULT_COST: int = 45
 _READY_MODE_FAST = "fast"
 _READY_MODE_MEDIUM = "medium"
 _READY_MODE_PREMIUM = "premium"
-_READY_MODE_DEFAULT = _READY_MODE_FAST
+_READY_MODE_DEFAULT = _READY_MODE_MEDIUM
 _READY_MODE_ALLOWED = {_READY_MODE_FAST, _READY_MODE_MEDIUM, _READY_MODE_PREMIUM}
 
 _READY_MODE_MODEL_BY_ID: dict[str, str] = {
@@ -2950,7 +2930,7 @@ async def _send_ready_ideas_screen(
             await state.update_data(
                 _ready_back_cb=back_callback,
                 _ready_user_id=user_id,
-                _ready_mode=_READY_MODE_DEFAULT,
+                _ready_mode=await get_user_ready_mode(user_id),
                 _ready_category_album_ids=[message.message_id],
             )
             await _set_img_flow_anchor(state, message)
@@ -2967,7 +2947,7 @@ async def _send_ready_ideas_screen(
     await state.update_data(
         _ready_back_cb=back_callback,
         _ready_user_id=user_id,
-        _ready_mode=_READY_MODE_DEFAULT,
+        _ready_mode=await get_user_ready_mode(user_id),
         _ready_category_album_ids=album_ids,
     )
     await _set_img_flow_anchor(state, first)
@@ -3117,7 +3097,6 @@ async def _open_ready_card(
         total,
         back_callback=back_callback,
         category_slug=category,
-        selected_mode=ready_mode,
         single_shortcut_mode=single_shortcut_mode,
     )
     photo_path = _ready_idea_listing_photo_path(title)
@@ -3181,29 +3160,6 @@ async def ready_pick_category(callback: CallbackQuery, state: FSMContext) -> Non
     await callback.answer()
     category = callback.data.replace(CB_READY_CAT_PREFIX, "", 1).strip().lower()
     await _open_ready_card(callback.message, state, category=category, index=0, edit=True)
-
-
-@router.callback_query(F.data.startswith(CB_READY_MODE_PREFIX))
-async def ready_pick_mode(callback: CallbackQuery, state: FSMContext) -> None:
-    if callback.from_user is None or callback.message is None or not callback.data:
-        await callback.answer("Ошибка запроса.", show_alert=True)
-        return
-    mode = _ready_mode_normalize(callback.data.replace(CB_READY_MODE_PREFIX, "", 1))
-    data = await state.get_data()
-    category = str(data.get("_ready_category") or "").strip().lower()
-    idx = int(data.get("_ready_index") or 0)
-    if not category:
-        await callback.answer("Сначала выбери идею.", show_alert=True)
-        return
-    await state.update_data(_ready_mode=mode, _ready_user_id=callback.from_user.id)
-    await _open_ready_card(callback.message, state, category=category, index=idx, edit=True)
-    await callback.answer()
-    await callback.message.answer(
-        "<b>Выбран режим:</b> "
-        f"<b>{esc(mode)}</b>\n"
-        f"Генерирует: <b>{esc(_ready_mode_model_human(mode))}</b>",
-        parse_mode=HTML,
-    )
 
 
 @router.callback_query(F.data.startswith(CB_READY_NAV_PREFIX))

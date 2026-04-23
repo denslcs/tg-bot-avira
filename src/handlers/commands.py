@@ -46,7 +46,9 @@ from src.database import (
     get_referral_subscription_bonus_total,
     get_referral_paid_count,
     get_user_admin_profile,
+    get_user_ready_mode,
     subscription_is_active,
+    set_user_ready_mode,
     take_credits_with_reason,
 )
 from src.subscription_catalog import PLANS
@@ -113,11 +115,26 @@ def _back_row(back_callback: str) -> list[InlineKeyboardButton]:
 # Невидимый символ — только чтобы обновить reply-клавиатуру с актуальным балансом.
 _QUICK_PANEL_STUB = "\u200b"
 
+_READY_MODE_LABEL_BY_ID: dict[str, str] = {
+    "fast": "Fast",
+    "medium": "Medium",
+    "premium": "Premium",
+}
+
+
+def _ready_mode_label(mode: str | None) -> str:
+    return _READY_MODE_LABEL_BY_ID.get((mode or "").strip().lower(), "Medium")
+
 
 async def _refresh_quick_panel(bot: Bot, chat_id: int, user_id: int) -> None:
     try:
         balance = await get_credits(user_id)
-        await bot.send_message(chat_id, _QUICK_PANEL_STUB, reply_markup=quick_panel_keyboard(balance))
+        mode = await get_user_ready_mode(user_id)
+        await bot.send_message(
+            chat_id,
+            _QUICK_PANEL_STUB,
+            reply_markup=quick_panel_keyboard(balance, mode_label=_ready_mode_label(mode)),
+        )
     except Exception:
         logging.debug("quick panel refresh failed", exc_info=True)
 
@@ -369,6 +386,7 @@ async def send_main_menu_screen(
     """Главный экран как после /start: баланс в тексте, меню, при наличии — фото-баннер."""
     await ensure_user(user_id, username)
     balance = await get_credits(user_id)
+    ready_mode = await get_user_ready_mode(user_id)
     text = _main_screen_text(balance, "")
     kb = start_menu_keyboard(balance)
     banner = _start_banner_path()
@@ -538,7 +556,10 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         )
     else:
         await message.answer(text, reply_markup=kb, parse_mode=HTML)
-    await message.answer("Панель быстрого доступа включена ⤵️", reply_markup=quick_panel_keyboard(balance))
+    await message.answer(
+        "Панель быстрого доступа включена ⤵️",
+        reply_markup=quick_panel_keyboard(balance, mode_label=_ready_mode_label(ready_mode)),
+    )
 
     ann_text = START_ANNOUNCEMENT.strip() if START_ANNOUNCEMENT else ""
     if START_ANNOUNCEMENT_IMAGE:
@@ -581,6 +602,38 @@ async def quick_panel_ref(message: Message) -> None:
     if not message.from_user:
         return
     await deliver_referral_screen(message.bot, message.from_user.id, message.from_user.username, message)
+
+
+@router.message((F.text == "⚡ Fast") | (F.text == "🚀 Medium") | (F.text == "💎 Premium"))
+async def quick_panel_ready_mode_select(message: Message) -> None:
+    if not message.from_user:
+        return
+    text = (message.text or "").strip().lower()
+    target = "medium"
+    if "fast" in text:
+        target = "fast"
+    elif "premium" in text:
+        target = "premium"
+    mode = await set_user_ready_mode(message.from_user.id, target)
+    balance = await get_credits(message.from_user.id)
+    await message.answer(
+        f"Режим готовых идей: <b>{_ready_mode_label(mode)}</b>",
+        parse_mode=HTML,
+        reply_markup=quick_panel_keyboard(balance, mode_label=_ready_mode_label(mode)),
+    )
+
+
+@router.message(F.text.startswith("🎛 Режим:"))
+async def quick_panel_ready_mode_hint(message: Message) -> None:
+    if not message.from_user:
+        return
+    mode = await get_user_ready_mode(message.from_user.id)
+    await message.answer(
+        "Выбери режим кнопками ниже:\n"
+        "⚡ Fast / 🚀 Medium / 💎 Premium\n"
+        f"Текущий: <b>{_ready_mode_label(mode)}</b>",
+        parse_mode=HTML,
+    )
 
 
 @router.message((F.text == "История бюджета") | (F.text == "📊 История бюджета"))

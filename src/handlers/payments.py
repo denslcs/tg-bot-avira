@@ -360,6 +360,14 @@ async def _active_bonus_pack_discount_multiplier(user_id: int) -> float | None:
     return BONUS_PACK_DISCOUNT_MULTIPLIER_BY_PLAN.get(plan_id)
 
 
+async def _has_active_starter_or_universe(user_id: int) -> bool:
+    """Back-compat helper used in tests and older flows."""
+    prof = await get_user_admin_profile(user_id)
+    if not prof or not subscription_is_active(prof.subscription_ends_at):
+        return False
+    return (prof.subscription_plan or "").strip().lower() in ("starter", "universe")
+
+
 async def _expected_stars_amount(*, kind: str, item_id: str, user_id: int) -> int | None:
     """Ожидаемая сумма Stars для payload (plan/pack) с учётом скидок."""
     if kind == "plan":
@@ -376,9 +384,18 @@ async def _expected_stars_amount(*, kind: str, item_id: str, user_id: int) -> in
     return None
 
 
-def _discount_pack_values(pack_id: str, *, discount_multiplier: float | None) -> tuple[int, float, int, bool]:
+def _discount_pack_values(
+    pack_id: str,
+    *,
+    discount_multiplier: float | None = None,
+    apply_universe_discount: bool | None = None,
+) -> tuple[int, float, int, bool]:
     """Цена пакета с учётом скидки активной подписки (₽, $, ⭐)."""
     p = BONUS_PACKS[pack_id]
+    if apply_universe_discount is not None:
+        discount_multiplier = (
+            BONUS_PACK_DISCOUNT_MULTIPLIER_BY_PLAN["universe"] if apply_universe_discount else None
+        )
     if discount_multiplier is None:
         return p.price_rub, p.price_usd, p.stars, False
     m = float(discount_multiplier)

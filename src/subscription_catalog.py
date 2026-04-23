@@ -153,6 +153,8 @@ BONUS_PACK_DISCOUNT_MULTIPLIER_BY_PLAN: dict[str, float] = {
     "galaxy": 0.95,
     "universe": 0.85,
 }
+# Back-compat alias for tests/legacy imports.
+UNIVERSE_BONUS_PACK_DISCOUNT_MULTIPLIER: float = BONUS_PACK_DISCOUNT_MULTIPLIER_BY_PLAN["universe"]
 
 BONUS_PACKS: dict[str, BonusPack] = {
     "pack300": BonusPack(
