@@ -543,6 +543,7 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
             bonus_note = "\n🎉 Реферальный бонус: тебе +10 кредитов."
             logging.info("referral applied: invitee=%s inviter=%s", user_id, referrer_id)
     balance = await get_credits(user_id)
+    ready_mode = await get_user_ready_mode(user_id)
 
     text = _main_screen_text(balance, bonus_note)
     kb = start_menu_keyboard(balance)
@@ -597,7 +598,11 @@ async def quick_panel_support(message: Message) -> None:
     await cmd_support(message)
 
 
-@router.message((F.text == "🫂 Реф. система") | (F.text == "👥 Реф. система"))
+@router.message(
+    (F.text == "🫂 Реф. система")
+    | (F.text == "👥 Реф. система")
+    | (F.text == "🎥 Реф. система")
+)
 async def quick_panel_ref(message: Message) -> None:
     if not message.from_user:
         return
