@@ -714,12 +714,19 @@ async def quick_panel_ready_mode_hint(message: Message) -> None:
 
 
 @router.callback_query(F.data.startswith(CB_READY_MODE_LEGACY_PREFIX))
-async def ready_mode_legacy_inline_disabled(callback: CallbackQuery) -> None:
-    """Старые inline-кнопки режима на карточках «Готовых идей» (если остались в чате)."""
-    await callback.answer(
-        "Режим для готовых идей выбирается только внизу: кнопка «🎛 Режим» на панели быстрого доступа.",
-        show_alert=True,
-    )
+async def ready_mode_legacy_inline(callback: CallbackQuery) -> None:
+    """Старые ``img:idea_mode:*`` на карточках в чате — применяем режим в БД, не перерисовываем сообщение (это карточка идеи)."""
+    if not callback.from_user or not callback.message:
+        await callback.answer()
+        return
+    suffix = (callback.data or "")[len(CB_READY_MODE_LEGACY_PREFIX) :].strip().lower()
+    if suffix not in _READY_MODE_IDS:
+        await callback.answer("Неверный режим", show_alert=True)
+        return
+    mode = await set_user_ready_mode(callback.from_user.id, suffix)
+    await callback.answer("Сохранено")
+    await _refresh_quick_panel(callback.bot, callback.message.chat.id, callback.from_user.id)
+    await callback.message.answer(_ready_mode_activation_html(mode), parse_mode=HTML)
 
 
 @router.callback_query(F.data.startswith(CB_READY_MODE_PREFIX))

@@ -1,6 +1,10 @@
 """
-Один актуальный inline-интерфейс на чат: перед новой панелью снимаем inline-клавиатуры
-со всех ранее отправленных ботом сообщений (кроме правки того же сообщения на месте).
+Один актуальный «singleton» inline-интерфейс на чат для главных меню/оплат: перед новой
+панелью снимаем inline-клавиатуры с ранее отслеживаемых сообщений.
+
+Исключения (не трекаем как singleton, чтобы не сносить соседние клавиатуры):
+- «Готовые идеи» и шаги сценария (callback ``img:idea…``, ``img:back_ready…``, …);
+- выбор режима готовых идей (только ``menu:ready_mode:*``).
 
 ReplyKeyboard (нижняя панель) не трогаем — только InlineKeyboardMarkup.
 
@@ -28,10 +32,49 @@ from aiogram.methods import (
 from aiogram.methods.base import TelegramMethod
 from aiogram.types import InlineKeyboardMarkup
 
+from src.keyboards.callback_data import CB_READY_MODE_PREFIX
+
 logger = logging.getLogger(__name__)
 
 _locks: dict[Any, asyncio.Lock] = defaultdict(asyncio.Lock)
 _tracked: dict[Any, list[int]] = defaultdict(list)
+
+
+def _markup_callback_datas(markup: InlineKeyboardMarkup | None) -> list[str]:
+    if not markup or not markup.inline_keyboard:
+        return []
+    out: list[str] = []
+    for row in markup.inline_keyboard:
+        for btn in row:
+            cd = getattr(btn, "callback_data", None)
+            if cd:
+                out.append(str(cd))
+    return out
+
+
+def _is_panel_ready_mode_only_markup(markup: InlineKeyboardMarkup | None) -> bool:
+    cds = _markup_callback_datas(markup)
+    if not cds:
+        return False
+    return all(x.startswith(CB_READY_MODE_PREFIX) for x in cds)
+
+
+def _is_ready_ideas_coexist_markup(markup: InlineKeyboardMarkup | None) -> bool:
+    """Inline «Готовых идей» и шагов внутри сценария — не держим в singleton-трекере."""
+    for x in _markup_callback_datas(markup):
+        if x.startswith("img:idea"):
+            return True
+        if x.startswith("img:back_ready"):
+            return True
+        if x.startswith("img:regen_ready"):
+            return True
+        if x.startswith("img:ready_result"):
+            return True
+    return False
+
+
+def _exempt_from_singleton_tracking(markup: InlineKeyboardMarkup | None) -> bool:
+    return _is_panel_ready_mode_only_markup(markup) or _is_ready_ideas_coexist_markup(markup)
 
 
 def _is_inline_markup(markup: Any) -> bool:
@@ -43,8 +86,13 @@ async def relinquish_inline_panels_except(
     chat_id: Any,
     *,
     keep_message_id: int | None = None,
+    track_keep_after: bool = True,
 ) -> None:
-    """Снять inline-клавиатуры со всех отслеживаемых сообщений, кроме ``keep_message_id``."""
+    """Снять inline-клавиатуры со всех отслеживаемых сообщений, кроме ``keep_message_id``.
+
+    Если ``track_keep_after`` ложь — после правки не добавляем ``keep_message_id`` в singleton-трекер
+    (нужно для «Готовых идей», чтобы выбор режима не сносил якорь сценария).
+    """
     key = chat_id
     async with _locks[key]:
         mids = list(_tracked.get(key, []))
@@ -60,7 +108,7 @@ async def relinquish_inline_panels_except(
                     mid,
                     exc_info=True,
                 )
-        if keep_message_id is not None:
+        if keep_message_id is not None and track_keep_after:
             _tracked[key] = [keep_message_id]
         else:
             _tracked[key] = []
@@ -102,8 +150,12 @@ def apply_exclusive_inline_panels() -> None:
                 and not method.inline_message_id
                 and _is_inline_markup(method.reply_markup)
             ):
+                ex = _exempt_from_singleton_tracking(method.reply_markup)
                 await relinquish_inline_panels_except(
-                    self, method.chat_id, keep_message_id=method.message_id
+                    self,
+                    method.chat_id,
+                    keep_message_id=method.message_id,
+                    track_keep_after=not ex,
                 )
         elif isinstance(method, EditMessageText):
             if (
@@ -112,8 +164,12 @@ def apply_exclusive_inline_panels() -> None:
                 and not method.inline_message_id
                 and _is_inline_markup(method.reply_markup)
             ):
+                ex = _exempt_from_singleton_tracking(method.reply_markup)
                 await relinquish_inline_panels_except(
-                    self, method.chat_id, keep_message_id=method.message_id
+                    self,
+                    method.chat_id,
+                    keep_message_id=method.message_id,
+                    track_keep_after=not ex,
                 )
         elif isinstance(method, EditMessageMedia):
             if (
@@ -122,8 +178,12 @@ def apply_exclusive_inline_panels() -> None:
                 and not method.inline_message_id
                 and _is_inline_markup(method.reply_markup)
             ):
+                ex = _exempt_from_singleton_tracking(method.reply_markup)
                 await relinquish_inline_panels_except(
-                    self, method.chat_id, keep_message_id=method.message_id
+                    self,
+                    method.chat_id,
+                    keep_message_id=method.message_id,
+                    track_keep_after=not ex,
                 )
         elif isinstance(method, EditMessageReplyMarkup):
             if (
@@ -131,44 +191,54 @@ def apply_exclusive_inline_panels() -> None:
                 and method.message_id is not None
                 and _is_inline_markup(method.reply_markup)
             ):
+                ex = _exempt_from_singleton_tracking(method.reply_markup)
                 await relinquish_inline_panels_except(
-                    self, method.chat_id, keep_message_id=method.message_id
+                    self,
+                    method.chat_id,
+                    keep_message_id=method.message_id,
+                    track_keep_after=not ex,
                 )
 
         result = await orig_call(self, method, request_timeout=request_timeout)
 
         # --- после успешного ответа
         if isinstance(method, SendMessage) and _is_inline_markup(method.reply_markup):
-            remember_inline_panel_message(method.chat_id, result.message_id)
+            if not _exempt_from_singleton_tracking(method.reply_markup):
+                remember_inline_panel_message(method.chat_id, result.message_id)
         elif isinstance(method, SendPhoto) and _is_inline_markup(method.reply_markup):
-            remember_inline_panel_message(method.chat_id, result.message_id)
+            if not _exempt_from_singleton_tracking(method.reply_markup):
+                remember_inline_panel_message(method.chat_id, result.message_id)
         elif isinstance(method, CopyMessage) and _is_inline_markup(method.reply_markup):
-            remember_inline_panel_message(method.chat_id, result.message_id)
+            if not _exempt_from_singleton_tracking(method.reply_markup):
+                remember_inline_panel_message(method.chat_id, result.message_id)
         elif isinstance(method, EditMessageCaption) and (
             method.chat_id is not None
             and method.message_id is not None
             and not method.inline_message_id
             and _is_inline_markup(method.reply_markup)
         ):
-            remember_inline_panel_message(method.chat_id, method.message_id)
+            if not _exempt_from_singleton_tracking(method.reply_markup):
+                remember_inline_panel_message(method.chat_id, method.message_id)
         elif isinstance(method, EditMessageText) and (
             method.chat_id is not None
             and method.message_id is not None
             and not method.inline_message_id
             and _is_inline_markup(method.reply_markup)
         ):
-            remember_inline_panel_message(method.chat_id, method.message_id)
+            if not _exempt_from_singleton_tracking(method.reply_markup):
+                remember_inline_panel_message(method.chat_id, method.message_id)
         elif isinstance(method, EditMessageMedia) and (
             method.chat_id is not None
             and method.message_id is not None
             and not method.inline_message_id
             and _is_inline_markup(method.reply_markup)
         ):
-            remember_inline_panel_message(method.chat_id, method.message_id)
+            if not _exempt_from_singleton_tracking(method.reply_markup):
+                remember_inline_panel_message(method.chat_id, method.message_id)
         elif isinstance(method, EditMessageReplyMarkup) and method.chat_id is not None and method.message_id is not None:
             if method.reply_markup is None:
                 _forget_message(method.chat_id, method.message_id)
-            elif _is_inline_markup(method.reply_markup):
+            elif _is_inline_markup(method.reply_markup) and not _exempt_from_singleton_tracking(method.reply_markup):
                 remember_inline_panel_message(method.chat_id, method.message_id)
 
         return result
