@@ -129,7 +129,6 @@ def _ready_mode_label(mode: str | None) -> str:
 
 
 _READY_MODE_IDS: frozenset[str] = frozenset({"fast", "medium", "premium"})
-_READY_PICKER_QUALITY: dict[str, str] = {"fast": "1K", "medium": "2K", "premium": "4K"}
 
 
 def _ready_mode_picker_normalize(mode: str | None) -> str:
@@ -150,18 +149,16 @@ def _ready_mode_selected_line(mode: str) -> str:
         return "⚡ Fast"
     if m == "medium":
         return "🚀 Medium"
-    return "💎 PRO"
+    return "💎 Premium"
 
 
 def _ready_mode_picker_body_html(*, balance: int, mode: str, cost: int) -> str:
     m = _ready_mode_picker_normalize(mode)
     sel = _ready_mode_selected_line(m)
-    qual = _READY_PICKER_QUALITY[m]
     return (
         "<b>🎛 Выбери режим генерации</b>\n"
         f"Баланс: <b>{esc(str(balance))}</b> {CREDITS_COIN_TG_HTML}\n"
         f"Выбрано: <b>{sel}</b>\n"
-        f"Качество: <b>{esc(qual)}</b>\n"
         f"Стоимость за генерацию: <b>{esc(str(cost))}</b> {CREDITS_COIN_TG_HTML}"
     )
 
@@ -170,9 +167,9 @@ def _ready_mode_picker_markup(current_mode: str) -> InlineKeyboardMarkup:
     cur = _ready_mode_picker_normalize(current_mode)
     row: list[InlineKeyboardButton] = []
     for mode_id, label in (
-        ("fast", "Fast"),
-        ("medium", "Medium"),
-        ("premium", "💎 PRO"),
+        ("fast", "⚡ Fast"),
+        ("medium", "🚀 Medium"),
+        ("premium", "💎 Premium"),
     ):
         selected = mode_id == cur
         text = f"{label} ✅" if selected else label
