@@ -131,6 +131,8 @@ def _ready_mode_label(mode: str | None) -> str:
 
 
 _READY_MODE_IDS: frozenset[str] = frozenset({"fast", "medium", "premium"})
+_READY_MODE_HELP_PREFIX = "menu:ready_mode_help:"
+_READY_MODE_BACK_PREFIX = "menu:ready_mode_back:"
 
 # Клиенты Telegram часто добавляют U+FE0F к эмодзи в тексте кнопки (🎛️ vs 🎛) — фильтры без нормализации не срабатывают.
 _U_FE0F = "\ufe0f"
@@ -195,6 +197,19 @@ def _parse_ready_mode_panel_callback(data: str | None) -> tuple[str | None, int 
     return None, None
 
 
+def _parse_ready_mode_gen_callback(data: str | None, *, prefix: str) -> int | None:
+    if not data or not data.startswith(prefix):
+        return None
+    tail = data[len(prefix) :].strip()
+    if not tail:
+        return None
+    try:
+        g = int(tail)
+    except ValueError:
+        return None
+    return g if g > 0 else None
+
+
 def _ready_mode_picker_normalize(mode: str | None) -> str:
     m = (mode or "").strip().lower()
     return m if m in _READY_MODE_IDS else "medium"
@@ -238,6 +253,23 @@ def _ready_mode_picker_body_html(*, balance: int, mode: str, cost: int) -> str:
     )
 
 
+def _ready_mode_help_body_html() -> str:
+    return (
+        "<b>🎛 Что выбрать?</b>\n\n"
+        "Режимы — это выбор модели, которая будет генерировать готовые идеи. "
+        "Каждый режим по-своему уникален: один генерирует быстрее, другой качественнее.\n\n"
+        "<b>⚡ Fast</b> — базовый режим, генерирует быстрее всех при помощи модели <b>Nano Banana 2</b>. "
+        "Некоторые готовые идеи делает не хуже остальных, но где нужен максимальный реализм — может уступать.\n\n"
+        "<b>🚀 Medium</b> — основной режим для готовых идей (стоит по умолчанию). "
+        "Генерирует лучше Fast, хорошо сохраняет черты лица и точнее подгоняет под промпт. "
+        "Модель: <b>Nano Banana PRO</b>.\n\n"
+        "<b>💎 Premium</b> — самый дорогой режим на новой модели <b>Chat GPT Image 2</b>. "
+        "Его сильная сторона — реализм и максимально живое фото, но генерирует заметно дольше предыдущих режимов.\n\n"
+        "<blockquote><i>Рекомендация: если бот не смог сгенерировать картинку или плохо сгенерировал лицо, попробуй поменять режим на другой. "
+        "Если какой-то из режимов очень плохо справляется и не оправдывает ваши ожидания — всегда можно написать в поддержку, мы обязательно решим эту проблему!</i></blockquote>"
+    )
+
+
 def _ready_mode_picker_markup(current_mode: str, *, gen: int) -> InlineKeyboardMarkup:
     cur = _ready_mode_picker_normalize(current_mode)
     row: list[InlineKeyboardButton] = []
@@ -255,7 +287,20 @@ def _ready_mode_picker_markup(current_mode: str, *, gen: int) -> InlineKeyboardM
         if selected:
             kw["style"] = BTN_PRIMARY
         row.append(InlineKeyboardButton(**kw))
-    return InlineKeyboardMarkup(inline_keyboard=[row])
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            row,
+            [InlineKeyboardButton(text="❓ Что выбрать?", callback_data=f"{_READY_MODE_HELP_PREFIX}{gen}")],
+        ]
+    )
+
+
+def _ready_mode_help_markup(*, gen: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"{_READY_MODE_BACK_PREFIX}{gen}")]
+        ]
+    )
 
 
 async def _send_ready_mode_picker(message: Message, user_id: int, state: FSMContext) -> None:
@@ -328,6 +373,8 @@ def _budget_source_label(source: str) -> str:
         "admin_take": "Админ списал",
         "image_generate": "Генерация изображения",
         "ready_idea_generate": "Готовая идея",
+        "image_refund": "Возврат за генерацию",
+        "ready_idea_refund": "Возврат за готовую идею",
         "subscription_bonus": "Бонус подписки",
         "bonus_pack": "Бонус-пакет",
         "subscription_purchase": "Покупка подписки",
@@ -815,6 +862,31 @@ async def quick_panel_ready_mode_hint(message: Message, state: FSMContext) -> No
     await _send_ready_mode_picker(message, message.from_user.id, state)
 
 
+async def _ready_mode_picker_is_current_message(
+    state: FSMContext,
+    *,
+    callback: CallbackQuery,
+    tap_gen: int | None,
+) -> bool:
+    data = await state.get_data()
+    stored_gen = _read_ready_mode_picker_generation(data)
+    stored_mid = data.get("_ready_mode_picker_message_id")
+    stored_chat = data.get("_ready_mode_picker_chat_id")
+    cur = callback.message
+    if cur is None:
+        return False
+    mid_ok = isinstance(stored_mid, int) and isinstance(stored_chat, int)
+    if stored_gen is not None:
+        return bool(
+            tap_gen is not None
+            and tap_gen == stored_gen
+            and mid_ok
+            and cur.message_id == stored_mid
+            and cur.chat.id == stored_chat
+        )
+    return tap_gen is None
+
+
 @router.callback_query(F.data.startswith(CB_READY_MODE_LEGACY_PREFIX))
 async def ready_mode_legacy_inline(callback: CallbackQuery, state: FSMContext) -> None:
     """Старые ``img:idea_mode:*`` на карточках в чате — применяем режим в БД, не перерисовываем сообщение (это карточка идеи)."""
@@ -838,6 +910,54 @@ async def ready_mode_legacy_inline(callback: CallbackQuery, state: FSMContext) -
     await callback.message.answer(_ready_mode_activation_html(mode), parse_mode=HTML)
 
 
+@router.callback_query(F.data.startswith(_READY_MODE_HELP_PREFIX))
+async def quick_panel_ready_mode_help(callback: CallbackQuery, state: FSMContext) -> None:
+    if not callback.from_user or not callback.message:
+        await callback.answer()
+        return
+    tap_gen = _parse_ready_mode_gen_callback(callback.data, prefix=_READY_MODE_HELP_PREFIX)
+    if not await _ready_mode_picker_is_current_message(state, callback=callback, tap_gen=tap_gen):
+        await callback.answer("Это старое меню. Нажми «🎛 Режим» заново.", show_alert=False)
+        return
+    body = _ready_mode_help_body_html()
+    kb = _ready_mode_help_markup(gen=tap_gen or 1)
+    msg = callback.message
+    try:
+        await msg.edit_text(body, parse_mode=HTML, reply_markup=kb)
+    except TelegramBadRequest:
+        try:
+            await msg.edit_caption(caption=body, parse_mode=HTML, reply_markup=kb)
+        except TelegramBadRequest:
+            await msg.answer(body, parse_mode=HTML, reply_markup=kb)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith(_READY_MODE_BACK_PREFIX))
+async def quick_panel_ready_mode_back(callback: CallbackQuery, state: FSMContext) -> None:
+    if not callback.from_user or not callback.message:
+        await callback.answer()
+        return
+    tap_gen = _parse_ready_mode_gen_callback(callback.data, prefix=_READY_MODE_BACK_PREFIX)
+    if not await _ready_mode_picker_is_current_message(state, callback=callback, tap_gen=tap_gen):
+        await callback.answer("Это старое меню. Нажми «🎛 Режим» заново.", show_alert=False)
+        return
+    mode = await get_user_ready_mode(callback.from_user.id)
+    m = _ready_mode_picker_normalize(mode)
+    balance = await get_credits(callback.from_user.id)
+    cost = await _ready_idea_cost_lazy(callback.from_user.id, m)
+    body = _ready_mode_picker_body_html(balance=balance, mode=m, cost=cost)
+    kb = _ready_mode_picker_markup(m, gen=tap_gen or 1)
+    msg = callback.message
+    try:
+        await msg.edit_text(body, parse_mode=HTML, reply_markup=kb)
+    except TelegramBadRequest:
+        try:
+            await msg.edit_caption(caption=body, parse_mode=HTML, reply_markup=kb)
+        except TelegramBadRequest:
+            await msg.answer(body, parse_mode=HTML, reply_markup=kb)
+    await callback.answer()
+
+
 @router.callback_query(F.data.startswith(CB_READY_MODE_PREFIX))
 async def quick_panel_ready_mode_inline(callback: CallbackQuery, state: FSMContext) -> None:
     if not callback.from_user or not callback.message:
@@ -849,34 +969,18 @@ async def quick_panel_ready_mode_inline(callback: CallbackQuery, state: FSMConte
         return
     data = await state.get_data()
     stored_gen = _read_ready_mode_picker_generation(data)
-    stored_mid = data.get("_ready_mode_picker_message_id")
-    stored_chat = data.get("_ready_mode_picker_chat_id")
     cur = callback.message
-    mid_ok = isinstance(stored_mid, int) and isinstance(stored_chat, int)
-    if stored_gen is not None:
-        if (
-            tap_gen is None
-            or tap_gen != stored_gen
-            or not mid_ok
-            or cur.message_id != stored_mid
-            or cur.chat.id != stored_chat
-        ):
+    if not await _ready_mode_picker_is_current_message(state, callback=callback, tap_gen=tap_gen):
+        if stored_gen is not None and cur is not None:
             logging.info(
-                "ready_mode/ignore_stale_picker user_id=%s tap_gen=%s stored_gen=%s msg=%s stored_msg=%s",
+                "ready_mode/ignore_stale_picker user_id=%s tap_gen=%s stored_gen=%s msg=%s",
                 callback.from_user.id,
                 tap_gen,
                 stored_gen,
                 cur.message_id,
-                stored_mid,
             )
-            await callback.answer(
-                "Это старое меню. Нажми «🎛 Режим» и выбери режим в последнем сообщении.",
-                show_alert=False,
-            )
-            return
-    elif tap_gen is not None:
         await callback.answer(
-            "Открой выбор режима заново через «🎛 Режим».",
+            "Это старое меню. Нажми «🎛 Режим» и выбери режим в последнем сообщении.",
             show_alert=False,
         )
         return

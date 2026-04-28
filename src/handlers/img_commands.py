@@ -1218,7 +1218,9 @@ async def _rollback_generation_charge(
     if meta.daily_reserved:
         await release_daily_image_generation(user_id, usage_kind)
     if meta.credit_charged:
-        await add_credits_with_reason(user_id, cost, source="image_refund", details="refund after generation fail")
+        refund_source = "ready_idea_refund" if usage_kind == "ready" else "image_refund"
+        refund_details = "ready generation fail" if usage_kind == "ready" else "self generation fail"
+        await add_credits_with_reason(user_id, cost, source=refund_source, details=refund_details)
     if meta.nonsub_quota_reserved:
         await release_nonsub_image_quota_slot(user_id)
     if meta.nonsub_ready_reserved:
@@ -1477,6 +1479,7 @@ async def _prepare_image_charge_and_daily_slot(
         return True, meta
 
     is_ready = usage_kind == "ready"
+    charge_source = "ready_idea_generate" if is_ready else "image_generate"
 
     if is_ready and not has_active_sub:
         if await try_reserve_nonsub_ready_idea_slot(user_id):
@@ -1493,7 +1496,7 @@ async def _prepare_image_charge_and_daily_slot(
             )
             return False, None
         if charge:
-            ok = await take_credits_with_reason(user_id, cost, source="image_generate", details="manual prompt")
+            ok = await take_credits_with_reason(user_id, cost, source=charge_source, details="ready nonsub")
             if not ok:
                 if meta.nonsub_ready_reserved:
                     await release_nonsub_ready_idea_slot(user_id)
@@ -1511,7 +1514,7 @@ async def _prepare_image_charge_and_daily_slot(
 
     if is_ready and has_active_sub:
         if charge:
-            ok = await take_credits_with_reason(user_id, cost, source="image_generate", details="edit mode")
+            ok = await take_credits_with_reason(user_id, cost, source=charge_source, details="ready sub")
             if not ok:
                 balance = await get_credits(user_id)
                 extra = (
@@ -1540,7 +1543,7 @@ async def _prepare_image_charge_and_daily_slot(
             return False, None
         meta.nonsub_quota_reserved = True
         if charge:
-            ok = await take_credits_with_reason(user_id, cost, source="image_generate", details="manual prompt")
+            ok = await take_credits_with_reason(user_id, cost, source=charge_source, details="self nonsub")
             if not ok:
                 await release_nonsub_image_quota_slot(user_id)
                 balance = await get_credits(user_id)
@@ -1554,7 +1557,7 @@ async def _prepare_image_charge_and_daily_slot(
         return True, meta
 
     if charge:
-        ok = await take_credits_with_reason(user_id, cost, source="image_generate", details="retry generation")
+        ok = await take_credits_with_reason(user_id, cost, source=charge_source, details="self sub")
         if not ok:
             balance = await get_credits(user_id)
             extra = (
@@ -1573,7 +1576,9 @@ async def _prepare_image_charge_and_daily_slot(
     if not await try_reserve_daily_image_generation(user_id, usage_kind):
         used, limit = await get_daily_image_generation_usage(user_id, usage_kind)
         if meta.credit_charged:
-            await add_credits_with_reason(user_id, cost, source="image_refund", details="refund after failed retry")
+            refund_source = "ready_idea_refund" if is_ready else "image_refund"
+            refund_details = "daily slot reject ready" if is_ready else "daily slot reject self"
+            await add_credits_with_reason(user_id, cost, source=refund_source, details=refund_details)
         await message.answer(
             "<b>Лимит занят</b>\n"
             f"<blockquote><i>Параллельный запрос.</i> Сегодня (МСК): <b>{esc(used)}/{esc(limit)}</b>. "
@@ -1837,15 +1842,6 @@ def _ready_category_caption() -> str:
     )
 
 
-_READY_IDEA_COST_BY_PLAN: dict[str, int] = {
-    "starter": 30,
-    "nova": 45,
-    "supernova": 40,
-    "galaxy": 35,
-    "universe": 30,
-}
-_READY_IDEA_DEFAULT_COST: int = 45
-
 _READY_MODE_FAST = "fast"
 _READY_MODE_MEDIUM = "medium"
 _READY_MODE_PREMIUM = "premium"
@@ -1983,14 +1979,6 @@ def _ready_idea_cost_for_plan_and_mode(plan_id: str | None, mode: str | None) ->
     return _READY_MODE_COST_BY_PLAN.get(m, {}).get(p, _READY_MODE_DEFAULT_COST[m])
 
 
-def _ready_idea_cost_for_plan(plan_id: str | None) -> int:
-    return _READY_IDEA_COST_BY_PLAN.get((plan_id or "").strip().lower(), _READY_IDEA_DEFAULT_COST)
-
-
-async def _ready_idea_cost_for_user(user_id: int) -> int:
-    return await _ready_idea_cost_for_user_mode(user_id, _READY_MODE_DEFAULT)
-
-
 async def _ready_idea_cost_for_user_mode(user_id: int, mode: str | None) -> int:
     prof = await get_user_admin_profile(user_id)
     if not prof or not subscription_is_active(prof.subscription_ends_at):
@@ -1999,7 +1987,7 @@ async def _ready_idea_cost_for_user_mode(user_id: int, mode: str | None) -> int:
 
 
 def _ready_generation_cost_html(cost: int | None = None) -> str:
-    shown = int(cost) if cost is not None else _READY_IDEA_DEFAULT_COST
+    shown = int(cost) if cost is not None else _READY_MODE_DEFAULT_COST[_READY_MODE_DEFAULT]
     return f'<tg-emoji emoji-id="5330320040883411678">🗺</tg-emoji> Стоимость генерации: <b>{esc(shown)} кр.</b>'
 
 
@@ -2162,6 +2150,8 @@ async def _start_ready_redo_flow(
     user_id: int,
     username: str | None,
     ctx: LastImageContext,
+    *,
+    back_callback: str = CB_MENU_BACK_START,
 ) -> None:
     """Повтор той же готовой идеи: новые фото, тот же промпт (без скидок по планам)."""
     if ctx.kind != "text" or ctx.usage_kind != "ready":
@@ -2171,7 +2161,14 @@ async def _start_ready_redo_flow(
         await message.answer("Нет данных о фото. Запусти идею из «Готовых идей» заново.")
         return
     if (ctx.ready_idea_title or "").strip() == _MELLSTROY_PHOTO_TITLE:
-        await _send_ready_ideas_screen(message, state, user_id, username, edit=False)
+        await _send_ready_ideas_screen(
+            message,
+            state,
+            user_id,
+            username,
+            edit=False,
+            back_callback=back_callback,
+        )
         return
     base = int(ctx.cost)
     elig = await _user_eligible_redo_half_price(user_id)
@@ -2186,7 +2183,7 @@ async def _start_ready_redo_flow(
         _ready_redo_title=(ctx.ready_idea_title or "").strip(),
         _ready_photos=[],
         _ready_need=len(ctx.refs_file_ids),
-        _ready_back_cb=CB_MENU_BACK_START,
+        _ready_back_cb=back_callback,
     )
     await state.set_state(ImageGenState.ready_waiting_photos)
     await message.answer(
@@ -2950,10 +2947,29 @@ async def cancel_image_flow(callback: CallbackQuery, state: FSMContext) -> None:
     if not callback.from_user or not callback.message:
         await callback.answer()
         return
-    await state.clear()
     user_id = callback.from_user.id
+    data = await state.get_data()
+    cur = await state.get_state()
     await callback.answer()
-    await restore_main_menu_message(callback.message, user_id, callback.from_user.username)
+    if cur is not None and str(cur).startswith("ImageGenState.ready_"):
+        back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
+        await _send_ready_ideas_screen(
+            callback.message,
+            state,
+            user_id,
+            callback.from_user.username,
+            edit=True,
+            back_callback=back_callback,
+        )
+        return
+    await state.clear()
+    back_callback = str(data.get("_img_back_cb") or CB_MENU_BACK_START)
+    await _restore_image_flow_parent_menu(
+        callback,
+        back_callback=back_callback,
+        user_id=user_id,
+        username=callback.from_user.username,
+    )
 
 
 @router.callback_query(F.data == CB_BACK_IMAGE_MODELS)
@@ -3422,10 +3438,55 @@ async def refresh_ready_browsing_anchor(bot: Bot, *, user_id: int, state: FSMCon
         logging.debug("refresh_ready_browsing_anchor: edit failed", exc_info=True)
 
 
+def _state_has_suffix(cur_state: str | None, suffixes: tuple[str, ...]) -> bool:
+    if cur_state is None:
+        return False
+    s = str(cur_state)
+    return any(s.endswith(x) for x in suffixes)
+
+
+async def _guard_stale_result_callback(
+    callback: CallbackQuery,
+    state: FSMContext,
+    *,
+    action_label: str,
+) -> bool:
+    """Не даём старым result-кнопкам сбрасывать активный текущий ImageGenState-сценарий."""
+    cur = await state.get_state()
+    if cur is None:
+        return True
+    s = str(cur)
+    if not s.startswith("ImageGenState"):
+        return True
+    await callback.answer(
+        f"Сначала заверши текущий сценарий. Кнопка «{action_label}» относится к старому сообщению.",
+        show_alert=False,
+    )
+    return False
+
+
+async def _is_current_ready_listing_callback(callback: CallbackQuery, state: FSMContext) -> bool:
+    """Актуальность callback только для листинга ready-идей (cat/nav): защита от старых сообщений."""
+    if callback.message is None:
+        return False
+    data = await state.get_data()
+    ach_chat = data.get("_img_flow_anchor_chat_id")
+    ach_mid = data.get("_img_flow_anchor_message_id")
+    if not isinstance(ach_chat, int) or not isinstance(ach_mid, int):
+        return False
+    if callback.message.chat.id != ach_chat or callback.message.message_id != ach_mid:
+        return False
+    cur = await state.get_state()
+    return _state_has_suffix(cur, ("ready_choosing_category", "ready_browsing_idea"))
+
+
 @router.callback_query(F.data.startswith(CB_READY_CAT_PREFIX))
 async def ready_pick_category(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.from_user is None or callback.message is None or not callback.data:
         await callback.answer("Ошибка запроса.", show_alert=True)
+        return
+    if not await _is_current_ready_listing_callback(callback, state):
+        await callback.answer("Это старый экран. Открой «Готовые идеи» заново.", show_alert=False)
         return
     await callback.answer()
     category = callback.data.replace(CB_READY_CAT_PREFIX, "", 1).strip().lower()
@@ -3436,6 +3497,9 @@ async def ready_pick_category(callback: CallbackQuery, state: FSMContext) -> Non
 async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.from_user is None or callback.message is None or not callback.data:
         await callback.answer("Ошибка запроса.", show_alert=True)
+        return
+    if not await _is_current_ready_listing_callback(callback, state):
+        await callback.answer("Это старый экран. Открой «Готовые идеи» заново.", show_alert=False)
         return
     payload = callback.data.replace(CB_READY_NAV_PREFIX, "", 1)
     if payload == "back_cats":
@@ -3614,7 +3678,7 @@ async def ready_photo_back(callback: CallbackQuery, state: FSMContext) -> None:
 @router.message(ImageGenState.ready_waiting_photos, ~F.photo)
 async def ready_need_photo_hint(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
-    ready_cost = int(data.get("_ready_cost") or _READY_IDEA_DEFAULT_COST)
+    ready_cost = int(data.get("_ready_cost") or _READY_MODE_DEFAULT_COST[_READY_MODE_DEFAULT])
     category = str(data.get("_ready_category") or "").strip().lower()
     need = int(data.get("_ready_need") or 1)
     photos = list(data.get("_ready_photos") or [])
@@ -4561,6 +4625,8 @@ async def result_ok_to_main_menu(callback: CallbackQuery, state: FSMContext) -> 
     if not callback.from_user or not callback.message:
         await callback.answer()
         return
+    if not await _guard_stale_result_callback(callback, state, action_label="Ок"):
+        return
     await state.clear()
     await callback.answer()
     try:
@@ -4580,6 +4646,8 @@ async def regenerate_new_prompt(callback: CallbackQuery, state: FSMContext) -> N
     if not callback.from_user or not callback.message:
         await callback.answer()
         return
+    if not await _guard_stale_result_callback(callback, state, action_label="Ещё раз"):
+        return
     user_id = callback.from_user.id
     ctx = await get_last_image_context(user_id)
     if not ctx:
@@ -4596,6 +4664,8 @@ async def regenerate_new_prompt(callback: CallbackQuery, state: FSMContext) -> N
     if uk not in ("ready", "self"):
         uk = "self"
     if uk == "ready":
+        data = await state.get_data()
+        back_callback = str(data.get("_ready_back_cb") or data.get("_img_back_cb") or CB_MENU_BACK_START)
         if (ctx.ready_idea_title or "").strip() != _MELLSTROY_PHOTO_TITLE and ctx.refs_file_ids:
             await _start_ready_redo_flow(
                 callback.message,
@@ -4603,6 +4673,7 @@ async def regenerate_new_prompt(callback: CallbackQuery, state: FSMContext) -> N
                 user_id,
                 callback.from_user.username,
                 ctx,
+                back_callback=back_callback,
             )
             return
         await _send_ready_ideas_screen(
@@ -4611,6 +4682,7 @@ async def regenerate_new_prompt(callback: CallbackQuery, state: FSMContext) -> N
             user_id,
             callback.from_user.username,
             edit=False,
+            back_callback=back_callback,
         )
         return
     await state.update_data(
@@ -4632,6 +4704,8 @@ async def ready_redo_from_button(callback: CallbackQuery, state: FSMContext) -> 
     if not callback.from_user or not callback.message:
         await callback.answer()
         return
+    if not await _guard_stale_result_callback(callback, state, action_label="Ещё раз"):
+        return
     await callback.answer()
     try:
         await callback.message.edit_text(
@@ -4645,12 +4719,15 @@ async def ready_redo_from_button(callback: CallbackQuery, state: FSMContext) -> 
     if not ctx or ctx.usage_kind != "ready":
         await callback.message.answer("Нет данных для повтора. Открой «Готовые идеи» в меню.")
         return
+    data = await state.get_data()
+    back_callback = str(data.get("_ready_back_cb") or data.get("_img_back_cb") or CB_MENU_BACK_START)
     await _start_ready_redo_flow(
         callback.message,
         state,
         callback.from_user.id,
         callback.from_user.username,
         ctx,
+        back_callback=back_callback,
     )
 
 
@@ -4659,6 +4736,8 @@ async def ready_result_main_menu(callback: CallbackQuery, state: FSMContext) -> 
     """Шорткат Роналдо: из результата — в главное меню (не в листинг готовых идей)."""
     if not callback.from_user or not callback.message:
         await callback.answer()
+        return
+    if not await _guard_stale_result_callback(callback, state, action_label="В меню"):
         return
     await callback.answer()
     try:
@@ -4679,6 +4758,8 @@ async def ready_result_main_menu(callback: CallbackQuery, state: FSMContext) -> 
 async def back_to_ready_ideas_from_result(callback: CallbackQuery, state: FSMContext) -> None:
     if not callback.from_user or not callback.message:
         await callback.answer()
+        return
+    if not await _guard_stale_result_callback(callback, state, action_label="К готовым идеям"):
         return
     await callback.answer()
     try:

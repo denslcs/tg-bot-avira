@@ -121,27 +121,27 @@ def _log_payment_event(event: str, **kwargs: object) -> None:
 _PLAN_PAY_PERKS_HTML: dict[str, str] = {
     "starter": (
         "<b>Пробный 3 дня.</b> Те же модели, что у Universe (Klein, Nano Banana, GPT Image 1.5, FLUX Pro, Nano Banana 2, GPT‑5 Image). "
-        "Приоритет очереди. Готовые идеи — <b>30 кр.</b> за генерацию. "
+        "Приоритет очереди. Готовые идеи: <b>⚡ Fast 15</b> / <b>🚀 Medium 30</b> / <b>💎 Premium 50</b> кр. "
         "Скидка на бонус-паки — <b>−15%</b>, пока подписка активна. "
         "<b>Один раз на аккаунт.</b> Не откладывает 30-дневную паузу между полными тарифами."
     ),
     "nova": (
         "<b>Nova.</b> Только <b>FLUX Klein 4B</b>. Очередь общая (без приоритета). "
-        "Готовые идеи — <b>45 кр.</b> за генерацию."
+        "Готовые идеи: <b>⚡ Fast 30</b> / <b>🚀 Medium 45</b> / <b>💎 Premium 65</b> кр."
     ),
     "supernova": (
         "<b>SuperNova.</b> <b>Klein 4B</b> + <b>Nano Banana</b>. Очередь общая. "
-        "Готовые идеи — <b>40 кр.</b> за генерацию. "
+        "Готовые идеи: <b>⚡ Fast 25</b> / <b>🚀 Medium 40</b> / <b>💎 Premium 60</b> кр. "
         "Нет моделей GPT Image 1.5, FLUX Pro, Nano Banana 2, GPT‑5 Image."
     ),
     "galaxy": (
         "<b>Galaxy.</b> <b>Klein</b> + <b>Nano Banana</b> + <b>GPT Image 1.5</b>. "
-        "<b>Приоритет</b> очереди. Готовые идеи — <b>35 кр.</b> за генерацию. "
+        "<b>Приоритет</b> очереди. Готовые идеи: <b>⚡ Fast 20</b> / <b>🚀 Medium 35</b> / <b>💎 Premium 55</b> кр. "
         "Скидка на бонус-паки — <b>−5%</b>, пока подписка активна."
     ),
     "universe": (
         "<b>Universe.</b> Все модели (Klein, Nano Banana, GPT Image 1.5, FLUX Pro, Nano Banana 2, GPT‑5 Image). "
-        "<b>Приоритет</b> очереди. Готовые идеи — <b>30 кр.</b> за генерацию. "
+        "<b>Приоритет</b> очереди. Готовые идеи: <b>⚡ Fast 15</b> / <b>🚀 Medium 30</b> / <b>💎 Premium 50</b> кр. "
         "При продлении того же тарифа — <b>+10%</b> к бонусным кредитам "
         "(если подписка активна или прошло не более 2 дней после окончания). "
         "Скидка на бонус-паки — <b>−15%</b>, пока подписка активна."
@@ -151,21 +151,21 @@ _PLAN_PAY_PERKS_HTML: dict[str, str] = {
 # Короткие перки для подписи под баннером тарифов (Telegram caption ≤ 1024 — иначе текст уходит отдельным сообщением).
 _PLAN_PAY_PERKS_PHOTO_HTML: dict[str, str] = {
     "starter": (
-        "<blockquote><i><b>Пробный 3 дня.</b> Модели как у Universe; готовые идеи по <b>30 кр.</b>; скидка на бонус-паки <b>−15%</b>. "
+        "<blockquote><i><b>Пробный 3 дня.</b> Модели как у Universe; готовые идеи: <b>⚡15 / 🚀30 / 💎50 кр.</b>; скидка на бонус-паки <b>−15%</b>. "
         "<b>Один раз на аккаунт.</b></i></blockquote>\n"
         "<blockquote><i>После пробного — полные тарифы в меню оплаты.</i></blockquote>\n"
     ),
     "nova": (
-        "<blockquote><i><b>Nova:</b> только Klein 4B; готовые идеи — <b>45 кр.</b>.</i></blockquote>\n"
+        "<blockquote><i><b>Nova:</b> только Klein 4B; готовые идеи: <b>⚡30 / 🚀45 / 💎65 кр.</b>.</i></blockquote>\n"
     ),
     "supernova": (
-        "<blockquote><i><b>SuperNova:</b> Klein + Nano Banana; готовые идеи — <b>40 кр.</b>.</i></blockquote>\n"
+        "<blockquote><i><b>SuperNova:</b> Klein + Nano Banana; готовые идеи: <b>⚡25 / 🚀40 / 💎60 кр.</b>.</i></blockquote>\n"
     ),
     "galaxy": (
-        "<blockquote><i><b>Galaxy:</b> Klein + Nano Banana + GPT 1.5; приоритет; готовые идеи — <b>35 кр.</b>; бонус-паки <b>−5%</b>.</i></blockquote>\n"
+        "<blockquote><i><b>Galaxy:</b> Klein + Nano Banana + GPT 1.5; приоритет; готовые идеи: <b>⚡20 / 🚀35 / 💎55 кр.</b>; бонус-паки <b>−5%</b>.</i></blockquote>\n"
     ),
     "universe": (
-        "<blockquote><i><b>Universe:</b> все модели; приоритет; готовые идеи — <b>30 кр.</b>; "
+        "<blockquote><i><b>Universe:</b> все модели; приоритет; готовые идеи: <b>⚡15 / 🚀30 / 💎50 кр.</b>; "
         "за продление того же тарифа +10% к кр. (при активной подписке или до 2 дней после окончания); "
         "−15% на бонус-паки.</i></blockquote>\n"
     ),
@@ -493,8 +493,8 @@ def _plans_menu_caption() -> str:
     return (
         f"<b>Тарифы</b> — при оплате на баланс начисляются <b>{CREDITS_COIN_TG_HTML} кредиты</b>.\n"
         f"Ограничений на число генераций по подписке нет — списываются {CREDITS_COIN_TG_HTML} кредиты.\n\n"
-        "<blockquote><i>С каждой подпиской стоимость «Готовых идей» ниже: "
-        "<b>без подписки/Nova — 45</b>, <b>SuperNova — 40</b>, <b>Galaxy — 35</b>, <b>Universe/Starter — 30</b>.</i></blockquote>\n\n"
+        "<blockquote><i>Стоимость «Готовых идей» зависит от режима <b>⚡ Fast / 🚀 Medium / 💎 Premium</b> "
+        "и подписки: от <b>15</b> до <b>65</b> кр. за генерацию.</i></blockquote>\n\n"
         f"<blockquote><i>Продление и пауза:</i> после <b>окончания</b> подписки следующую покупку полного тарифа можно оформить "
         f"не раньше чем через <b>{esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дней. Пока подписка ещё действует, заранее можно "
         f"продлить только <b>тот же</b> тариф — дни суммируются; бонус за продление того же тарифа: <b>+5%</b>, "
