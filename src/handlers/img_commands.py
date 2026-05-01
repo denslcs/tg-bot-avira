@@ -2003,20 +2003,24 @@ def _ready_idea_caption(
     mode: str,
     show_category_title: bool = True,
 ) -> str:
+    is_ronaldo_ready = (title or "").strip() == _RONALDO_PHOTO_TITLE
     req = _ready_idea_requirement_line(title=title, photos_required=photos_required)
     recommendation = _ready_idea_recommendation_line(title=title, photos_required=photos_required)
     recommendation_part = f"\n{recommendation}" if recommendation else ""
     category_part = f"{_ready_category_title_html(category)}\n" if show_category_title else ""
     mode_line = _ready_mode_line(mode)
-    if (title or "").strip() == _RONALDO_PHOTO_TITLE:
-        mode_line = "Режим: 🚀 <b>medium</b> (фиксировано для этой идеи)"
+    shown_cost = cost
+    if is_ronaldo_ready:
+        mode_line = ""
+        shown_cost = 30
+    mode_part = f"{mode_line}\n" if mode_line else ""
     return (
         f"{category_part}"
         f'<tg-emoji emoji-id="5397782960512444700">📌</tg-emoji> Вариант: <b>{esc(index + 1)}/{esc(total)}</b>\n'
         f"<b>{esc(title)}</b>\n"
         f"{esc(preview)}\n"
-        f"{mode_line}\n"
-        f"{_ready_generation_cost_html(cost)}\n"
+        f"{mode_part}"
+        f"{_ready_generation_cost_html(shown_cost)}\n"
         f"<b>{esc(req)}</b>"
         f"{recommendation_part}"
     )
@@ -3275,6 +3279,8 @@ async def _open_ready_card(
     idx = index % total
     title, preview, _prompt, photos_required = ideas[idx]
     single_shortcut_mode = include_hidden and category == "celebrities" and (title or "").strip() == _RONALDO_PHOTO_TITLE
+    if (title or "").strip() == _RONALDO_PHOTO_TITLE:
+        ready_cost = 30
     cap = _ready_idea_caption(
         category=category,
         title=title,
@@ -3379,6 +3385,8 @@ async def refresh_ready_browsing_anchor(bot: Bot, *, user_id: int, state: FSMCon
     )
     ready_mode = await _live_user_ready_mode(user_id)
     ready_cost = await _ready_idea_cost_for_user_mode(user_id, ready_mode)
+    if (title or "").strip() == _RONALDO_PHOTO_TITLE:
+        ready_cost = 30
     await state.update_data(_ready_cost=ready_cost, _ready_mode=ready_mode)
     logging.info(
         "ready_mode/refresh_anchor user_id=%s category=%s idx=%s mode=%s cost=%s anchor_chat=%s anchor_mid=%s",
