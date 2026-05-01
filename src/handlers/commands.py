@@ -397,7 +397,9 @@ def _main_screen_text(balance: int, bonus_note: str = "") -> str:
         f"{CREDITS_COIN_TG_HTML} кредиты, статистику и лимиты.\n"
         '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Загляни в <b>«<tg-emoji emoji-id="5330522514231684724">🌟</tg-emoji> Что умеет бот»</b> — там коротко и понятно, как использовать все возможности.\n\n'
         '<blockquote><b><tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> Подсказка:</b> <i>чем точнее задача в одном сообщении, тем лучше и быстрее итоговая генерация.</i></blockquote>\n\n'
-        "<blockquote><i>Продолжая работу с ботом, ты подтверждаешь согласие на обработку персональных данных.</i>"
+        '<blockquote><i>Продолжая использовать бота, вы подтверждаете, что ознакомились с '
+        '<a href="https://telegra.ph/POLZOVATELSKOE-SOGLASHENIE-05-01-22">Публичной офертой</a> и '
+        '<a href="https://telegra.ph/POLITIKA-KONFIDENCIALNOSTI-05-01-53">Политикой обработки персональных данных</a>.</i>'
         f"{bonus_html}</blockquote>"
     )
 
