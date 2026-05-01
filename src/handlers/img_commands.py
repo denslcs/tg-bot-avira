@@ -1895,6 +1895,22 @@ def _ready_mode_line(mode: str) -> str:
     return f"Режим: {_ready_mode_emoji(m)} <b>{esc(m)}</b>"
 
 
+def _is_ronaldo_ready_title(title: str | None) -> bool:
+    return (title or "").strip() == _RONALDO_PHOTO_TITLE
+
+
+def _ready_mode_line_for_title(title: str | None, mode: str) -> str:
+    if _is_ronaldo_ready_title(title):
+        return ""
+    return _ready_mode_line(mode)
+
+
+def _ready_cost_for_title(title: str | None, cost: int) -> int:
+    if _is_ronaldo_ready_title(title):
+        return 30
+    return int(cost)
+
+
 def _ready_mode_model(mode: str) -> str:
     m = _ready_mode_normalize(mode)
     if m == _READY_MODE_FAST:
@@ -2003,7 +2019,7 @@ def _ready_idea_caption(
     mode: str,
     show_category_title: bool = True,
 ) -> str:
-    is_ronaldo_ready = (title or "").strip() == _RONALDO_PHOTO_TITLE
+    is_ronaldo_ready = _is_ronaldo_ready_title(title)
     req = _ready_idea_requirement_line(title=title, photos_required=photos_required)
     recommendation = _ready_idea_recommendation_line(title=title, photos_required=photos_required)
     recommendation_part = f"\n{recommendation}" if recommendation else ""
@@ -3279,8 +3295,7 @@ async def _open_ready_card(
     idx = index % total
     title, preview, _prompt, photos_required = ideas[idx]
     single_shortcut_mode = include_hidden and category == "celebrities" and (title or "").strip() == _RONALDO_PHOTO_TITLE
-    if (title or "").strip() == _RONALDO_PHOTO_TITLE:
-        ready_cost = 30
+    ready_cost = _ready_cost_for_title(title, ready_cost)
     cap = _ready_idea_caption(
         category=category,
         title=title,
@@ -3385,8 +3400,7 @@ async def refresh_ready_browsing_anchor(bot: Bot, *, user_id: int, state: FSMCon
     )
     ready_mode = await _live_user_ready_mode(user_id)
     ready_cost = await _ready_idea_cost_for_user_mode(user_id, ready_mode)
-    if (title or "").strip() == _RONALDO_PHOTO_TITLE:
-        ready_cost = 30
+    ready_cost = _ready_cost_for_title(title, ready_cost)
     await state.update_data(_ready_cost=ready_cost, _ready_mode=ready_mode)
     logging.info(
         "ready_mode/refresh_anchor user_id=%s category=%s idx=%s mode=%s cost=%s anchor_chat=%s anchor_mid=%s",
@@ -3572,6 +3586,9 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
         title, _preview, _prompt, photos_required = ideas[idx]
         ready_mode = await _live_user_ready_mode(callback.from_user.id)
         ready_cost = await _ready_idea_cost_for_user_mode(callback.from_user.id, ready_mode)
+        ready_cost = _ready_cost_for_title(title, ready_cost)
+        mode_line = _ready_mode_line_for_title(title, ready_mode)
+        mode_part = f"{mode_line}\n" if mode_line else ""
         await state.update_data(
             _ready_category=category,
             _ready_index=idx,
@@ -3594,7 +3611,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
                 callback.message,
                 caption=(
                     f'<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> <b>{esc(title)}</b>\n'
-                    f"{_ready_mode_line(ready_mode)}\n"
+                    f"{mode_part}"
                     f"{_ready_generation_cost_html(ready_cost)}\n"
                     f"<b>{esc(req0)}</b>\n"
                     f"✍️ Пришли <b>текст заголовка</b> для логотипа (до {_FANTASY_HEADLINE_MAX_LEN} символов)."
@@ -3616,7 +3633,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
             callback.message,
             caption=(
                 f'<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> <b>{esc(title)}</b>\n'
-                f"{_ready_mode_line(ready_mode)}\n"
+                f"{mode_part}"
                 f"{_ready_generation_cost_html(ready_cost)}\n"
                 f"{first_hint}\n"
                 '<tg-emoji emoji-id="5235837920081887219">📸</tg-emoji> Скинь фото, после загрузки появится кнопка подтверждения.'
@@ -3644,6 +3661,9 @@ async def ready_photo_back(callback: CallbackQuery, state: FSMContext) -> None:
         need = int(data.get("_ready_need") or 1)
         photos = list(data.get("_ready_photos") or [])
         title = _ready_title_from_state_data(data) or _RONALDO_PHOTO_TITLE
+        ready_cost = _ready_cost_for_title(title, ready_cost)
+        mode_line = _ready_mode_line_for_title(title, ready_mode)
+        mode_part = f"{mode_line}\n" if mode_line else ""
         hint = _ready_photo_upload_hint(
             category=category,
             need=need,
@@ -3658,7 +3678,7 @@ async def ready_photo_back(callback: CallbackQuery, state: FSMContext) -> None:
             callback.message,
             caption=(
                 f"<b>Выбрано:</b> {esc(title)}\n"
-                f"{_ready_mode_line(ready_mode)}\n"
+                f"{mode_part}"
                 f"{_ready_generation_cost_html(ready_cost)}\n"
                 f"{hint}"
                 f"{mellstroy_note}"
@@ -3761,6 +3781,9 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
     include_hidden = bool(data.get("_ready_include_hidden_start_only"))
     ideas = _ideas_for_category(category, include_hidden_start_only=include_hidden)
     title = ideas[idx][0] if ideas and 0 <= idx < len(ideas) else ""
+    ready_cost = _ready_cost_for_title(title, ready_cost)
+    mode_line = _ready_mode_line_for_title(title, ready_mode)
+    mode_part = f"{mode_line}\n" if mode_line else ""
     if _is_minecraft_ready_idea(title, ideas[idx][2] if ideas and 0 <= idx < len(ideas) else ""):
         await state.set_state(ImageGenState.ready_waiting_minecraft_nick)
         await message.answer(
@@ -3812,7 +3835,7 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
             (
                 f"{_ready_photo_upload_hint(category=category, need=need, received=len(photos), idea_title=title)}\n"
                 "<b>Фото зафиксированы.</b>\n"
-                f"{_ready_mode_line(ready_mode)}\n"
+                f"{mode_part}"
                 f"{_ready_generation_cost_html(ready_cost)}\n"
                 f"{head_hint}"
             ),
@@ -3825,7 +3848,7 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
         (
             f"{_ready_photo_upload_hint(category=category, need=need, received=len(photos), idea_title=title)}\n"
             f"<b>Фото зафиксированы:</b> <b>{esc(len(photos))}</b>\n"
-            f"{_ready_mode_line(ready_mode)}\n"
+            f"{mode_part}"
             f"{_ready_generation_cost_html(ready_cost)}\n"
             "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
         ),
@@ -3862,6 +3885,9 @@ async def ready_collect_poster_text(message: Message, state: FSMContext) -> None
     ready_mode = await _live_user_ready_mode(uid)
     ready_cost = await _ready_idea_cost_for_user_mode(uid, ready_mode)
     title = _ready_title_from_state_data(data)
+    ready_cost = _ready_cost_for_title(title, ready_cost)
+    mode_line = _ready_mode_line_for_title(title, ready_mode)
+    mode_part = f"{mode_line}\n" if mode_line else ""
     max_len = _headline_max_len_for_title(title)
     raw = message.text or ""
     if not raw.strip():
@@ -3885,7 +3911,7 @@ async def ready_collect_poster_text(message: Message, state: FSMContext) -> None
     await message.answer(
         (
             f"<b>{esc(label)}:</b> <code>{esc(raw)}</code>\n"
-            f"{_ready_mode_line(ready_mode)}\n"
+            f"{mode_part}"
             f"{_ready_generation_cost_html(ready_cost)}\n"
             "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
         ),
@@ -3964,13 +3990,17 @@ async def ready_collect_fantasy_color(message: Message, state: FSMContext) -> No
     ready_mode = await _live_user_ready_mode(uid)
     ready_cost = await _ready_idea_cost_for_user_mode(uid, ready_mode)
     headline = str(data.get("_ready_poster_text") or "")
+    title = _ready_title_from_state_data(data)
+    ready_cost = _ready_cost_for_title(title, ready_cost)
+    mode_line = _ready_mode_line_for_title(title, ready_mode)
+    mode_part = f"{mode_line}\n" if mode_line else ""
     await state.update_data(_ready_fantasy_color=color)
     await state.set_state(ImageGenState.ready_waiting_confirm)
     await message.answer(
         (
             f"<b>Заголовок:</b> <code>{esc(headline)}</code>\n"
             f"<b>Цвет:</b> <code>{esc(color)}</code>\n"
-            f"{_ready_mode_line(ready_mode)}\n"
+            f"{mode_part}"
             f"{_ready_generation_cost_html(ready_cost)}\n"
             "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
         ),
@@ -3995,12 +4025,16 @@ async def ready_collect_minecraft_nick(message: Message, state: FSMContext) -> N
     uid = message.from_user.id
     ready_mode = await _live_user_ready_mode(uid)
     ready_cost = await _ready_idea_cost_for_user_mode(uid, ready_mode)
+    title = _ready_title_from_state_data(data)
+    ready_cost = _ready_cost_for_title(title, ready_cost)
+    mode_line = _ready_mode_line_for_title(title, ready_mode)
+    mode_part = f"{mode_line}\n" if mode_line else ""
     await state.update_data(_ready_overlay_nick=nick)
     await state.set_state(ImageGenState.ready_waiting_confirm)
     await message.answer(
         (
             f"<b>Ник сохранён:</b> <code>@{esc(nick)}</code>\n"
-            f"{_ready_mode_line(ready_mode)}\n"
+            f"{mode_part}"
             f"{_ready_generation_cost_html(ready_cost)}\n"
             "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
         ),
@@ -4029,13 +4063,17 @@ async def ready_pick_beard_size(callback: CallbackQuery, state: FSMContext) -> N
     uid = callback.from_user.id
     ready_mode = await _live_user_ready_mode(uid)
     ready_cost = await _ready_idea_cost_for_user_mode(uid, ready_mode)
+    title = _ready_title_from_state_data(data)
+    ready_cost = _ready_cost_for_title(title, ready_cost)
+    mode_line = _ready_mode_line_for_title(title, ready_mode)
+    mode_part = f"{mode_line}\n" if mode_line else ""
     await state.update_data(_ready_beard_size=raw)
     await state.set_state(ImageGenState.ready_waiting_confirm)
     await _edit_ready_nav_message(
         callback.message,
         caption=(
             f"<b>Размер бороды:</b> <code>{esc(label)}</code>\n"
-            f"{_ready_mode_line(ready_mode)}\n"
+            f"{mode_part}"
             f"{_ready_generation_cost_html(ready_cost)}\n"
             "<blockquote><i>Нажми «Подтвердить», и бот запустит генерацию по выбранной идее.</i></blockquote>"
         ),
