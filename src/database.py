@@ -276,10 +276,10 @@ async def _backfill_generated_images_total_once(db: aiosqlite.Connection) -> Non
     await db.execute(
         """
         UPDATE users
-        SET generated_images_total = IFNULL(
+        SET generated_images_total = COALESCE(
             (SELECT SUM(u.count) FROM user_daily_image_usage u WHERE u.user_id = users.user_id),
             0
-        ) + IFNULL(
+        ) + COALESCE(
             (SELECT SUM(m.count) FROM user_monthly_image_usage m WHERE m.user_id = users.user_id),
             0
         )
