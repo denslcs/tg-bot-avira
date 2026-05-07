@@ -31,7 +31,12 @@ def _table_names(src: sqlite3.Connection) -> list[str]:
         ORDER BY name
         """
     )
-    return [str(r[0]) for r in cur.fetchall() if str(r[0]) not in SKIP_TABLES]
+    names = [str(r[0]) for r in cur.fetchall() if str(r[0]) not in SKIP_TABLES]
+    # FK-safe order: parent table first.
+    if "users" in names:
+        names.remove("users")
+        names.insert(0, "users")
+    return names
 
 
 def _table_columns(src: sqlite3.Connection, table: str) -> list[tuple[str, int]]:
