@@ -13,6 +13,7 @@ _RE_SQLITE_NOW = re.compile(r"datetime\('now'\)", re.IGNORECASE)
 _RE_SQLITE_NOW_WITH_ARG = re.compile(r"datetime\('now',\s*\$([0-9]+)\)", re.IGNORECASE)
 _RE_SQLITE_NOW_WITH_LITERAL = re.compile(r"datetime\('now',\s*'([^']+)'\)", re.IGNORECASE)
 _RE_SQLITE_DATETIME_FN = re.compile(r"datetime\(([\w\.]+)\)", re.IGNORECASE)
+_RE_ID_INTEGER = re.compile(r"\b([a-z_]+_id)\s+INTEGER\b", re.IGNORECASE)
 
 
 def _convert_qmark_placeholders(sql: str) -> str:
@@ -41,6 +42,8 @@ def _translate_sql_for_postgres(sql: str) -> str:
         return "BEGIN"
     text = _convert_qmark_placeholders(text)
     text = text.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY")
+    # Telegram/user-related IDs can exceed int32. Ensure *_id columns are bigint on Postgres.
+    text = _RE_ID_INTEGER.sub(r"\1 BIGINT", text)
     text = _RE_SQLITE_NOW.sub("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')", text)
     text = _RE_SQLITE_NOW_WITH_LITERAL.sub(
         "(CURRENT_TIMESTAMP AT TIME ZONE 'UTC' + '\\1'::interval)",
