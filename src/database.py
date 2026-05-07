@@ -12,7 +12,20 @@ from zoneinfo import ZoneInfo
 
 import aiosqlite
 
-from src.config import ADMIN_IDS, DB_PATH, START_CREDITS
+import asyncpg
+
+from src.config import (
+    ADMIN_IDS,
+    DATABASE_URL,
+    DB_BACKEND,
+    DB_CONNECT_TIMEOUT,
+    DB_PATH,
+    DB_POOL_MAX,
+    DB_POOL_MIN,
+    START_CREDITS,
+)
+from src.db.backends.postgres import PostgresPool
+from src.db.backends.sqlite import open_sqlite
 from src.services.subscription_time import (
     is_within_subscription_renewal_grace as _is_within_subscription_renewal_grace_service,
     normalize_subscription_ends_at_value as _normalize_subscription_ends_at_value_service,
@@ -35,11 +48,37 @@ from src.subscription_catalog import (
 # Ожидание при кратковременной блокировке SQLite вместо немедленной ошибки;
 # WAL (в init_db) даёт меньше конфликтов между читателями при одновременных запросах.
 _BUSY_TIMEOUT_MS = 8000
+_POSTGRES_POOL: PostgresPool | None = None
+
+
+def _is_postgres_backend() -> bool:
+    return DB_BACKEND == "postgres"
+
+
+async def _get_postgres_pool() -> PostgresPool:
+    global _POSTGRES_POOL
+    if _POSTGRES_POOL is not None:
+        return _POSTGRES_POOL
+    if not DATABASE_URL:
+        raise RuntimeError("DB_BACKEND=postgres, but DATABASE_URL is empty in .env")
+    raw_pool = await asyncpg.create_pool(
+        dsn=DATABASE_URL,
+        min_size=DB_POOL_MIN,
+        max_size=DB_POOL_MAX,
+        timeout=float(DB_CONNECT_TIMEOUT),
+    )
+    _POSTGRES_POOL = PostgresPool(raw_pool)
+    return _POSTGRES_POOL
 
 
 @asynccontextmanager
-async def open_db() -> AsyncIterator[aiosqlite.Connection]:
-    async with aiosqlite.connect(DB_PATH) as db:
+async def open_db():
+    if _is_postgres_backend():
+        pool = await _get_postgres_pool()
+        async with pool.connection() as db:
+            yield db
+        return
+    async with open_sqlite(DB_PATH) as db:
         await db.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
         yield db
 
@@ -985,7 +1024,7 @@ async def apply_referral(invitee_user_id: int, inviter_user_id: int) -> bool:
                     )
             await db.commit()
             return True
-        except sqlite3.IntegrityError:
+        except (sqlite3.IntegrityError, asyncpg.UniqueViolationError):
             await db.rollback()
             logging.info(
                 "referral: integrity error (race/dup) invitee=%s inviter=%s",
@@ -1852,7 +1891,7 @@ async def try_claim_star_payment(charge_id: str, user_id: int) -> bool:
                 (charge_id, user_id),
             )
             await db.commit()
-    except sqlite3.IntegrityError:
+    except (sqlite3.IntegrityError, asyncpg.UniqueViolationError):
         return False
     return True
 

@@ -42,6 +42,13 @@ TELEGRAM_BOT_TOKEN: str = _must_getenv("TELEGRAM_BOT_TOKEN")
 SUPPORT_BOT_TOKEN: str = os.getenv("SUPPORT_BOT_TOKEN", "").strip()
 SUPPORT_BOT_USERNAME: str = os.getenv("SUPPORT_BOT_USERNAME", "").strip()
 CHANNEL_URL: str = os.getenv("CHANNEL_URL", "").strip()
+DB_BACKEND: str = os.getenv("DB_BACKEND", "sqlite").strip().lower() or "sqlite"
+if DB_BACKEND not in {"sqlite", "postgres"}:
+    DB_BACKEND = "sqlite"
+DATABASE_URL: str = os.getenv("DATABASE_URL", "").strip()
+DB_POOL_MIN: int = max(1, _parse_int(os.getenv("DB_POOL_MIN", "2"), 2))
+DB_POOL_MAX: int = max(DB_POOL_MIN, _parse_int(os.getenv("DB_POOL_MAX", "20"), 20))
+DB_CONNECT_TIMEOUT: int = max(1, _parse_int(os.getenv("DB_CONNECT_TIMEOUT", "10"), 10))
 DB_PATH: str = os.getenv("DB_PATH", "data/bot.sqlite3").strip() or "data/bot.sqlite3"
 START_CREDITS: int = int(os.getenv("START_CREDITS", "20"))
 # Второе сообщение в ЛС сразу после главного экрана /start (новости, новый промпт). Пусто = не слать.

@@ -7,8 +7,8 @@ from pathlib import Path
 from aiogram import Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from src.config import PROJECT_ROOT
-from src.database import init_db
+from src.config import DATABASE_URL, DB_BACKEND, PROJECT_ROOT
+from src.database import init_db, open_db
 from src.handlers.global_errors import global_error_handler
 from src.handlers.img_commands import (
     READY_IDEA_CATEGORIES,
@@ -287,6 +287,37 @@ def _check_subscription_catalog() -> tuple[list[str], list[str]]:
     return checks, errors
 
 
+async def _check_db_backend_health() -> tuple[list[str], list[str]]:
+    checks: list[str] = []
+    errors: list[str] = []
+    if DB_BACKEND == "postgres" and not DATABASE_URL:
+        errors.append("DB_BACKEND=postgres but DATABASE_URL is empty.")
+        return checks, errors
+    try:
+        async with open_db() as db:
+            async with db.execute("SELECT 1") as cur:
+                row = await cur.fetchone()
+                if not row or int(row[0]) != 1:
+                    errors.append("DB health query returned unexpected result.")
+            checks.append(f"DB backend '{DB_BACKEND}' connectivity OK.")
+            for table in ("users", "user_budget_history", "support_tickets"):
+                async with db.execute(
+                    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name=?"
+                    if DB_BACKEND == "postgres"
+                    else "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
+                    (table,),
+                ) as cur:
+                    row = await cur.fetchone()
+                    exists = int(row[0] or 0) > 0 if row else False
+                    if not exists:
+                        errors.append(f"Required table missing: {table}")
+            if not errors:
+                checks.append("Critical DB tables exist (users/budget history/support tickets).")
+    except Exception as exc:
+        errors.append(f"DB backend health check failed: {exc}")
+    return checks, errors
+
+
 async def run_self_check() -> SelfCheckResult:
     checks: list[str] = []
     errors: list[str] = []
@@ -314,6 +345,9 @@ async def run_self_check() -> SelfCheckResult:
     catalog_checks, catalog_errors = _check_subscription_catalog()
     checks.extend(catalog_checks)
     errors.extend(catalog_errors)
+    db_checks, db_errors = await _check_db_backend_health()
+    checks.extend(db_checks)
+    errors.extend(db_errors)
 
     return SelfCheckResult(ok=not errors, checks=checks, errors=errors)
 

@@ -187,6 +187,83 @@ sudo systemctl status shard-creator-support-bot --no-pager
 
 ---
 
+## PostgreSQL cutover (safe two-phase)
+
+1) Подготовь PostgreSQL и проверь доступ:
+
+```bash
+psql "postgresql://user:password@127.0.0.1:5432/tg_bot_avira" -c "select 1;"
+```
+
+2) В `.env` оставь пока sqlite как основной backend:
+
+```env
+DB_BACKEND=sqlite
+DATABASE_URL=postgresql://user:password@127.0.0.1:5432/tg_bot_avira
+```
+
+3) Сними бэкап sqlite:
+
+```bash
+cd /root/shard-creator-bot
+cp data/bot.sqlite3 data/bot.sqlite3.bak_$(date +%F_%H%M%S)
+```
+
+4) Инициализируй схему в Postgres (одноразово):
+
+```bash
+cd /root/shard-creator-bot
+source venv/bin/activate
+DB_BACKEND=postgres DATABASE_URL="postgresql://user:password@127.0.0.1:5432/tg_bot_avira" python -m src.selfcheck
+```
+
+5) Выполни миграцию данных в Postgres:
+
+```bash
+cd /root/shard-creator-bot
+source venv/bin/activate
+python scripts/migrate_sqlite_to_postgres.py \
+  --sqlite-path data/bot.sqlite3 \
+  --postgres-url "postgresql://user:password@127.0.0.1:5432/tg_bot_avira"
+```
+
+6) Окно переключения (короткий даунтайм):
+
+```bash
+sudo systemctl stop shard-creator-main-bot shard-creator-support-bot
+# повтори миграцию для финальной дельты
+python scripts/migrate_sqlite_to_postgres.py --sqlite-path data/bot.sqlite3 --postgres-url "postgresql://user:password@127.0.0.1:5432/tg_bot_avira"
+```
+
+7) Переключи backend:
+
+```env
+DB_BACKEND=postgres
+DATABASE_URL=postgresql://user:password@127.0.0.1:5432/tg_bot_avira
+```
+
+8) Запуск и проверка:
+
+```bash
+sudo systemctl start shard-creator-main-bot shard-creator-support-bot
+cd /root/shard-creator-bot
+source venv/bin/activate
+python -m src.selfcheck
+sudo journalctl -u shard-creator-main-bot -n 120 --no-pager
+```
+
+9) Быстрый rollback (если есть проблемы):
+
+```env
+DB_BACKEND=sqlite
+```
+
+```bash
+sudo systemctl restart shard-creator-main-bot shard-creator-support-bot
+```
+
+---
+
 ## Файлы systemd (если нужно поправить пути)
 
 ```bash
