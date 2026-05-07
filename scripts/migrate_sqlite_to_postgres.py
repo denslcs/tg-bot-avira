@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -81,6 +82,34 @@ async def _copy_table(src: sqlite3.Connection, pg: asyncpg.Connection, table: st
     return copied, total
 
 
+async def _seed_orphan_users_for_table(src: sqlite3.Connection, pg: asyncpg.Connection, table: str) -> int:
+    """Create placeholder users for orphan user_id references in sqlite."""
+    cols = [name for name, _ in _table_columns(src, table)]
+    if table == "users" or "user_id" not in cols:
+        return 0
+    cur = src.execute(
+        f"""
+        SELECT DISTINCT t.user_id
+        FROM {table} t
+        LEFT JOIN users u ON u.user_id = t.user_id
+        WHERE t.user_id IS NOT NULL AND u.user_id IS NULL
+        """
+    )
+    orphan_ids = [int(r[0]) for r in cur.fetchall()]
+    if not orphan_ids:
+        return 0
+    now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    sql = (
+        "INSERT INTO users (user_id, username, credits, created_at) "
+        "VALUES ($1, $2, 0, $3) "
+        "ON CONFLICT (user_id) DO NOTHING"
+    )
+    async with pg.transaction():
+        for uid in orphan_ids:
+            await pg.execute(sql, uid, f"migrated_orphan_{uid}", now_utc)
+    return len(orphan_ids)
+
+
 async def _validate_counts(src: sqlite3.Connection, pg: asyncpg.Connection, tables: list[str]) -> list[str]:
     report: list[str] = []
     for table in tables:
@@ -110,6 +139,9 @@ async def main() -> None:
     try:
         print(f"Tables to migrate: {len(tables)}")
         for table in tables:
+            orphan_seeded = await _seed_orphan_users_for_table(src, pg, table)
+            if orphan_seeded:
+                print(f"{table}: seeded orphan users={orphan_seeded}")
             copied, total = await _copy_table(src, pg, table, max(1, int(args.batch_size)))
             print(f"{table}: copied {copied}/{total}")
         print("\nValidation (critical tables):")
