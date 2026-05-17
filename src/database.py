@@ -292,12 +292,12 @@ async def _backfill_generated_images_total_once(db: aiosqlite.Connection) -> Non
 
 
 async def _migrate_wata_benefits_applied(db: aiosqlite.Connection) -> None:
-    try:
+    async with db.execute("PRAGMA table_info(wata_payment_orders)") as cur:
+        cols = {row[1] for row in await cur.fetchall()}
+    if "benefits_applied" not in cols:
         await db.execute(
             "ALTER TABLE wata_payment_orders ADD COLUMN benefits_applied INTEGER NOT NULL DEFAULT 0"
         )
-    except sqlite3.OperationalError:
-        pass
 
 
 async def _migrate_nonsub_quota_exhaustion_semantics(db: aiosqlite.Connection) -> None:
