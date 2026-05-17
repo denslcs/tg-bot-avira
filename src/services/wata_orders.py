@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -51,6 +52,23 @@ class WataFinalizeResult:
     pack_credits: int = 0
     transaction_id: str = ""
     error_message: str = ""
+
+
+# Wata: 1 GET /transactions на orderId раз в 30 секунд.
+_WATA_TXN_CHECK_AT: dict[str, float] = {}
+_WATA_TXN_CHECK_MIN_SEC = 31.0
+
+
+def _wata_check_cooldown_sec(order_id: str) -> float | None:
+    last = _WATA_TXN_CHECK_AT.get(order_id)
+    if last is None:
+        return None
+    wait = _WATA_TXN_CHECK_MIN_SEC - (time.time() - last)
+    return wait if wait > 0 else None
+
+
+def _wata_check_mark(order_id: str) -> None:
+    _WATA_TXN_CHECK_AT[order_id] = time.time()
 
 
 def build_wata_order_id(*, user_id: int, kind: str, item_id: str) -> str:
@@ -150,11 +168,28 @@ async def finalize_wata_order(
             item_id=item_id,
         )
 
+    cooldown = _wata_check_cooldown_sec(order_id)
+    if cooldown is not None:
+        sec = int(cooldown) + 1
+        return WataFinalizeResult(
+            status=WataFinalizeStatus.ERROR,
+            order_id=order_id,
+            kind=kind,
+            item_id=item_id,
+            error_message=(
+                f"Слишком частые проверки. Подожди ещё {sec} с и нажми «Проверить оплату» снова."
+            ),
+        )
+
     try:
         client = WataClient()
-        paid_txns = await client.find_paid_transactions(order_id)
-        declined_txns = await client.find_declined_transactions(order_id)
+        all_txns = await client.find_transactions_for_order(order_id)
+        _wata_check_mark(order_id)
+        paid_txns = [t for t in all_txns if str(t.get("status") or "").strip() == "Paid"]
+        declined_txns = [t for t in all_txns if str(t.get("status") or "").strip() == "Declined"]
     except WataApiError as exc:
+        if exc.status_code == 429:
+            _wata_check_mark(order_id)
         return WataFinalizeResult(
             status=WataFinalizeStatus.ERROR,
             order_id=order_id,

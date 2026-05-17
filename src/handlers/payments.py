@@ -1322,14 +1322,15 @@ async def _start_wata_rub_checkout(
             await _send_wata_checkout_screen(
                 callback.message,
                 text=(
-                    f"<blockquote><i>Оплата: <b>{esc(title)}</b> — <b>{esc(price_rub)} ₽</b>.</i>\n"
-                    "<i>Заказ привязан к твоему Telegram — подписка или кредиты начислятся "
-                    "этому аккаунту.</i></blockquote>\n"
-                    "<blockquote><i>1. Нажми «Оплатить» и заверши платёж на странице Wata.\n"
-                    "2. После оплаты обычно хватает <b>1–2 мин</b> (при нагрузке — до <b>5 мин</b>), "
-                    "пока банк передаст статус.</i>\n"
-                    "<i>3. Нажми <b>«Проверить оплату»</b> на этом экране — "
-                    "или вернись в бота по ссылке после кассы (проверка запустится сама).</i></blockquote>"
+                    f"<b>💳 Оплата:</b> <b>{esc(title)}</b> — <b>{esc(price_rub)} ₽</b>\n"
+                    "<i>📲 Заказ привязан к твоему Telegram — подписка или кредиты начислятся "
+                    "этому аккаунту.</i>\n\n"
+                    "<b>📋 Как оплатить:</b>\n"
+                    "<i>1️⃣ Нажми «Оплатить» и заверши платёж на странице Wata.\n"
+                    "2️⃣ После оплаты обычно хватает <b>1–2 мин</b> (при нагрузке — до <b>5 мин</b>), "
+                    "пока банк передаст статус.\n"
+                    "3️⃣ Нажми <b>«Проверить оплату»</b> на этом экране — "
+                    "или вернись в бота по ссылке после кассы (проверка запустится сама).</i>"
                 ),
                 keyboard=keyboard,
             )
@@ -1432,9 +1433,12 @@ def _wata_finalize_user_message(result) -> str:
             support_username=SUPPORT_BOT_USERNAME,
         )
     if r.status == WataFinalizeStatus.ERROR:
+        msg = r.error_message or "Попробуй позже или напиши в поддержку."
+        if "Подожди" in msg or "частые" in msg.lower():
+            return f"<blockquote><i>{esc(msg)}</i></blockquote>"
         return (
             "<blockquote><i>Не удалось проверить оплату.</i> "
-            f"{esc(r.error_message or 'Попробуй позже или напиши в поддержку.')}</blockquote>"
+            f"{esc(msg)}</blockquote>"
         )
     if r.status == WataFinalizeStatus.WRONG_USER:
         return "<blockquote><i>Этот заказ создан в другом аккаунте Telegram.</i></blockquote>"

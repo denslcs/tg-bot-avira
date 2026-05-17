@@ -69,23 +69,32 @@ class WataClient:
             payload["failRedirectUrl"] = fail_redirect_url
         return await self._request("POST", "/links", json_body=payload)
 
-    async def find_transactions(self, order_id: str, *, statuses: str) -> list[dict[str, Any]]:
-        data = await self._request(
-            "GET",
-            "/transactions/",
-            params={
-                "orderId": order_id,
-                "statuses": statuses,
-                "maxResultCount": 10,
-            },
-        )
+    async def find_transactions_for_order(self, order_id: str) -> list[dict[str, Any]]:
+        """
+        Все транзакции по orderId одним запросом (Wata: не чаще 1 GET / 30 с на orderId).
+        """
+        try:
+            data = await self._request(
+                "GET",
+                "/v2/transactions/",
+                params={
+                    "orderId": order_id,
+                    "maxResultCount": 20,
+                },
+            )
+        except WataApiError as exc:
+            if exc.status_code == 404:
+                return []
+            raise
         return _extract_transaction_items(data)
 
     async def find_paid_transactions(self, order_id: str) -> list[dict[str, Any]]:
-        return await self.find_transactions(order_id, statuses="Paid")
+        txns = await self.find_transactions_for_order(order_id)
+        return [t for t in txns if str(t.get("status") or "").strip() == "Paid"]
 
     async def find_declined_transactions(self, order_id: str) -> list[dict[str, Any]]:
-        return await self.find_transactions(order_id, statuses="Declined")
+        txns = await self.find_transactions_for_order(order_id)
+        return [t for t in txns if str(t.get("status") or "").strip() == "Declined"]
 
     async def _request(
         self,
@@ -111,6 +120,16 @@ class WataClient:
                 raise WataApiError(f"Сеть Wata: {exc}") from exc
         if resp.status_code == 401:
             raise WataApiError("Токен Wata недействителен (401)", status_code=401)
+        if resp.status_code == 429:
+            retry_raw = (resp.headers.get("Retry-After") or "").strip()
+            try:
+                retry_sec = max(1, int(float(retry_raw))) if retry_raw else 30
+            except ValueError:
+                retry_sec = 30
+            raise WataApiError(
+                f"Слишком частые проверки. Подожди {retry_sec} с и нажми «Проверить оплату» снова.",
+                status_code=429,
+            )
         if resp.status_code >= 400:
             body = resp.text[:500]
             raise WataApiError(
