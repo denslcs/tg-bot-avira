@@ -8,7 +8,8 @@ from aiogram import Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from src.config import DATABASE_URL, DB_BACKEND, PROJECT_ROOT
-from src.services.wata_client import wata_configured
+from src.services.wata_client import WataApiError, WataClient, wata_configured
+from src.services.wata_orders import build_wata_order_id
 from src.database import init_db, open_db
 from src.handlers.global_errors import global_error_handler
 from src.handlers.img_commands import (
@@ -25,6 +26,30 @@ class SelfCheckResult:
     ok: bool
     checks: list[str]
     errors: list[str]
+
+
+async def _check_wata_api_live() -> tuple[list[str], list[str]]:
+    """Пробный запрос POST /links (минимальная сумма) — ловит 401/403 и сеть."""
+    checks: list[str] = []
+    errors: list[str] = []
+    order_id = build_wata_order_id(user_id=0, kind="plan", item_id="starter")
+    try:
+        client = WataClient()
+        link = await client.create_payment_link(
+            amount_rub=10.0,
+            order_id=order_id,
+            description="selfcheck",
+            link_type="OneTime",
+        )
+        if str(link.get("url") or "").strip():
+            checks.append("Wata API: test payment link created (POST /links).")
+        else:
+            errors.append("Wata API: ответ без url платёжной ссылки.")
+    except WataApiError as exc:
+        errors.append(f"Wata API: {exc}")
+    except Exception as exc:
+        errors.append(f"Wata API unexpected: {exc}")
+    return checks, errors
 
 
 def _check_ready_ideas() -> tuple[list[str], list[str]]:
@@ -348,6 +373,9 @@ async def run_self_check() -> SelfCheckResult:
     errors.extend(catalog_errors)
     if wata_configured():
         checks.append("WATA_ACCESS_TOKEN is set (card RUB via API).")
+        wata_checks, wata_errors = await _check_wata_api_live()
+        checks.extend(wata_checks)
+        errors.extend(wata_errors)
     else:
         checks.append("WATA_ACCESS_TOKEN is not set (card RUB uses PAY_URL_* fallback).")
     db_checks, db_errors = await _check_db_backend_health()

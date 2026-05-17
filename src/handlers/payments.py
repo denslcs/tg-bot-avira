@@ -638,7 +638,7 @@ def _methods_keyboard(
                 InlineKeyboardButton(
                     text=f"{rub} ₽ · картой РФ",
                     callback_data=f"{CB_PAY_RUB_PREFIX}{item_id}",
-                    style=BTN_PRIMARY,
+                    style=BTN_SUCCESS,
                     icon_custom_emoji_id=PAY_INLINE_RUB_BTN_EMOJI_ID,
                 )
             ],
@@ -1143,6 +1143,13 @@ def _pay_item_info(item_id: str, *, pack_rub_override: int | None = None) -> tup
     return b.title, b.price_rub
 
 
+def _wata_payment_description(*, kind: str, item_id: str, title: str) -> str:
+    """Описание заказа для Wata (без HTML и эмодзи — только текст)."""
+    if kind == "plan":
+        return f"Подписка {item_id}"
+    return (title or item_id).strip()[:500]
+
+
 async def _send_wata_checkout_screen(
     message: Message,
     *,
@@ -1187,7 +1194,7 @@ async def _wata_success_redirect_url(bot, order_id: str) -> str | None:
     return f"https://t.me/{username}?start={payload}"
 
 
-async def _wata_checkout_kind_item(item_id: str) -> tuple[str, str] | None:
+def _wata_checkout_kind_item(item_id: str) -> tuple[str, str] | None:
     if item_id in PLANS:
         return "plan", item_id
     if item_id in BONUS_PACKS:
@@ -1239,12 +1246,13 @@ async def _start_wata_rub_checkout(
         try:
             order_id = build_wata_order_id(user_id=user_id, kind=kind, item_id=item_id)
             redirect = await _wata_success_redirect_url(callback.message.bot, order_id)
+            wata_desc = _wata_payment_description(kind=kind, item_id=item_id, title=title)
             order_id, pay_url = await create_wata_checkout(
                 user_id=user_id,
                 kind=kind,
                 item_id=item_id,
                 amount_rub=price_rub,
-                description=title,
+                description=wata_desc,
                 success_redirect_url=redirect,
                 order_id=order_id,
             )
@@ -1260,31 +1268,33 @@ async def _start_wata_rub_checkout(
                 show_alert=True,
             )
             answered = True
-            await _send_wata_checkout_screen(
-                callback.message,
-                text=(
-                    "<blockquote><i>Оплата картой временно недоступна.</i> "
-                    f"{esc(str(exc))}</blockquote>"
-                ),
-                keyboard=InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [
-                            InlineKeyboardButton(
-                                text="Назад",
-                                callback_data=back_cb,
-                                icon_custom_emoji_id="5256247952564825322",
-                            )
-                        ]
-                    ]
-                ),
-            )
+            if callback.message:
+                try:
+                    await callback.message.answer(
+                        "<blockquote><i>Оплата картой временно недоступна.</i> "
+                        f"{esc(str(exc))}</blockquote>",
+                        parse_mode=HTML,
+                        reply_markup=InlineKeyboardMarkup(
+                            inline_keyboard=[
+                                [
+                                    InlineKeyboardButton(
+                                        text="Назад",
+                                        callback_data=back_cb,
+                                        icon_custom_emoji_id="5256247952564825322",
+                                    )
+                                ]
+                            ]
+                        ),
+                    )
+                except Exception:
+                    logger.debug("wata error reply failed", exc_info=True)
             return
         check_cb = f"{CB_PAY_WATA_CHECK_PREFIX}{order_id}"
         if len(check_cb.encode("utf-8")) > 64:
             await callback.answer("Внутренняя ошибка заказа", show_alert=True)
             answered = True
             return
-        if not pay_url.lower().startswith(("http://", "https://")):
+        if not pay_url.lower().startswith("https://"):
             logger.error("wata invalid pay url uid=%s order=%s url=%r", user_id, order_id, pay_url)
             await callback.answer("Ссылка оплаты недействительна.", show_alert=True)
             answered = True
@@ -1308,27 +1318,63 @@ async def _start_wata_rub_checkout(
                 ],
             ]
         )
-        await _send_wata_checkout_screen(
-            callback.message,
-            text=(
-                f"<blockquote><i>Оплата: <b>{esc(title)}</b> — <b>{esc(price_rub)} ₽</b>.</i>\n"
-                "<i>Заказ привязан к твоему Telegram — подписка или кредиты начислятся "
-                "этому аккаунту.</i></blockquote>\n"
-                "<blockquote><i>1. Нажми «Оплатить» и заверши платёж на странице Wata.\n"
-                "2. После оплаты обычно хватает <b>1–2 мин</b> (при нагрузке — до <b>5 мин</b>), "
-                "пока банк передаст статус.</i>\n"
-                "<i>3. Нажми <b>«Проверить оплату»</b> на этом экране — "
-                "или вернись в бота по ссылке после кассы (проверка запустится сама).</i></blockquote>"
-            ),
-            keyboard=keyboard,
-        )
+        try:
+            await _send_wata_checkout_screen(
+                callback.message,
+                text=(
+                    f"<blockquote><i>Оплата: <b>{esc(title)}</b> — <b>{esc(price_rub)} ₽</b>.</i>\n"
+                    "<i>Заказ привязан к твоему Telegram — подписка или кредиты начислятся "
+                    "этому аккаунту.</i></blockquote>\n"
+                    "<blockquote><i>1. Нажми «Оплатить» и заверши платёж на странице Wata.\n"
+                    "2. После оплаты обычно хватает <b>1–2 мин</b> (при нагрузке — до <b>5 мин</b>), "
+                    "пока банк передаст статус.</i>\n"
+                    "<i>3. Нажми <b>«Проверить оплату»</b> на этом экране — "
+                    "или вернись в бота по ссылке после кассы (проверка запустится сама).</i></blockquote>"
+                ),
+                keyboard=keyboard,
+            )
+        except TelegramBadRequest as exc:
+            logger.warning(
+                "wata checkout telegram rejected uid=%s order=%s: %s",
+                user_id,
+                order_id,
+                exc,
+            )
+            await callback.answer(
+                "Не удалось показать кнопку оплаты. Напиши в поддержку.",
+                show_alert=True,
+            )
+            answered = True
+            if callback.message:
+                await callback.message.answer(
+                    "<blockquote><i>Ссылка на оплату создана, но Telegram не принял кнопку. "
+                    "Напиши в поддержку — пришлём ссылку вручную.</i></blockquote>",
+                    parse_mode=HTML,
+                )
+            return
         await callback.answer()
         answered = True
-    except Exception:
+    except WataApiError as exc:
+        logger.warning("wata rub checkout wata error uid=%s item=%s: %s", callback.from_user.id, item_id, exc)
+        if not answered:
+            try:
+                await callback.answer("Ошибка Wata. Проверь токен в настройках бота.", show_alert=True)
+            except TelegramBadRequest:
+                pass
+        if callback.message:
+            try:
+                await callback.message.answer(
+                    f"<blockquote><i>Оплата картой недоступна: {esc(str(exc))}</i></blockquote>",
+                    parse_mode=HTML,
+                )
+            except Exception:
+                pass
+    except Exception as exc:
         logger.exception(
-            "wata rub checkout failed uid=%s item=%s",
+            "wata rub checkout failed uid=%s item=%s: %s",
             callback.from_user.id,
             item_id,
+            exc,
         )
         if not answered:
             try:
@@ -1336,10 +1382,12 @@ async def _start_wata_rub_checkout(
             except TelegramBadRequest:
                 pass
         if callback.message:
+            hint = esc(str(exc))[:200] if str(exc) else "неизвестная ошибка"
             try:
                 await callback.message.answer(
-                    "<blockquote><i>Не удалось подготовить оплату картой. "
-                    "Попробуй ещё раз через минуту или выбери оплату Звёздами.</i></blockquote>",
+                    "<blockquote><i>Не удалось подготовить оплату картой.</i> "
+                    f"<i>({hint})</i>\n"
+                    "Проверь <b>WATA_ACCESS_TOKEN</b> на сервере или выбери оплату Звёздами.</blockquote>",
                     parse_mode=HTML,
                 )
             except Exception:
