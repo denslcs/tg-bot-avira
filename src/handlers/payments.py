@@ -6,9 +6,8 @@ from __future__ import annotations
 Автоматическая запись подписки в БД — только при успешной оплате Telegram Stars
 (SUCCESSFUL_PAYMENT): срок подписки + кредиты; при активной подписке — продление срока
 (extend) и бонус к кредитам за продление (включая окно 2 дня после окончания).
-Оплата по внешним ссылкам
-(карта РФ/INTL, крипта) в этом боте только ведёт на кассу; продление в users делается
-вручную или отдельным процессом на стороне платежки.
+Оплата картой РФ через Wata API (если задан WATA_ACCESS_TOKEN): одноразовая ссылка с orderId,
+кнопка «Проверить оплату». INTL/крипта — статические PAY_URL_* или поддержка.
 """
 
 import logging
@@ -45,6 +44,7 @@ from src.config import (
     PAY_URL_CRYPTO,
     PROJECT_ROOT,
     SUPPORT_BOT_USERNAME,
+
 )
 from src.database import (
     add_credits_with_reason,
@@ -85,6 +85,7 @@ from src.keyboards.callback_data import (
     CB_PAY_PLAN_PREFIX,
     CB_PAY_RUB_PREFIX,
     CB_PAY_STARS_PREFIX,
+    CB_PAY_WATA_CHECK_PREFIX,
 )
 from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 from src.subscription_catalog import (
@@ -104,10 +105,74 @@ from src.services.payments_apply import (
     apply_plan_purchase_from_stars,
     repeat_plan_bonus_extra_credits,
 )
+from src.services.wata_client import WataApiError, wata_configured
+from src.services.payment_user_messages import (
+    pack_purchase_success_html,
+    plan_purchase_success_html,
+    wata_already_applied_pack_html,
+    wata_already_applied_plan_html,
+    wata_declined_html,
+    wata_paid_but_not_applied_html,
+)
+from src.services.wata_orders import (
+    WataFinalizeStatus,
+    build_wata_order_id,
+    create_wata_checkout,
+    finalize_latest_pending_wata_for_user,
+    finalize_wata_order,
+    parse_wata_start_payload,
+)
 
 router = Router(name="payments")
 
 logger = logging.getLogger(__name__)
+
+
+async def try_apply_pending_wata_after_redirect(
+    message: Message,
+    start_payload: str | None = None,
+) -> bool:
+    """
+    После возврата с кассы (start=wata_<order_id> или wata_ok): проверить заказ Wata.
+    Возвращает True, если обработан диплинк wata (сообщение пользователю отправлено).
+    """
+    if not message.from_user or not wata_configured():
+        return False
+    arg = (start_payload or "").strip()
+    if not arg.lower().startswith("wata"):
+        return False
+    order_id = parse_wata_start_payload(arg)
+    if order_id:
+        result = await finalize_wata_order(
+            order_id,
+            expected_user_id=message.from_user.id,
+            can_buy_plan=_can_buy_plan,
+        )
+    else:
+        result = await finalize_latest_pending_wata_for_user(
+            message.from_user.id,
+            can_buy_plan=_can_buy_plan,
+        )
+    if result is None:
+        await message.answer(
+            "<blockquote><i>Нет незавершённой оплаты. "
+            "Если уже платил — нажми «Проверить оплату» в меню «Оплатить».</i></blockquote>",
+            parse_mode=HTML,
+        )
+        return True
+    text = _wata_finalize_user_message(result)
+    await message.answer(text, parse_mode=HTML)
+    if result.status == WataFinalizeStatus.PAID and result.kind == "plan":
+        await _notify_admin_sales(
+            message.bot,
+            thread_id=_admin_sales_thread_for_plan(result.item_id),
+            text=(
+                "<b>Подписка оплачена (Wata, redirect)</b>\n"
+                f"Тариф: {plan_subscription_title_html(result.item_id)}\n"
+                f"Пользователь: {_user_line_html(message.from_user)}"
+            ),
+        )
+    return True
 
 
 def _log_payment_event(event: str, **kwargs: object) -> None:
@@ -1077,6 +1142,200 @@ def _pay_item_info(item_id: str, *, pack_rub_override: int | None = None) -> tup
     return b.title, b.price_rub
 
 
+async def _wata_success_redirect_url(bot, order_id: str) -> str | None:
+    try:
+        me = await bot.get_me()
+        username = (me.username or "").strip()
+    except Exception:
+        username = ""
+    if not username:
+        return None
+    payload = f"wata_{order_id}"
+    if len(payload.encode("utf-8")) > 64:
+        payload = "wata_ok"
+    return f"https://t.me/{username}?start={payload}"
+
+
+async def _wata_checkout_kind_item(item_id: str) -> tuple[str, str] | None:
+    if item_id in PLANS:
+        return "plan", item_id
+    if item_id in BONUS_PACKS:
+        return "pack", item_id
+    return None
+
+
+async def _start_wata_rub_checkout(
+    callback: CallbackQuery,
+    item_id: str,
+    *,
+    pack_rub_override: int | None = None,
+) -> None:
+    if not callback.from_user or not callback.message:
+        await callback.answer()
+        return
+    await ensure_user(callback.from_user.id, callback.from_user.username)
+    if not wata_configured():
+        await _external_pay_hint(
+            callback,
+            item_id,
+            "карта РФ",
+            PAY_URL_CARD_RU or None,
+            pack_rub_override=pack_rub_override,
+        )
+        return
+    kind_item = _wata_checkout_kind_item(item_id)
+    if kind_item is None:
+        await callback.answer("Ошибка тарифа", show_alert=True)
+        return
+    kind, _ = kind_item
+    user_id = callback.from_user.id
+    title, price_rub = _pay_item_info(item_id, pack_rub_override=pack_rub_override)
+    if kind == "plan":
+        allowed, reason = await _can_buy_plan(user_id, item_id)
+        if not allowed:
+            await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
+            return
+    back_cb = (
+        f"{CB_PAY_PLAN_PREFIX}{item_id}"
+        if item_id in PLANS
+        else f"{CB_PAY_PACK_PREFIX}{item_id}"
+    )
+    try:
+        order_id = build_wata_order_id(user_id=user_id, kind=kind, item_id=item_id)
+        redirect = await _wata_success_redirect_url(callback.message.bot, order_id)
+        order_id, pay_url = await create_wata_checkout(
+            user_id=user_id,
+            kind=kind,
+            item_id=item_id,
+            amount_rub=price_rub,
+            description=title,
+            success_redirect_url=redirect,
+            order_id=order_id,
+        )
+    except WataApiError as exc:
+        logger.exception("wata create link failed uid=%s item=%s", user_id, item_id)
+        await callback.answer("Не удалось создать ссылку оплаты. Попробуй позже.", show_alert=True)
+        if callback.message:
+            await edit_or_send_nav_message(
+                callback.message,
+                text=(
+                    "<blockquote><i>Оплата картой временно недоступна.</i> "
+                    f"{esc(str(exc))}</blockquote>"
+                ),
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="Назад",
+                                callback_data=back_cb,
+                                icon_custom_emoji_id="5256247952564825322",
+                            )
+                        ]
+                    ]
+                ),
+                parse_mode=HTML,
+            )
+        return
+    check_cb = f"{CB_PAY_WATA_CHECK_PREFIX}{order_id}"
+    if len(check_cb.encode("utf-8")) > 64:
+        await callback.answer("Внутренняя ошибка заказа", show_alert=True)
+        return
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=f"Оплатить {price_rub} ₽", url=pay_url, style=BTN_PRIMARY)],
+            [
+                InlineKeyboardButton(
+                    text="Проверить оплату",
+                    callback_data=check_cb,
+                    style=BTN_SUCCESS,
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Назад",
+                    callback_data=back_cb,
+                    icon_custom_emoji_id="5256247952564825322",
+                )
+            ],
+        ]
+    )
+    await edit_or_send_nav_message(
+        callback.message,
+        text=(
+            f"<blockquote><i>Оплата: <b>{esc(title)}</b> — <b>{esc(price_rub)} ₽</b>.</i>\n"
+            "<i>Заказ привязан к твоему Telegram — подписка или кредиты начислятся "
+            "этому аккаунту.</i></blockquote>\n"
+            "<blockquote><i>1. Нажми «Оплатить» и заверши платёж на странице Wata.\n"
+            "2. После оплаты обычно хватает <b>1–2 мин</b> (при нагрузке — до <b>5 мин</b>), "
+            "пока банк передаст статус.</i>\n"
+            "<i>3. Нажми <b>«Проверить оплату»</b> на этом экране — "
+            "или вернись в бота по ссылке после кассы (проверка запустится сама).</i></blockquote>"
+        ),
+        reply_markup=keyboard,
+        parse_mode=HTML,
+    )
+    await callback.answer()
+
+
+def _wata_finalize_user_message(result) -> str:
+    from src.services.wata_orders import WataFinalizeResult
+
+    r: WataFinalizeResult = result
+    if r.status == WataFinalizeStatus.PENDING:
+        return (
+            "<blockquote><i>Платёж пока не виден в кассе.</i> "
+            "Если только что оплатил — подожди <b>1–2 мин</b> (при большой нагрузке — до <b>5 мин</b>) "
+            "и нажми <b>«Проверить оплату»</b> снова на экране оплаты.</i>\n"
+            "<i>Ничего дополнительно писать не нужно — заказ уже привязан к твоему Telegram.</i></blockquote>"
+        )
+    if r.status == WataFinalizeStatus.DECLINED:
+        return wata_declined_html()
+    if r.status == WataFinalizeStatus.ALREADY_PAID:
+        if r.kind == "plan" and r.item_id:
+            return wata_already_applied_plan_html(
+                r.item_id, support_username=SUPPORT_BOT_USERNAME
+            )
+        if r.kind == "pack" and r.item_id:
+            return wata_already_applied_pack_html(r.item_id)
+        return "<blockquote><i>Эта оплата уже была зачислена ранее.</i></blockquote>"
+    if r.status in (
+        WataFinalizeStatus.NOT_ALLOWED,
+        WataFinalizeStatus.AMOUNT_MISMATCH,
+        WataFinalizeStatus.APPLY_FAILED,
+    ):
+        return wata_paid_but_not_applied_html(
+            order_id=r.order_id,
+            transaction_id=r.transaction_id,
+            support_username=SUPPORT_BOT_USERNAME,
+        )
+    if r.status == WataFinalizeStatus.ERROR:
+        return (
+            "<blockquote><i>Не удалось проверить оплату.</i> "
+            f"{esc(r.error_message or 'Попробуй позже или напиши в поддержку.')}</blockquote>"
+        )
+    if r.status == WataFinalizeStatus.WRONG_USER:
+        return "<blockquote><i>Этот заказ создан в другом аккаунте Telegram.</i></blockquote>"
+    if r.status == WataFinalizeStatus.NOT_FOUND:
+        return "<blockquote><i>Заказ не найден. Создай оплату заново:</i> <code>/start</code> <i>→ Оплатить.</i></blockquote>"
+    if r.status == WataFinalizeStatus.PAID and r.kind == "pack":
+        return pack_purchase_success_html(r.pack_credits)
+    if r.status == WataFinalizeStatus.PAID and r.plan_apply:
+        return plan_purchase_success_html(
+            r.item_id,
+            r.plan_apply,
+            support_username=SUPPORT_BOT_USERNAME,
+        )
+    return "<blockquote><i>Неизвестный статус проверки.</i></blockquote>"
+
+
+def _wata_needs_support_notify(status: WataFinalizeStatus) -> bool:
+    return status in (
+        WataFinalizeStatus.NOT_ALLOWED,
+        WataFinalizeStatus.AMOUNT_MISMATCH,
+        WataFinalizeStatus.APPLY_FAILED,
+    )
+
+
 async def _external_pay_hint(
     callback: CallbackQuery,
     item_id: str,
@@ -1084,6 +1343,7 @@ async def _external_pay_hint(
     url: str | None,
     *,
     pack_rub_override: int | None = None,
+    connecting_only: bool = False,
 ) -> None:
     title, price_rub = _pay_item_info(item_id, pack_rub_override=pack_rub_override)
     if url:
@@ -1113,10 +1373,10 @@ async def _external_pay_hint(
             )
         await callback.answer()
         return
-    support_line = (
-        f"Напиши в @{SUPPORT_BOT_USERNAME} с текстом «{title}» (🪙 {price_rub})."
-        if SUPPORT_BOT_USERNAME
-        else f"Напиши в поддержку (бот в настройках проекта) с текстом «{title}» (🪙 {price_rub})."
+    back_cb = (
+        f"{CB_PAY_PLAN_PREFIX}{item_id}"
+        if item_id in PLANS
+        else f"{CB_PAY_PACK_PREFIX}{item_id}"
     )
     if callback.message:
         kb = InlineKeyboardMarkup(
@@ -1124,18 +1384,27 @@ async def _external_pay_hint(
                 [
                     InlineKeyboardButton(
                         text="Назад",
-                        callback_data=CB_PAY_MENU,
+                        callback_data=back_cb if connecting_only else CB_PAY_MENU,
                         icon_custom_emoji_id="5256247952564825322",
                     )
                 ]
             ]
         )
+        if connecting_only:
+            body = f"<blockquote><i>Оплата «{esc(label)}» пока подключается.</i></blockquote>"
+        else:
+            support_line = (
+                f"Напиши в @{SUPPORT_BOT_USERNAME} с текстом «{title}» (🪙 {price_rub})."
+                if SUPPORT_BOT_USERNAME
+                else f"Напиши в поддержку с текстом «{title}» (🪙 {price_rub})."
+            )
+            body = (
+                f"<b>Оплата «{esc(label)}»</b> пока подключается.\n"
+                f"<blockquote><i>{esc(support_line)} Мы выставим счёт или дадим ссылку.</i></blockquote>"
+            )
         await edit_or_send_nav_message(
             callback.message,
-            text=(
-                f"<b>Оплата «{esc(label)}»</b> пока подключается.\n"
-                f"<blockquote>{esc(support_line)} Мы выставим счёт или дадим ссылку.</blockquote>"
-            ),
+            text=body,
             reply_markup=kb,
             parse_mode=HTML,
         )
@@ -1163,13 +1432,85 @@ async def pay_rub(callback: CallbackQuery) -> None:
             pack_rub_override, _usd, _stars, _disc = _discount_pack_values(
                 item_id, discount_multiplier=m
             )
-    await _external_pay_hint(
+    await _start_wata_rub_checkout(
         callback,
         item_id,
-        "карта РФ",
-        PAY_URL_CARD_RU or None,
         pack_rub_override=pack_rub_override,
     )
+
+
+@router.callback_query(F.data.startswith(CB_PAY_WATA_CHECK_PREFIX))
+async def pay_wata_check(callback: CallbackQuery) -> None:
+    if not callback.from_user or not callback.message or not callback.data:
+        await callback.answer()
+        return
+    order_id = callback.data.removeprefix(CB_PAY_WATA_CHECK_PREFIX).strip()
+    if not order_id:
+        await callback.answer("Ошибка заказа", show_alert=True)
+        return
+    await callback.answer("Проверяю оплату… (обычно до 1–2 мин после платежа)")
+    result = await finalize_wata_order(
+        order_id,
+        expected_user_id=callback.from_user.id,
+        can_buy_plan=_can_buy_plan,
+    )
+    text = _wata_finalize_user_message(result)
+    if result.status == WataFinalizeStatus.PAID and result.kind == "plan":
+        await _notify_admin_sales(
+            callback.message.bot,
+            thread_id=_admin_sales_thread_for_plan(result.item_id),
+            text=(
+                "<b>Подписка оплачена (Wata)</b>\n"
+                f"Тариф: {plan_subscription_title_html(result.item_id)}\n"
+                f"Пользователь: {_user_line_html(callback.from_user)}\n"
+                f"Заказ: <code>{esc(order_id)}</code>\n"
+                f"Транзакция: <code>{esc(result.transaction_id)}</code>"
+            ),
+        )
+        _log_payment_event(
+            "wata_plan_applied",
+            user_id=callback.from_user.id,
+            item_id=result.item_id,
+            order_id=order_id,
+            transaction_id=result.transaction_id,
+        )
+    elif result.status == WataFinalizeStatus.PAID and result.kind == "pack":
+        await _notify_admin_sales(
+            callback.message.bot,
+            thread_id=ADMIN_SALES_THREAD_BONUS_PACKS,
+            text=(
+                "<b>Пакет оплачен (Wata)</b>\n"
+                f"Пакет: <code>{esc(result.item_id)}</code> · +{esc(result.pack_credits)} кр.\n"
+                f"Пользователь: {_user_line_html(callback.from_user)}\n"
+                f"Заказ: <code>{esc(order_id)}</code>"
+            ),
+        )
+    elif _wata_needs_support_notify(result.status):
+        await _notify_admin_sales(
+            callback.message.bot,
+            thread_id=(
+                _admin_sales_thread_for_plan(result.item_id)
+                if result.kind == "plan"
+                else ADMIN_SALES_THREAD_BONUS_PACKS
+            ),
+            text=(
+                "<b>⚠️ Wata: оплата без зачисления</b>\n"
+                f"Статус: <code>{esc(result.status.value)}</code>\n"
+                f"Пользователь: {_user_line_html(callback.from_user)}\n"
+                f"Заказ: <code>{esc(order_id)}</code>\n"
+                f"Транзакция: <code>{esc(result.transaction_id)}</code>\n"
+                f"Товар: <code>{esc(result.item_id)}</code>"
+            ),
+        )
+        _log_payment_event(
+            "wata_apply_failed",
+            user_id=callback.from_user.id,
+            order_id=order_id,
+            status=result.status.value,
+            item_id=result.item_id,
+            transaction_id=result.transaction_id,
+        )
+    await callback.message.answer(text, parse_mode=HTML)
 
 
 @router.callback_query(F.data.startswith(CB_PAY_INTL_PREFIX))
@@ -1199,6 +1540,7 @@ async def pay_intl(callback: CallbackQuery) -> None:
         "карта другой страны",
         PAY_URL_CARD_INTL or None,
         pack_rub_override=pack_rub_override,
+        connecting_only=True,
     )
 
 
@@ -1229,6 +1571,7 @@ async def pay_crypto(callback: CallbackQuery) -> None:
         "крипта",
         PAY_URL_CRYPTO or None,
         pack_rub_override=pack_rub_override,
+        connecting_only=True,
     )
 
 
@@ -1530,55 +1873,15 @@ async def successful_payment(message: Message) -> None:
             )
             return
         end_h = format_subscription_ends_at(apply_result.new_end)
-        q_lines = [
-            f"<i>Срок:</i> <b>{esc(apply_result.period_days)}</b> дн.; действует до <b>{esc(end_h)}</b>",
-        ]
-        if apply_result.had_active_renewal and item_id != "starter":
-            q_lines.append(
-                "<blockquote><i>Подписка продлена заранее — к текущему сроку добавлены дни тарифа.</i></blockquote>"
-            )
-            if apply_result.renewal_release_at:
-                q_lines.append(
-                    "<blockquote><i>Кредиты по этому продлению начислятся после окончания текущего периода подписки.</i></blockquote>"
-                )
-        if apply_result.renewal_extra > 0:
-            q_lines.append(
-                f"<i>Бонус за повтор этого же тарифа:</i> <b>+{esc(apply_result.renewal_extra)}</b> кредитов"
-            )
-        elif item_id != "starter" and (not apply_result.same_plan_repeat):
-            q_lines.append(
-                "<i>Смена тарифа: бонус за продление не применяется.</i>"
-            )
-        elif item_id != "starter" and apply_result.same_plan_repeat and not apply_result.renewal_bonus_eligible:
-            q_lines.append(
-                "<i>Бонус продления действует только при активной подписке или в течение 2 дней после её окончания.</i>"
-            )
-        if apply_result.credited:
-            q_lines.append(
-                (
-                    f"<i>{'Запланировано к начислению' if apply_result.had_active_renewal else 'Начислено на баланс'} "
-                    f"(тариф{(' + продление' if apply_result.renewal_extra else '')}):</i> "
-                    f"<b>+{esc(apply_result.total_bonus_credits)}</b> кредитов"
-                )
-            )
-        else:
-            q_lines.append(
-                f"<i>Бонус +{esc(apply_result.total_bonus_credits)} не начислен — напиши в поддержку.</i>"
-            )
-        quote_inner = "\n".join(q_lines)
-        starter_tail = ""
-        if item_id == "starter":
-            starter_tail = (
-                "\n\n<blockquote><i>После окончания "
-                f"{plan_subscription_title_html('starter')} оформи полный тариф в</i> "
-                "<code>/start</code> <i>→</i> <b>Оплатить</b><i>. Повторно "
-                f"{plan_subscription_title_html('starter')} купить нельзя.</i></blockquote>"
-            )
         verify_tail = ""
         if not apply_result.sub_active_ok:
             verify_tail = (
                 "\n\n<blockquote><i>Если в</i> <code>/profile</code> <i>подписка всё ещё «не активна», "
                 "обнови меню или напиши в поддержку — проверим запись.</i></blockquote>"
+            )
+        if not apply_result.credited and not apply_result.had_active_renewal:
+            verify_tail += (
+                "\n\n<blockquote><i>Кредиты не начислены автоматически — напиши в поддержку.</i></blockquote>"
             )
         if (
             apply_result.referral_bonus_credited > 0
@@ -1604,11 +1907,12 @@ async def successful_payment(message: Message) -> None:
                     message.from_user.id,
                 )
         await message.answer(
-            "<b>Спасибо за покупку!</b>\n"
-            f"Вы приобрели подписку <b>{plan_subscription_title_html(item_id)}</b>.\n\n"
-            f"<blockquote>{quote_inner}</blockquote>\n\n"
-            "<i>Можно снова открыть «Создать картинку» в</i> <code>/start</code>."
-            f"{starter_tail}{verify_tail}",
+            plan_purchase_success_html(
+                item_id,
+                apply_result,
+                support_username=SUPPORT_BOT_USERNAME,
+            )
+            + verify_tail,
             parse_mode=HTML,
         )
         stars_amt = int(sp.total_amount or 0)
@@ -1687,9 +1991,7 @@ async def successful_payment(message: Message) -> None:
     )
     if credited:
         await message.answer(
-            '<b>Оплата прошла <tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji></b>\n'
-            f"Пакет: <b>{esc(b.title)}</b>\n"
-            f"<blockquote><i>Начислено:</i> +{esc(b.credits)} кредитов на баланс.</blockquote>",
+            pack_purchase_success_html(b.credits),
             parse_mode=HTML,
         )
         stars_amt = int(sp.total_amount or 0)

@@ -291,6 +291,15 @@ async def _backfill_generated_images_total_once(db: aiosqlite.Connection) -> Non
     )
 
 
+async def _migrate_wata_benefits_applied(db: aiosqlite.Connection) -> None:
+    try:
+        await db.execute(
+            "ALTER TABLE wata_payment_orders ADD COLUMN benefits_applied INTEGER NOT NULL DEFAULT 0"
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
 async def _migrate_nonsub_quota_exhaustion_semantics(db: aiosqlite.Connection) -> None:
     """Очистить метку исчерпания, если счётчик не на максимуме (после смены логики окон)."""
     await db.execute(
@@ -431,6 +440,26 @@ async def init_db() -> None:
         )
         await db.execute(
             """
+            CREATE TABLE IF NOT EXISTS wata_payment_orders (
+                order_id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                kind TEXT NOT NULL,
+                item_id TEXT NOT NULL,
+                amount_rub INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                wata_link_id TEXT,
+                wata_transaction_id TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                paid_at TEXT
+            )
+            """
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_wata_payment_orders_user "
+            "ON wata_payment_orders (user_id, created_at DESC)"
+        )
+        await db.execute(
+            """
             CREATE TABLE IF NOT EXISTS user_last_image_context (
                 user_id INTEGER PRIMARY KEY,
                 kind TEXT NOT NULL,
@@ -488,6 +517,7 @@ async def init_db() -> None:
         await _migrate_generated_images_total(db)
         await _backfill_generated_images_total_once(db)
         await _migrate_nonsub_quota_exhaustion_semantics(db)
+        await _migrate_wata_benefits_applied(db)
         await _migrate_subscription_ends_at_canonical(db)
         await db.commit()
 
@@ -624,6 +654,23 @@ async def mark_redo_half_price_used_today(user_id: int) -> None:
             (d, user_id),
         )
         await db.commit()
+
+
+async def has_unreleased_subscription_bonus_pending(user_id: int) -> bool:
+    """Есть ли отложенные кредиты подписки, ещё не выданные на баланс (продление вперёд)."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    async with open_db() as db:
+        async with db.execute(
+            """
+            SELECT 1
+            FROM subscription_bonus_pending
+            WHERE user_id = ? AND release_at_utc > ?
+            LIMIT 1
+            """,
+            (int(user_id), now_iso),
+        ) as cur:
+            row = await cur.fetchone()
+    return row is not None
 
 
 async def queue_subscription_bonus_credits(
@@ -1907,6 +1954,190 @@ async def release_star_payment_claim(charge_id: str) -> None:
         await db.commit()
 
 
+async def star_payment_claim_belongs_to(charge_id: str, user_id: int) -> bool:
+    """True, если charge_id уже зарезервирован этим пользователем (повторная финализация Wata)."""
+    if not charge_id:
+        return False
+    async with open_db() as db:
+        async with db.execute(
+            "SELECT 1 FROM star_payment_charges WHERE charge_id = ? AND user_id = ?",
+            (charge_id, int(user_id)),
+        ) as cur:
+            row = await cur.fetchone()
+    return row is not None
+
+
+async def create_wata_payment_order(
+    *,
+    order_id: str,
+    user_id: int,
+    kind: str,
+    item_id: str,
+    amount_rub: int,
+    wata_link_id: str | None = None,
+) -> None:
+    async with open_db() as db:
+        await db.execute(
+            """
+            INSERT INTO wata_payment_orders (
+                order_id, user_id, kind, item_id, amount_rub, status, wata_link_id
+            )
+            VALUES (?, ?, ?, ?, ?, 'pending', ?)
+            """,
+            (order_id, int(user_id), kind, item_id, int(amount_rub), wata_link_id),
+        )
+        await db.commit()
+
+
+async def get_wata_payment_order(order_id: str) -> dict | None:
+    async with open_db() as db:
+        async with db.execute(
+            """
+            SELECT order_id, user_id, kind, item_id, amount_rub, status,
+                   wata_link_id, wata_transaction_id, created_at, paid_at,
+                   COALESCE(benefits_applied, 0)
+            FROM wata_payment_orders
+            WHERE order_id = ?
+            """,
+            (order_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return None
+    return _wata_payment_order_row_to_dict(row)
+
+
+async def mark_wata_order_benefits_applied(order_id: str) -> None:
+    async with open_db() as db:
+        await db.execute(
+            """
+            UPDATE wata_payment_orders
+            SET benefits_applied = 1
+            WHERE order_id = ? AND status = 'processing'
+            """,
+            (order_id,),
+        )
+        await db.commit()
+
+
+async def try_lock_wata_order_for_finalize(order_id: str) -> str:
+    """
+    Блокировка заказа на время начисления (pending → processing).
+    Возвращает: locked | paid | processing | declined | not_found | miss.
+    """
+    async with open_db() as db:
+        cur = await db.execute(
+            """
+            UPDATE wata_payment_orders
+            SET status = 'processing'
+            WHERE order_id = ? AND status = 'pending'
+            """,
+            (order_id,),
+        )
+        await db.commit()
+        if cur.rowcount and int(cur.rowcount) > 0:
+            return "locked"
+    row = await get_wata_payment_order(order_id)
+    if not row:
+        return "not_found"
+    st = str(row.get("status") or "")
+    if st == "paid":
+        return "paid"
+    if st == "processing":
+        return "processing"
+    if st == "declined":
+        return "declined"
+    return "miss"
+
+
+async def unlock_wata_order_finalize(order_id: str) -> None:
+    """Снять блокировку после ошибки начисления (processing → pending)."""
+    async with open_db() as db:
+        await db.execute(
+            """
+            UPDATE wata_payment_orders
+            SET status = 'pending'
+            WHERE order_id = ? AND status = 'processing'
+            """,
+            (order_id,),
+        )
+        await db.commit()
+
+
+async def mark_wata_payment_order_paid(
+    order_id: str,
+    *,
+    wata_transaction_id: str,
+    wata_link_id: str | None = None,
+) -> bool:
+    paid_at = datetime.now(timezone.utc).isoformat()
+    async with open_db() as db:
+        cur = await db.execute(
+            """
+            UPDATE wata_payment_orders
+            SET status = 'paid',
+                wata_transaction_id = ?,
+                wata_link_id = COALESCE(?, wata_link_id),
+                paid_at = ?
+            WHERE order_id = ? AND status IN ('pending', 'processing')
+            """,
+            (wata_transaction_id, wata_link_id, paid_at, order_id),
+        )
+        await db.commit()
+    return bool(cur.rowcount and int(cur.rowcount) > 0)
+
+
+async def mark_wata_payment_order_declined(order_id: str) -> None:
+    async with open_db() as db:
+        await db.execute(
+            """
+            UPDATE wata_payment_orders
+            SET status = 'declined'
+            WHERE order_id = ? AND status = 'pending'
+            """,
+            (order_id,),
+        )
+        await db.commit()
+
+
+def _wata_payment_order_row_to_dict(row) -> dict:
+    return {
+        "order_id": row[0],
+        "user_id": int(row[1]),
+        "kind": row[2],
+        "item_id": row[3],
+        "amount_rub": int(row[4]),
+        "status": row[5],
+        "wata_link_id": row[6],
+        "wata_transaction_id": row[7],
+        "created_at": row[8],
+        "paid_at": row[9],
+        "benefits_applied": bool(int(row[10] or 0)) if len(row) > 10 else False,
+    }
+
+
+async def list_pending_wata_orders_for_user(user_id: int) -> list[dict]:
+    async with open_db() as db:
+        async with db.execute(
+            """
+            SELECT order_id, user_id, kind, item_id, amount_rub, status,
+                   wata_link_id, wata_transaction_id, created_at, paid_at,
+                   COALESCE(benefits_applied, 0)
+            FROM wata_payment_orders
+            WHERE user_id = ? AND status IN ('pending', 'processing')
+            ORDER BY created_at DESC
+            """,
+            (int(user_id),),
+        ) as cur:
+            rows = await cur.fetchall()
+    return [_wata_payment_order_row_to_dict(r) for r in rows]
+
+
+async def get_latest_pending_wata_order_for_user(user_id: int) -> dict | None:
+    rows = await list_pending_wata_orders_for_user(user_id)
+    return rows[0] if rows else None
+
+
 async def extend_subscription(user_id: int, days: int, plan: str | None = None) -> str | None:
     if days <= 0:
         return None
@@ -2249,6 +2480,16 @@ async def subscription_can_purchase_plan(user_id: int, plan_id: str) -> tuple[bo
             return False, (
                 "Пока подписка активна, заранее можно продлить только текущий тариф. "
                 "Сменить тариф можно после окончания срока."
+            )
+        if (
+            current_plan
+            and current_plan == plan_id
+            and await has_unreleased_subscription_bonus_pending(user_id)
+        ):
+            return False, (
+                "У тебя уже оформлено продление этого тарифа на следующий период. "
+                "Кредиты по нему начислятся после окончания текущего срока — "
+                "тогда можно будет продлить снова."
             )
         return True, None
 

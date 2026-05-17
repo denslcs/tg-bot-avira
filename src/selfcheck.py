@@ -8,6 +8,7 @@ from aiogram import Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from src.config import DATABASE_URL, DB_BACKEND, PROJECT_ROOT
+from src.services.wata_client import wata_configured
 from src.database import init_db, open_db
 from src.handlers.global_errors import global_error_handler
 from src.handlers.img_commands import (
@@ -345,6 +346,10 @@ async def run_self_check() -> SelfCheckResult:
     catalog_checks, catalog_errors = _check_subscription_catalog()
     checks.extend(catalog_checks)
     errors.extend(catalog_errors)
+    if wata_configured():
+        checks.append("WATA_ACCESS_TOKEN is set (card RUB via API).")
+    else:
+        checks.append("WATA_ACCESS_TOKEN is not set (card RUB uses PAY_URL_* fallback).")
     db_checks, db_errors = await _check_db_backend_health()
     checks.extend(db_checks)
     errors.extend(db_errors)

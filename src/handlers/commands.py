@@ -18,10 +18,14 @@ from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     InputMediaPhoto,
+    LinkPreviewOptions,
     Message,
     MessageOriginChannel,
     MessageOriginChat,
 )
+
+# Без плашки-превью telegra.ph в подписи главного меню (ссылки в тексте остаются).
+_MAIN_MENU_LINK_PREVIEW = LinkPreviewOptions(is_disabled=True)
 
 from src.config import (
     ADMIN_IDS,
@@ -538,6 +542,8 @@ async def edit_or_send_nav_message(
     if message is None:
         return None
 
+    link_preview = _MAIN_MENU_LINK_PREVIEW if disable_web_page_preview else None
+
     if _is_generated_image_result_message(message):
         try:
             return await message.bot.send_message(
@@ -545,6 +551,7 @@ async def edit_or_send_nav_message(
                 text,
                 reply_markup=reply_markup,
                 parse_mode=parse_mode,
+                link_preview_options=link_preview,
                 disable_web_page_preview=disable_web_page_preview,
             )
         except Exception:
@@ -558,6 +565,7 @@ async def edit_or_send_nav_message(
                     caption=text,
                     reply_markup=reply_markup,
                     parse_mode=parse_mode,
+                    link_preview_options=link_preview,
                 )
             except Exception:
                 logging.debug(
@@ -570,6 +578,7 @@ async def edit_or_send_nav_message(
                 text,
                 reply_markup=reply_markup,
                 parse_mode=parse_mode,
+                link_preview_options=link_preview,
                 disable_web_page_preview=disable_web_page_preview,
             )
             try:
@@ -589,6 +598,7 @@ async def edit_or_send_nav_message(
             text,
             reply_markup=reply_markup,
             parse_mode=parse_mode,
+            link_preview_options=link_preview,
             disable_web_page_preview=disable_web_page_preview,
         )
     except Exception:
@@ -600,6 +610,7 @@ async def edit_or_send_nav_message(
             text,
             reply_markup=reply_markup,
             parse_mode=parse_mode,
+            link_preview_options=link_preview,
             disable_web_page_preview=disable_web_page_preview,
         )
     except Exception:
@@ -627,9 +638,16 @@ async def send_main_menu_screen(
             caption=text,
             reply_markup=kb,
             parse_mode=HTML,
+            link_preview_options=_MAIN_MENU_LINK_PREVIEW,
         )
     else:
-        await bot.send_message(chat_id, text, reply_markup=kb, parse_mode=HTML)
+        await bot.send_message(
+            chat_id,
+            text,
+            reply_markup=kb,
+            parse_mode=HTML,
+            link_preview_options=_MAIN_MENU_LINK_PREVIEW,
+        )
 
 
 async def restore_main_menu_message(message: Message, user_id: int, username: str | None) -> None:
@@ -653,6 +671,7 @@ async def restore_main_menu_message(message: Message, user_id: int, username: st
                             parse_mode=HTML,
                         ),
                         reply_markup=kb,
+                        link_preview_options=_MAIN_MENU_LINK_PREVIEW,
                     )
                     return
                 except Exception:
@@ -669,10 +688,16 @@ async def restore_main_menu_message(message: Message, user_id: int, username: st
                     text,
                     reply_markup=kb,
                     parse_mode=HTML,
+                    link_preview_options=_MAIN_MENU_LINK_PREVIEW,
                 )
                 return
             try:
-                await message.edit_caption(caption=text, reply_markup=kb, parse_mode=HTML)
+                await message.edit_caption(
+                    caption=text,
+                    reply_markup=kb,
+                    parse_mode=HTML,
+                    link_preview_options=_MAIN_MENU_LINK_PREVIEW,
+                )
                 return
             except Exception:
                 logging.debug("restore_main_menu_message: edit_caption failed", exc_info=True)
@@ -683,13 +708,25 @@ async def restore_main_menu_message(message: Message, user_id: int, username: st
 
         if banner and not message.photo:
             # Не удаляем UI-сообщения: только заменяем/переотправляем при необходимости.
-            edited = await edit_or_send_nav_message(message, text=text, reply_markup=kb, parse_mode=HTML)
+            edited = await edit_or_send_nav_message(
+                message,
+                text=text,
+                reply_markup=kb,
+                parse_mode=HTML,
+                disable_web_page_preview=True,
+            )
             if edited is not None:
                 return
             await send_main_menu_screen(message.bot, message.chat.id, user_id, username)
             return
 
-        edited = await edit_or_send_nav_message(message, text=text, reply_markup=kb, parse_mode=HTML)
+        edited = await edit_or_send_nav_message(
+            message,
+            text=text,
+            reply_markup=kb,
+            parse_mode=HTML,
+            disable_web_page_preview=True,
+        )
         if edited is not None:
             return
         await send_main_menu_screen(message.bot, message.chat.id, user_id, username)
@@ -754,6 +791,12 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
     await state.clear()
     user_id = message.from_user.id
     await ensure_user(user_id, message.from_user.username)
+    start_arg = (command.args or "").strip()
+    if start_arg.lower().startswith("wata"):
+        from src.handlers.payments import try_apply_pending_wata_after_redirect
+
+        if await try_apply_pending_wata_after_redirect(message, start_arg):
+            return
     raw = (message.text or message.caption or "").strip()
     referrer_id = _parse_ref_start_arg(command.args)
     if referrer_id is None and raw:
@@ -784,9 +827,15 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
             caption=text,
             reply_markup=kb,
             parse_mode=HTML,
+            link_preview_options=_MAIN_MENU_LINK_PREVIEW,
         )
     else:
-        await message.answer(text, reply_markup=kb, parse_mode=HTML)
+        await message.answer(
+            text,
+            reply_markup=kb,
+            parse_mode=HTML,
+            link_preview_options=_MAIN_MENU_LINK_PREVIEW,
+        )
     await message.answer(
         "Панель быстрого доступа включена ⤵️",
         reply_markup=quick_panel_keyboard(balance, mode_label=_ready_mode_label(ready_mode)),
@@ -1136,12 +1185,20 @@ async def menu_about(callback: CallbackQuery) -> None:
     text = (
         "<b>Что умеет бот</b>\n"
         "<blockquote>"
-        "• Собирать кадр по твоему описанию — от бытового до киношного.\n"
-        "• В «Готовых идеях» можно окунуться в атмосферу игр и фэнтези, попробовать MMORPG-героя, "
-        "сериалы и кино, хоррор и «найденную плёнку», fashion и студийные портреты.\n"
-        "• Поставить тебя рядом с узнаваемыми образами и сценами — промо, ринг, переговоры, то, что уже есть в подборке.\n"
-        "• Перенести в любую локацию: от бизнес-джета и Амальфи до тоннеля, бэкрумов или ночного города — без съёмочной группы.\n"
-        "• Подобрать сцену под твой запрос: одно фото, два референса или фото плюс текст — всё подсказано в карточке идеи."
+        "<b>Генерации</b>\n"
+        "• <b>Создать картинку</b> — по тексту или с фото.\n"
+        "• <b>Готовые идеи</b> — готовые сценарии из каталога; шаги — в карточке.\n\n"
+        f"<b>Кредиты</b> {CREDITS_COIN_TG_HTML}\n"
+        "Списываются только за генерации. Баланс и остаток — в профиле.\n\n"
+        "<b>Режимы</b> (готовые идеи)\n"
+        "<b>fast</b> — быстрее; <b>medium</b> — баланс; <b>premium</b> — выше качество. "
+        "Переключение — кнопка «Режим».\n\n"
+        "<b>Подписка</b>\n"
+        "Даёт кредиты на баланс и снимает лимиты «без подписки». "
+        "Чем выше тариф — тем дешевле генерации и больше моделей на выбор. "
+        "У Galaxy и Universe — приоритет в очереди.\n\n"
+        "<b>Без подписки</b>\n"
+        "Ограниченное число картинок и «готовых идей» за период; подробности — в профиле и «Частые вопросы»."
         "</blockquote>"
     )
     await edit_or_send_nav_message(
@@ -1452,19 +1509,13 @@ async def _profile_card_html(
             # В БД мог не быть записан тариф (старые выдачи / только срок); доступ как у Universe.
             plan_name = plan_subscription_title_html("universe")
         pid = "universe" if is_admin else (profile.subscription_plan or "").strip().lower()
-        if pid in ("starter", "galaxy", "universe"):
-            priority_note = (
-                f"\n<i>⚡ Приоритет очереди генераций и скидка на повтор «готовой идеи» как у "
-                f"{plan_subscription_title_html('universe')} (см. подсказки после картинки).</i>"
-            )
+        if pid in ("galaxy", "universe"):
+            priority_note = "\n<i>⚡ приоритет в очереди</i>"
     elif is_admin:
         sub_status = "админ-безлимит"
         sub_till = "—"
         plan_name = plan_subscription_title_html("universe")
-        priority_note = (
-            f"\n<i>⚡ Приоритет очереди генераций и скидка на повтор «готовой идеи» доступны как у "
-            f"{plan_subscription_title_html('universe')}.</i>"
-        )
+        priority_note = "\n<i>⚡ приоритет в очереди</i>"
     else:
         sub_status = "не активна"
         sub_till = (

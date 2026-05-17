@@ -184,6 +184,21 @@ PAY_URL_CARD_RU: str = os.getenv("PAY_URL_CARD_RU", "").strip()
 PAY_URL_CARD_INTL: str = os.getenv("PAY_URL_CARD_INTL", "").strip()
 PAY_URL_CRYPTO: str = os.getenv("PAY_URL_CRYPTO", "").strip()
 
+# Wata H2H: Access token из кабинета → Терминалы → Ключи.
+_wata_sandbox = os.getenv("WATA_USE_SANDBOX", "0").strip().lower() in ("1", "true", "yes")
+WATA_ACCESS_TOKEN: str = os.getenv("WATA_ACCESS_TOKEN", "").strip()
+WATA_API_BASE: str = (
+    os.getenv(
+        "WATA_API_BASE",
+        "https://api-sandbox.wata.pro/api/h2h"
+        if _wata_sandbox
+        else "https://api.wata.pro/api/h2h",
+    )
+    .strip()
+    .rstrip("/")
+    or ("https://api-sandbox.wata.pro/api/h2h" if _wata_sandbox else "https://api.wata.pro/api/h2h")
+)
+
 
 def _env_custom_emoji_id(name: str, default: str) -> str:
     """document_id премиум-эмодзи из .env; пусто — значение по умолчанию."""

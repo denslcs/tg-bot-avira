@@ -18,6 +18,7 @@ CRITICAL_TABLES = {
     "support_ratings",
     "subscription_bonus_pending",
     "star_payment_charges",
+    "wata_payment_orders",
     "bot_meta",
 }
 

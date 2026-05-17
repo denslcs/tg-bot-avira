@@ -67,6 +67,7 @@ CB_PAY_PLAN_PREFIX = "pay:p:"
 CB_PAY_PACK_PREFIX = "pay:b:"
 CB_PAY_STARS_PREFIX = "pay:s:"
 CB_PAY_RUB_PREFIX = "pay:r:"
+CB_PAY_WATA_CHECK_PREFIX = "pay:wc:"
 CB_PAY_INTL_PREFIX = "pay:i:"
 CB_PAY_CRYPTO_PREFIX = "pay:c:"
 # Возврат к выбору способа оплаты после счёта Stars: pay:ib:p:nova:h | pay:ib:b:pack300:m
@@ -117,6 +118,7 @@ __all__ = [
     "CB_PAY_PACK_PREFIX",
     "CB_PAY_PLAN_PREFIX",
     "CB_PAY_RUB_PREFIX",
+    "CB_PAY_WATA_CHECK_PREFIX",
     "CB_PAY_STARS_PREFIX",
     "CB_PICK_NANO",
     "CB_PICK_NANO_2",
