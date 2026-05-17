@@ -61,6 +61,7 @@ def _translate_sql_for_postgres(sql: str) -> str:
 class PostgresCursor:
     rows: list[tuple[Any, ...]]
     lastrowid: int | None = None
+    rowcount: int = 0
     _idx: int = 0
 
     async def fetchone(self) -> tuple[Any, ...] | None:
@@ -118,8 +119,13 @@ class PostgresCompatConnection:
             if row:
                 lastrowid = int(row[0])
         else:
-            await self._conn.execute(query, *params)
-        return PostgresCursor(rows=[], lastrowid=lastrowid)
+            status = await self._conn.execute(query, *params)
+            rowcount = 0
+            if status:
+                parts = str(status).split()
+                if parts and parts[-1].isdigit():
+                    rowcount = int(parts[-1])
+        return PostgresCursor(rows=[], lastrowid=lastrowid, rowcount=rowcount)
 
     async def commit(self) -> None:
         try:

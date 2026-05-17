@@ -22,6 +22,16 @@ def wata_configured() -> bool:
     return bool(WATA_ACCESS_TOKEN)
 
 
+def _unwrap_link_response(data: dict[str, Any]) -> dict[str, Any]:
+    """Нормализует ответ POST /links (плоский JSON или обёртка data)."""
+    if str(data.get("url") or "").strip():
+        return data
+    inner = data.get("data")
+    if isinstance(inner, dict):
+        return inner
+    return data
+
+
 class WataClient:
     def __init__(self, *, token: str | None = None, base_url: str | None = None) -> None:
         self._token = (token or WATA_ACCESS_TOKEN).strip()
@@ -115,7 +125,9 @@ class WataClient:
             err = data["error"]
             msg = err.get("message") if isinstance(err, dict) else str(err)
             raise WataApiError(msg or "Ошибка Wata")
-        return data if isinstance(data, dict) else {}
+        if isinstance(data, dict):
+            return _unwrap_link_response(data)
+        return {}
 
 
 def _extract_transaction_items(data: dict[str, Any]) -> list[dict[str, Any]]:

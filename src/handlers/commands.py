@@ -390,8 +390,7 @@ def _budget_source_label(source: str) -> str:
     return labels.get(source, source or "Операция")
 
 
-def _main_screen_body_text(balance: int, bonus_note: str = "") -> str:
-    """Текст под баннером без ссылок telegra.ph (превью ссылок — отдельным сообщением)."""
+def _main_screen_text(balance: int, bonus_note: str = "") -> str:
     bonus_html = esc(bonus_note) if bonus_note else ""
     return (
         '<b><tg-emoji emoji-id="5463297803235113601">✨</tg-emoji> Добро пожаловать в Shard Creator</b>\n'
@@ -401,33 +400,12 @@ def _main_screen_body_text(balance: int, bonus_note: str = "") -> str:
         f'<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Нажми <b>«{PROFILE_AVATAR_TG_HTML} Профиль»</b> внизу — увидишь '
         f"{CREDITS_COIN_TG_HTML} кредиты, статистику и лимиты.\n"
         '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Загляни в <b>«<tg-emoji emoji-id="5330522514231684724">🌟</tg-emoji> Что умеет бот»</b> — там коротко и понятно, как использовать все возможности.\n\n'
-        '<blockquote><b><tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> Подсказка:</b> <i>чем точнее задача в одном сообщении, тем лучше и быстрее итоговая генерация.</i></blockquote>'
-        f"{bonus_html}"
-    )
-
-
-def _main_screen_legal_text() -> str:
-    return (
+        '<blockquote><b><tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> Подсказка:</b> <i>чем точнее задача в одном сообщении, тем лучше и быстрее итоговая генерация.</i></blockquote>\n\n'
         '<blockquote><i>Продолжая использовать бота, вы подтверждаете, что ознакомились с '
         '<a href="https://telegra.ph/POLZOVATELSKOE-SOGLASHENIE-05-01-22">Публичной офертой</a> и '
         '<a href="https://telegra.ph/POLITIKA-KONFIDENCIALNOSTI-05-01-53">Политикой обработки персональных данных</a>.</i></blockquote>'
+        f"{bonus_html}"
     )
-
-
-def _main_screen_text(balance: int, bonus_note: str = "") -> str:
-    return f"{_main_screen_body_text(balance, bonus_note)}\n\n{_main_screen_legal_text()}"
-
-
-async def _send_main_screen_legal_note(message: Message) -> None:
-    try:
-        await message.answer(
-            _main_screen_legal_text(),
-            parse_mode=HTML,
-            link_preview_options=_MAIN_MENU_LINK_PREVIEW,
-            disable_web_page_preview=True,
-        )
-    except Exception:
-        logging.debug("legal note send failed", exc_info=True)
 
 
 def _days_in_bot(created_at: str) -> int:
@@ -587,7 +565,6 @@ async def edit_or_send_nav_message(
                     caption=text,
                     reply_markup=reply_markup,
                     parse_mode=parse_mode,
-                    link_preview_options=link_preview,
                 )
             except Exception:
                 logging.debug(
@@ -650,7 +627,7 @@ async def send_main_menu_screen(
     await ensure_user(user_id, username)
     balance = await get_credits(user_id)
     ready_mode = await get_user_ready_mode(user_id)
-    text = _main_screen_body_text(balance, "")
+    text = _main_screen_text(balance, "")
     kb = start_menu_keyboard(balance)
     banner = _start_banner_path()
     if banner:
@@ -676,7 +653,7 @@ async def restore_main_menu_message(message: Message, user_id: int, username: st
     try:
         await ensure_user(user_id, username)
         balance = await get_credits(user_id)
-        text = _main_screen_body_text(balance, "")
+        text = _main_screen_text(balance, "")
         kb = start_menu_keyboard(balance)
         banner = _start_banner_path()
 
@@ -837,7 +814,7 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
     balance = await get_credits(user_id)
     ready_mode = await get_user_ready_mode(user_id)
 
-    text = _main_screen_body_text(balance, bonus_note)
+    text = _main_screen_text(balance, bonus_note)
     kb = start_menu_keyboard(balance)
     banner = _start_banner_path()
     try:
@@ -850,16 +827,15 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
             )
         else:
             await message.answer(
-                _main_screen_text(balance, bonus_note),
+                text,
                 reply_markup=kb,
                 parse_mode=HTML,
                 disable_web_page_preview=True,
             )
-        await _send_main_screen_legal_note(message)
     except Exception:
         logging.exception("cmd_start: failed to send main menu")
         await message.answer(
-            _main_screen_text(balance, bonus_note),
+            text,
             reply_markup=kb,
             parse_mode=HTML,
             disable_web_page_preview=True,
@@ -1214,7 +1190,7 @@ async def menu_about(callback: CallbackQuery) -> None:
         "<b>Что умеет бот</b>\n"
         "<blockquote>"
         "<b>Генерации</b>\n"
-        "• <b>Создать картинку</b> — по тексту или с фото.\n"
+        "• <b>Создать картинку</b> — по тексту.\n"
         "• <b>Готовые идеи</b> — готовые сценарии из каталога; шаги — в карточке.\n\n"
         f"<b>Кредиты</b> {CREDITS_COIN_TG_HTML}\n"
         "Списываются только за генерации. Баланс и остаток — в профиле.\n\n"
