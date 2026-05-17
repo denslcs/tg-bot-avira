@@ -59,6 +59,7 @@ from src.database import (
 from src.formatting import (
     CREDITS_COIN_TG_HTML,
     HTML,
+    PROFILE_AVATAR_TG_HTML,
     esc,
     format_subscription_ends_at,
     full_plans_after_starter_html,
@@ -1150,6 +1151,37 @@ def _wata_payment_description(*, kind: str, item_id: str, title: str) -> str:
     return (title or item_id).strip()[:500]
 
 
+def _wata_checkout_screen_html(*, kind: str, item_id: str, price_rub: int) -> str:
+    """Текст экрана оплаты Wata с премиум-эмодзи тарифа и раздела оплаты."""
+    pay_icon = f'<tg-emoji emoji-id="{PAY_INLINE_RUB_BTN_EMOJI_ID}">🪙</tg-emoji>'
+    hint_icon = '<tg-emoji emoji-id="5422439311196834318">💡</tg-emoji>'
+    step_icon = '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji>'
+    if kind == "plan":
+        product_line = plan_subscription_title_html(item_id)
+    else:
+        pack = BONUS_PACKS[item_id]
+        product_line = (
+            f'<tg-emoji emoji-id="5203996991054432397">🎁</tg-emoji> <b>{esc(pack.title)}</b>'
+        )
+    return (
+        f"<b>{pay_icon} Оплата:</b> {product_line} — <b>{esc(price_rub)} ₽</b>\n"
+        f"<i>{PROFILE_AVATAR_TG_HTML} Заказ привязан к твоему Telegram — подписка или кредиты "
+        f"начислятся этому аккаунту.</i>\n\n"
+        f"<b>{hint_icon} Как оплатить:</b>\n"
+        f"<i>{step_icon} Нажми «Оплатить» и заверши платёж <b>картой</b> на странице Wata.\n"
+        f"{step_icon} Если пишет «не удаётся провести платёж» — попробуй другую карту"
+        + (
+            f' или напиши в <a href="https://t.me/{esc(SUPPORT_BOT_USERNAME)}">'
+            f"@{esc(SUPPORT_BOT_USERNAME)}</a>"
+            if SUPPORT_BOT_USERNAME
+            else ""
+        )
+        + " — это ограничение банка или эквайринга, не бота.\n"
+        f"{step_icon} После оплаты подожди <b>1–2 мин</b>, затем нажми <b>«Проверить оплату»</b> "
+        f"(не чаще раза в полминуты).</i>"
+    )
+
+
 async def _send_wata_checkout_screen(
     message: Message,
     *,
@@ -1321,16 +1353,8 @@ async def _start_wata_rub_checkout(
         try:
             await _send_wata_checkout_screen(
                 callback.message,
-                text=(
-                    f"<b>💳 Оплата:</b> <b>{esc(title)}</b> — <b>{esc(price_rub)} ₽</b>\n"
-                    "<i>📲 Заказ привязан к твоему Telegram — подписка или кредиты начислятся "
-                    "этому аккаунту.</i>\n\n"
-                    "<b>📋 Как оплатить:</b>\n"
-                    "<i>1️⃣ Нажми «Оплатить» и заверши платёж на странице Wata.\n"
-                    "2️⃣ После оплаты обычно хватает <b>1–2 мин</b> (при нагрузке — до <b>5 мин</b>), "
-                    "пока банк передаст статус.\n"
-                    "3️⃣ Нажми <b>«Проверить оплату»</b> на этом экране — "
-                    "или вернись в бота по ссылке после кассы (проверка запустится сама).</i>"
+                text=_wata_checkout_screen_html(
+                    kind=kind, item_id=item_id, price_rub=price_rub
                 ),
                 keyboard=keyboard,
             )
