@@ -81,6 +81,26 @@ def pack_purchase_success_html(credits: int) -> str:
     )
 
 
+def wata_not_paid_yet_html(*, kind: str) -> str:
+    if kind == "pack":
+        return (
+            "<b>Оплата не подтверждена</b>\n"
+            "<blockquote><i>Пакет ещё не оплачен — сначала заверши платёж на странице Wata, "
+            "затем нажми «Проверить оплату».</i></blockquote>"
+        )
+    return (
+        "<b>Подписка не оплачена</b>\n"
+        "<blockquote><i>Оплата в кассе пока не подтверждена — сначала заверши платёж на странице Wata, "
+        "затем нажми «Проверить оплату».</i></blockquote>"
+    )
+
+
+def wata_not_paid_yet_alert(*, kind: str) -> str:
+    if kind == "pack":
+        return "Пакет ещё не оплачен. Сначала нажми «Оплатить» и заверши платёж на странице Wata."
+    return "Подписка ещё не оплачена. Сначала нажми «Оплатить» и заверши платёж на странице Wata."
+
+
 def wata_declined_html() -> str:
     return (
         "<b>Оплата не прошла</b>\n"

@@ -114,6 +114,8 @@ from src.services.payment_user_messages import (
     wata_already_applied_pack_html,
     wata_already_applied_plan_html,
     wata_declined_html,
+    wata_not_paid_yet_alert,
+    wata_not_paid_yet_html,
     wata_paid_but_not_applied_html,
 )
 from src.services.wata_orders import (
@@ -1152,10 +1154,8 @@ def _wata_payment_description(*, kind: str, item_id: str, title: str) -> str:
 
 
 def _wata_checkout_screen_html(*, kind: str, item_id: str, price_rub: int) -> str:
-    """Текст экрана оплаты Wata с премиум-эмодзи тарифа и раздела оплаты."""
+    """Текст экрана оплаты Wata с премиум-эмодзи тарифа."""
     pay_icon = f'<tg-emoji emoji-id="{PAY_INLINE_RUB_BTN_EMOJI_ID}">🪙</tg-emoji>'
-    hint_icon = '<tg-emoji emoji-id="5422439311196834318">💡</tg-emoji>'
-    step_icon = '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji>'
     if kind == "plan":
         product_line = plan_subscription_title_html(item_id)
     else:
@@ -1166,19 +1166,7 @@ def _wata_checkout_screen_html(*, kind: str, item_id: str, price_rub: int) -> st
     return (
         f"<b>{pay_icon} Оплата:</b> {product_line} — <b>{esc(price_rub)} ₽</b>\n"
         f"<i>{PROFILE_AVATAR_TG_HTML} Заказ привязан к твоему Telegram — подписка или кредиты "
-        f"начислятся этому аккаунту.</i>\n\n"
-        f"<b>{hint_icon} Как оплатить:</b>\n"
-        f"<i>{step_icon} Нажми «Оплатить» и заверши платёж <b>картой</b> на странице Wata.\n"
-        f"{step_icon} Если пишет «не удаётся провести платёж» — попробуй другую карту"
-        + (
-            f' или напиши в <a href="https://t.me/{esc(SUPPORT_BOT_USERNAME)}">'
-            f"@{esc(SUPPORT_BOT_USERNAME)}</a>"
-            if SUPPORT_BOT_USERNAME
-            else ""
-        )
-        + " — это ограничение банка или эквайринга, не бота.\n"
-        f"{step_icon} После оплаты подожди <b>1–2 мин</b>, затем нажми <b>«Проверить оплату»</b> "
-        f"(не чаще раза в полминуты).</i>"
+        f"начислятся этому аккаунту.</i>"
     )
 
 
@@ -1430,12 +1418,7 @@ def _wata_finalize_user_message(result) -> str:
 
     r: WataFinalizeResult = result
     if r.status == WataFinalizeStatus.PENDING:
-        return (
-            "<blockquote><i>Платёж пока не виден в кассе.</i> "
-            "Если только что оплатил — подожди <b>1–2 мин</b> (при большой нагрузке — до <b>5 мин</b>) "
-            "и нажми <b>«Проверить оплату»</b> снова на экране оплаты.</i>\n"
-            "<i>Ничего дополнительно писать не нужно — заказ уже привязан к твоему Telegram.</i></blockquote>"
-        )
+        return wata_not_paid_yet_html(kind=r.kind or "plan")
     if r.status == WataFinalizeStatus.DECLINED:
         return wata_declined_html()
     if r.status == WataFinalizeStatus.ALREADY_PAID:
@@ -1599,13 +1582,44 @@ async def pay_wata_check(callback: CallbackQuery) -> None:
     if not order_id:
         await callback.answer("Ошибка заказа", show_alert=True)
         return
-    await callback.answer("Проверяю оплату… (обычно до 1–2 мин после платежа)")
     result = await finalize_wata_order(
         order_id,
         expected_user_id=callback.from_user.id,
         can_buy_plan=_can_buy_plan,
     )
+    if result.status == WataFinalizeStatus.PENDING:
+        await callback.answer(
+            wata_not_paid_yet_alert(kind=result.kind or "plan"),
+            show_alert=True,
+        )
+        return
+    if result.status == WataFinalizeStatus.ERROR:
+        msg = (result.error_message or "").strip()
+        await callback.answer(
+            msg or "Не удалось проверить оплату. Попробуй позже.",
+            show_alert=True,
+        )
+        return
+    if result.status == WataFinalizeStatus.DECLINED:
+        await callback.answer(
+            "Оплата отклонена банком или кассой. Попробуй снова или другой способ.",
+            show_alert=True,
+        )
+        return
+    if result.status == WataFinalizeStatus.NOT_FOUND:
+        await callback.answer(
+            "Заказ не найден. Создай оплату заново: /start → Оплатить.",
+            show_alert=True,
+        )
+        return
+    if result.status == WataFinalizeStatus.WRONG_USER:
+        await callback.answer(
+            "Этот заказ привязан к другому аккаунту Telegram.",
+            show_alert=True,
+        )
+        return
     text = _wata_finalize_user_message(result)
+    await callback.answer("Оплата подтверждена" if result.status == WataFinalizeStatus.PAID else "Готово")
     if result.status == WataFinalizeStatus.PAID and result.kind == "plan":
         await _notify_admin_sales(
             callback.message.bot,
