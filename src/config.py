@@ -203,6 +203,17 @@ WATA_API_BASE: str = (
     or ("https://api-sandbox.wata.pro/api/h2h" if _wata_sandbox else "https://api.wata.pro/api/h2h")
 )
 
+# Heleket (крипто): Merchant UUID + Payment API key из кабинета мерчанта.
+HELEKET_MERCHANT_UUID: str = os.getenv("HELEKET_MERCHANT_UUID", "").strip()
+HELEKET_PAYMENT_API_KEY: str = os.getenv("HELEKET_PAYMENT_API_KEY", "").strip()
+HELEKET_API_BASE: str = (
+    os.getenv("HELEKET_API_BASE", "https://api.heleket.com").strip().rstrip("/")
+    or "https://api.heleket.com"
+)
+# Валюта счёта Heleket: USD (как на кнопке «$ · криптой») или RUB. Оплата всё равно в крипте на стороне Heleket.
+_heleket_cur = os.getenv("HELEKET_PAYMENT_CURRENCY", "USD").strip().upper()
+HELEKET_PAYMENT_CURRENCY: str = _heleket_cur if _heleket_cur else "USD"
+
 
 def _env_custom_emoji_id(name: str, default: str) -> str:
     """document_id премиум-эмодзи из .env; пусто — значение по умолчанию."""

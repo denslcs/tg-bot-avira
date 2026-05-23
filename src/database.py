@@ -323,6 +323,49 @@ async def _migrate_wata_benefits_applied(db: aiosqlite.Connection) -> None:
         )
 
 
+async def _migrate_heleket_payment_orders(db: aiosqlite.Connection) -> None:
+    await db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS heleket_payment_orders (
+            order_id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            kind TEXT NOT NULL,
+            item_id TEXT NOT NULL,
+            amount_rub INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            heleket_invoice_uuid TEXT,
+            heleket_txid TEXT,
+            benefits_applied INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            paid_at TEXT,
+            invoice_currency TEXT NOT NULL DEFAULT 'USD',
+            invoice_amount TEXT NOT NULL DEFAULT '0'
+        )
+        """
+    )
+    await db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_heleket_payment_orders_user "
+        "ON heleket_payment_orders (user_id, created_at DESC)"
+    )
+    async with db.execute("PRAGMA table_info(heleket_payment_orders)") as cur:
+        cols = {row[1] for row in await cur.fetchall()}
+    if "benefits_applied" not in cols:
+        await db.execute(
+            "ALTER TABLE heleket_payment_orders "
+            "ADD COLUMN benefits_applied INTEGER NOT NULL DEFAULT 0"
+        )
+    if "invoice_currency" not in cols:
+        await db.execute(
+            "ALTER TABLE heleket_payment_orders "
+            "ADD COLUMN invoice_currency TEXT NOT NULL DEFAULT 'USD'"
+        )
+    if "invoice_amount" not in cols:
+        await db.execute(
+            "ALTER TABLE heleket_payment_orders "
+            "ADD COLUMN invoice_amount TEXT NOT NULL DEFAULT '0'"
+        )
+
+
 async def _migrate_nonsub_quota_exhaustion_semantics(db: aiosqlite.Connection) -> None:
     """Очистить метку исчерпания, если счётчик не на максимуме (после смены логики окон)."""
     await db.execute(
@@ -542,6 +585,7 @@ async def init_db() -> None:
         await _backfill_generated_images_total_once(db)
         await _migrate_nonsub_quota_exhaustion_semantics(db)
         await _migrate_wata_benefits_applied(db)
+        await _migrate_heleket_payment_orders(db)
         await _migrate_subscription_ends_at_canonical(db)
         await db.commit()
 
@@ -2148,6 +2192,186 @@ async def list_pending_wata_orders_for_user(user_id: int) -> list[dict]:
 async def get_latest_pending_wata_order_for_user(user_id: int) -> dict | None:
     rows = await list_pending_wata_orders_for_user(user_id)
     return rows[0] if rows else None
+
+
+def _heleket_payment_order_row_to_dict(row) -> dict:
+    out = {
+        "order_id": row[0],
+        "user_id": int(row[1]),
+        "kind": row[2],
+        "item_id": row[3],
+        "amount_rub": int(row[4]),
+        "status": row[5],
+        "heleket_invoice_uuid": row[6],
+        "heleket_txid": row[7],
+        "benefits_applied": bool(int(row[8] or 0)),
+        "created_at": row[9],
+        "paid_at": row[10] if len(row) > 10 else None,
+    }
+    if len(row) > 12:
+        out["invoice_currency"] = str(row[11] or "USD")
+        out["invoice_amount"] = str(row[12] or "0")
+    else:
+        out["invoice_currency"] = "USD"
+        out["invoice_amount"] = str(row[4])
+    return out
+
+
+async def create_heleket_payment_order(
+    *,
+    order_id: str,
+    user_id: int,
+    kind: str,
+    item_id: str,
+    amount_rub: int,
+    invoice_amount: str,
+    invoice_currency: str,
+    heleket_invoice_uuid: str | None = None,
+) -> None:
+    async with open_db() as db:
+        await db.execute(
+            """
+            INSERT INTO heleket_payment_orders (
+                order_id, user_id, kind, item_id, amount_rub, status,
+                heleket_invoice_uuid, invoice_currency, invoice_amount
+            )
+            VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+            """,
+            (
+                order_id,
+                int(user_id),
+                kind,
+                item_id,
+                int(amount_rub),
+                heleket_invoice_uuid,
+                invoice_currency,
+                invoice_amount,
+            ),
+        )
+        await db.commit()
+
+
+async def get_heleket_payment_order(order_id: str) -> dict | None:
+    async with open_db() as db:
+        async with db.execute(
+            """
+            SELECT order_id, user_id, kind, item_id, amount_rub, status,
+                   heleket_invoice_uuid, heleket_txid, COALESCE(benefits_applied, 0),
+                   created_at, paid_at, invoice_currency, invoice_amount
+            FROM heleket_payment_orders
+            WHERE order_id = ?
+            """,
+            (order_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return None
+    return _heleket_payment_order_row_to_dict(row)
+
+
+async def mark_heleket_order_benefits_applied(order_id: str) -> None:
+    async with open_db() as db:
+        await db.execute(
+            """
+            UPDATE heleket_payment_orders
+            SET benefits_applied = 1
+            WHERE order_id = ? AND status = 'processing'
+            """,
+            (order_id,),
+        )
+        await db.commit()
+
+
+async def try_lock_heleket_order_for_finalize(order_id: str) -> str:
+    async with open_db() as db:
+        cur = await db.execute(
+            """
+            UPDATE heleket_payment_orders
+            SET status = 'processing'
+            WHERE order_id = ? AND status = 'pending'
+            """,
+            (order_id,),
+        )
+        await db.commit()
+        if cur.rowcount and int(cur.rowcount) > 0:
+            return "locked"
+    row = await get_heleket_payment_order(order_id)
+    if not row:
+        return "not_found"
+    st = str(row.get("status") or "")
+    if st == "paid":
+        return "paid"
+    if st == "processing":
+        return "processing"
+    if st == "declined":
+        return "declined"
+    return "miss"
+
+
+async def unlock_heleket_order_finalize(order_id: str) -> None:
+    async with open_db() as db:
+        await db.execute(
+            """
+            UPDATE heleket_payment_orders
+            SET status = 'pending'
+            WHERE order_id = ? AND status = 'processing'
+            """,
+            (order_id,),
+        )
+        await db.commit()
+
+
+async def mark_heleket_payment_order_paid(
+    order_id: str,
+    *,
+    heleket_txid: str,
+    heleket_invoice_uuid: str | None = None,
+) -> bool:
+    paid_at = datetime.now(timezone.utc).isoformat()
+    async with open_db() as db:
+        cur = await db.execute(
+            """
+            UPDATE heleket_payment_orders
+            SET status = 'paid',
+                heleket_txid = ?,
+                heleket_invoice_uuid = COALESCE(?, heleket_invoice_uuid),
+                paid_at = ?
+            WHERE order_id = ? AND status IN ('pending', 'processing')
+            """,
+            (heleket_txid, heleket_invoice_uuid, paid_at, order_id),
+        )
+        await db.commit()
+    return bool(cur.rowcount and int(cur.rowcount) > 0)
+
+
+async def mark_heleket_payment_order_declined(order_id: str) -> None:
+    async with open_db() as db:
+        await db.execute(
+            """
+            UPDATE heleket_payment_orders
+            SET status = 'declined'
+            WHERE order_id = ? AND status = 'pending'
+            """,
+            (order_id,),
+        )
+        await db.commit()
+
+
+async def list_pending_heleket_orders_for_user(user_id: int) -> list[dict]:
+    async with open_db() as db:
+        async with db.execute(
+            """
+            SELECT order_id, user_id, kind, item_id, amount_rub, status,
+                   heleket_invoice_uuid, heleket_txid, COALESCE(benefits_applied, 0),
+                   created_at, paid_at, invoice_currency, invoice_amount
+            FROM heleket_payment_orders
+            WHERE user_id = ? AND status IN ('pending', 'processing')
+            ORDER BY created_at DESC
+            """,
+            (int(user_id),),
+        ) as cur:
+            rows = await cur.fetchall()
+    return [_heleket_payment_order_row_to_dict(r) for r in rows]
 
 
 @dataclass

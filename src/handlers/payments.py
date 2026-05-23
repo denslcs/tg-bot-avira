@@ -88,6 +88,7 @@ from src.keyboards.callback_data import (
     CB_PAY_RUB_PREFIX,
     CB_PAY_STARS_PREFIX,
     CB_PAY_WATA_CHECK_PREFIX,
+    CB_PAY_HELEKET_CHECK_PREFIX,
 )
 from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 from src.subscription_catalog import (
@@ -106,6 +107,14 @@ from src.subscription_catalog import (
 from src.services.payments_apply import (
     apply_plan_purchase_from_stars,
     repeat_plan_bonus_extra_credits,
+)
+from src.services.heleket_client import HeleketApiError, heleket_configured
+from src.services.heleket_orders import (
+    build_heleket_order_id,
+    create_heleket_checkout,
+    finalize_heleket_order,
+    finalize_latest_pending_heleket_for_user,
+    parse_heleket_start_payload,
 )
 from src.services.wata_client import WataApiError, wata_configured
 from src.services.payment_user_messages import (
@@ -171,9 +180,55 @@ async def try_apply_pending_wata_after_redirect(
             message.bot,
             thread_id=_admin_sales_thread_for_plan(result.item_id),
             text=(
-                "<b>Подписка оплачена (Wata, redirect)</b>\n"
+                "<b>Подписка оплачена (Wata)</b>\n"
                 f"Тариф: {plan_subscription_title_html(result.item_id)}\n"
-                f"Пользователь: {_user_line_html(message.from_user)}"
+                f"Пользователь: {_user_line_html(message.from_user)}\n"
+                f"Заказ: <code>{esc(result.order_id)}</code>"
+            ),
+        )
+    return True
+
+
+async def try_apply_pending_heleket_after_redirect(
+    message: Message,
+    start_payload: str | None = None,
+) -> bool:
+    if not message.from_user or not heleket_configured():
+        return False
+    arg = (start_payload or "").strip()
+    lower = arg.lower()
+    if not (lower.startswith("heleket") or lower.startswith("hk")):
+        return False
+    order_id = parse_heleket_start_payload(arg)
+    if order_id:
+        result = await finalize_heleket_order(
+            order_id,
+            expected_user_id=message.from_user.id,
+            can_buy_plan=_can_buy_plan,
+        )
+    else:
+        result = await finalize_latest_pending_heleket_for_user(
+            message.from_user.id,
+            can_buy_plan=_can_buy_plan,
+        )
+    if result is None:
+        await message.answer(
+            "<blockquote><i>Нет незавершённой крипто-оплаты. "
+            "Если уже платил — нажми «Проверить оплату» в меню «Оплатить».</i></blockquote>",
+            parse_mode=HTML,
+        )
+        return True
+    text = _wata_finalize_user_message(result)
+    await message.answer(text, parse_mode=HTML)
+    if result.status == WataFinalizeStatus.PAID and result.kind == "plan":
+        await _notify_admin_sales(
+            message.bot,
+            thread_id=_admin_sales_thread_for_plan(result.item_id),
+            text=(
+                "<b>Подписка оплачена (Heleket)</b>\n"
+                f"Тариф: {plan_subscription_title_html(result.item_id)}\n"
+                f"Пользователь: {_user_line_html(message.from_user)}\n"
+                f"Заказ: <code>{esc(result.order_id)}</code>"
             ),
         )
     return True
@@ -1214,6 +1269,68 @@ async def _wata_success_redirect_url(bot, order_id: str) -> str | None:
     return f"https://t.me/{username}?start={payload}"
 
 
+async def _heleket_success_redirect_url(bot, order_id: str) -> str | None:
+    try:
+        me = await bot.get_me()
+        username = (me.username or "").strip()
+    except Exception:
+        username = ""
+    if not username:
+        return None
+    payload = f"heleket_{order_id}"
+    if len(payload.encode("utf-8")) > 64:
+        payload = "heleket_ok"
+    return f"https://t.me/{username}?start={payload}"
+
+
+def _heleket_invoice_pricing(
+    item_id: str,
+    *,
+    pack_rub_override: int | None = None,
+    pack_usd_override: float | None = None,
+) -> tuple[str, str, str, int]:
+    """(invoice_amount, invoice_currency, price_label_html, amount_rub для БД)."""
+    from src.config import HELEKET_PAYMENT_CURRENCY
+
+    currency = HELEKET_PAYMENT_CURRENCY.strip().upper() or "USD"
+    _, price_rub = _pay_item_info(item_id, pack_rub_override=pack_rub_override)
+    if item_id in PLANS:
+        usd = float(PLANS[item_id].price_usd)
+    elif pack_usd_override is not None:
+        usd = float(pack_usd_override)
+    else:
+        usd = float(BONUS_PACKS[item_id].price_usd)
+    if currency == "RUB":
+        amount = float(price_rub)
+        label = f"<b>{esc(int(round(amount)))} ₽</b>"
+        invoice_amount = str(int(round(amount)))
+    else:
+        label = f"<b>{esc(f'{usd:g}')} $</b>"
+        invoice_amount = f"{usd:.2f}"
+    return invoice_amount, currency, label, int(price_rub)
+
+
+def _heleket_checkout_screen_html(
+    *,
+    kind: str,
+    item_id: str,
+    price_label_html: str,
+) -> str:
+    pay_icon = f'<tg-emoji emoji-id="{PAY_INLINE_CRYPTO_BTN_EMOJI_ID}">🪙</tg-emoji>'
+    if kind == "plan":
+        product_line = plan_subscription_title_html(item_id)
+    else:
+        pack = BONUS_PACKS[item_id]
+        product_line = (
+            f'<tg-emoji emoji-id="5203996991054432397">🎁</tg-emoji> <b>{esc(pack.title)}</b>'
+        )
+    return (
+        f"<b>{pay_icon} Оплата криптой:</b> {product_line} — {price_label_html}\n"
+        f"<i>{PROFILE_AVATAR_TG_HTML} На странице Heleket выбери монету (USDT, BTC и др.) и сеть. "
+        f"После перевода вернись в бот и нажми «Проверить оплату».</i>"
+    )
+
+
 def _wata_checkout_kind_item(item_id: str) -> tuple[str, str] | None:
     if item_id in PLANS:
         return "plan", item_id
@@ -1405,6 +1522,131 @@ async def _start_wata_rub_checkout(
                 )
             except Exception:
                 logger.debug("wata checkout error reply failed", exc_info=True)
+    finally:
+        if not answered:
+            try:
+                await callback.answer()
+            except TelegramBadRequest:
+                pass
+
+
+async def _start_heleket_checkout(
+    callback: CallbackQuery,
+    item_id: str,
+    *,
+    pack_rub_override: int | None = None,
+    pack_usd_override: float | None = None,
+) -> None:
+    if not callback.from_user or not callback.message:
+        await callback.answer()
+        return
+    answered = False
+    try:
+        await ensure_user(callback.from_user.id, callback.from_user.username)
+        if not heleket_configured():
+            await _external_pay_hint(
+                callback,
+                item_id,
+                "крипта",
+                PAY_URL_CRYPTO or None,
+                pack_rub_override=pack_rub_override,
+            )
+            answered = True
+            return
+        kind_item = _wata_checkout_kind_item(item_id)
+        if kind_item is None:
+            await callback.answer("Ошибка тарифа", show_alert=True)
+            answered = True
+            return
+        kind, _ = kind_item
+        user_id = callback.from_user.id
+        invoice_amount, invoice_currency, price_label, price_rub = _heleket_invoice_pricing(
+            item_id,
+            pack_rub_override=pack_rub_override,
+            pack_usd_override=pack_usd_override,
+        )
+        if kind == "plan":
+            allowed, reason = await _can_buy_plan(user_id, item_id)
+            if not allowed:
+                await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
+                answered = True
+                return
+        back_cb = (
+            f"{CB_PAY_PLAN_PREFIX}{item_id}"
+            if item_id in PLANS
+            else f"{CB_PAY_PACK_PREFIX}{item_id}"
+        )
+        try:
+            order_id = build_heleket_order_id(user_id=user_id, kind=kind, item_id=item_id)
+            redirect = await _heleket_success_redirect_url(callback.message.bot, order_id)
+            order_id, pay_url = await create_heleket_checkout(
+                user_id=user_id,
+                kind=kind,
+                item_id=item_id,
+                amount_rub=price_rub,
+                invoice_amount=invoice_amount,
+                invoice_currency=invoice_currency,
+                success_redirect_url=redirect,
+                order_id=order_id,
+            )
+        except HeleketApiError as exc:
+            logger.warning(
+                "heleket create invoice failed uid=%s item=%s: %s",
+                user_id,
+                item_id,
+                exc,
+            )
+            await callback.answer(
+                "Не удалось создать счёт. Попробуй позже.",
+                show_alert=True,
+            )
+            answered = True
+            return
+        check_cb = f"{CB_PAY_HELEKET_CHECK_PREFIX}{order_id}"
+        if len(check_cb.encode("utf-8")) > 64:
+            await callback.answer("Внутренняя ошибка заказа", show_alert=True)
+            answered = True
+            return
+        if not pay_url.lower().startswith("https://"):
+            await callback.answer("Ссылка оплаты недействительна.", show_alert=True)
+            answered = True
+            return
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="Оплатить криптой", url=pay_url)],
+                [
+                    InlineKeyboardButton(
+                        text="Проверить оплату",
+                        callback_data=check_cb,
+                        style=BTN_SUCCESS,
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="Назад",
+                        callback_data=back_cb,
+                        icon_custom_emoji_id="5256247952564825322",
+                    )
+                ],
+            ]
+        )
+        await _send_wata_checkout_screen(
+            callback.message,
+            text=_heleket_checkout_screen_html(
+                kind=kind, item_id=item_id, price_label_html=price_label
+            ),
+            keyboard=keyboard,
+        )
+        await callback.answer()
+        answered = True
+    except HeleketApiError as exc:
+        logger.warning("heleket checkout error uid=%s item=%s: %s", callback.from_user.id, item_id, exc)
+        if not answered:
+            await callback.answer("Ошибка Heleket. Проверь ключи в .env.", show_alert=True)
+    except Exception:
+        logger.exception("heleket checkout failed uid=%s item=%s", callback.from_user.id, item_id)
+        if not answered:
+            await callback.answer("Не удалось открыть оплату.", show_alert=True)
     finally:
         if not answered:
             try:
@@ -1724,20 +1966,91 @@ async def pay_crypto(callback: CallbackQuery) -> None:
             await callback.answer(reason or "Покупка тарифа недоступна.", show_alert=True)
             return
     pack_rub_override = None
+    pack_usd_override = None
     if item_id in BONUS_PACKS and callback.from_user:
         m = await _active_bonus_pack_discount_multiplier(callback.from_user.id)
         if m is not None:
-            pack_rub_override, _usd, _stars, _disc = _discount_pack_values(
+            pack_rub_override, pack_usd_override, _stars, _disc = _discount_pack_values(
                 item_id, discount_multiplier=m
             )
-    await _external_pay_hint(
+    await _start_heleket_checkout(
         callback,
         item_id,
-        "крипта",
-        PAY_URL_CRYPTO or None,
         pack_rub_override=pack_rub_override,
-        connecting_only=True,
+        pack_usd_override=pack_usd_override,
     )
+
+
+@router.callback_query(F.data.startswith(CB_PAY_HELEKET_CHECK_PREFIX))
+async def pay_heleket_check(callback: CallbackQuery) -> None:
+    if not callback.from_user or not callback.message or not callback.data:
+        await callback.answer()
+        return
+    order_id = callback.data.removeprefix(CB_PAY_HELEKET_CHECK_PREFIX).strip()
+    if not order_id:
+        await callback.answer("Ошибка заказа", show_alert=True)
+        return
+    result = await finalize_heleket_order(
+        order_id,
+        expected_user_id=callback.from_user.id,
+        can_buy_plan=_can_buy_plan,
+    )
+    if result.status == WataFinalizeStatus.PENDING:
+        await callback.answer(
+            wata_not_paid_yet_alert(kind=result.kind or "plan"),
+            show_alert=True,
+        )
+        return
+    if result.status == WataFinalizeStatus.ERROR:
+        msg = (result.error_message or "").strip()
+        await callback.answer(
+            msg or "Не удалось проверить оплату.",
+            show_alert=True,
+        )
+        return
+    if result.status == WataFinalizeStatus.DECLINED:
+        await callback.answer(
+            "Оплата отменена или не завершена. Попробуй снова.",
+            show_alert=True,
+        )
+        return
+    if result.status == WataFinalizeStatus.NOT_FOUND:
+        await callback.answer(
+            "Заказ не найден. Создай оплату заново.",
+            show_alert=True,
+        )
+        return
+    if result.status == WataFinalizeStatus.WRONG_USER:
+        await callback.answer(
+            "Этот заказ привязан к другому аккаунту.",
+            show_alert=True,
+        )
+        return
+    text = _wata_finalize_user_message(result)
+    await callback.answer("Оплата подтверждена" if result.status == WataFinalizeStatus.PAID else "Готово")
+    if result.status == WataFinalizeStatus.PAID and result.kind == "plan":
+        await _notify_admin_sales(
+            callback.message.bot,
+            thread_id=_admin_sales_thread_for_plan(result.item_id),
+            text=(
+                "<b>Подписка оплачена (Heleket)</b>\n"
+                f"Тариф: {plan_subscription_title_html(result.item_id)}\n"
+                f"Пользователь: {_user_line_html(callback.from_user)}\n"
+                f"Заказ: <code>{esc(order_id)}</code>"
+            ),
+        )
+    elif result.status == WataFinalizeStatus.PAID and result.kind == "pack":
+        await _notify_admin_sales(
+            callback.message.bot,
+            thread_id=ADMIN_SALES_THREAD_BONUS_PACKS,
+            text=(
+                "<b>Пакет оплачен (Heleket)</b>\n"
+                f"Пакет: <code>{esc(result.item_id)}</code> · +{esc(result.pack_credits)} кр.\n"
+                f"Пользователь: {_user_line_html(callback.from_user)}\n"
+                f"Заказ: <code>{esc(order_id)}</code>"
+            ),
+        )
+    await callback.message.answer(text, parse_mode=HTML)
 
 
 @router.callback_query(F.data.startswith(CB_PAY_STARS_PREFIX))

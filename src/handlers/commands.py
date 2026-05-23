@@ -402,12 +402,13 @@ def _main_screen_text(balance: int, bonus_note: str = "") -> str:
     return (
         '<b><tg-emoji emoji-id="5463297803235113601">✨</tg-emoji> Добро пожаловать в Shard Creator</b>\n'
         "<i>Создание и изменение фото в пару кликов.</i>\n\n"
+        "<blockquote>"
         '<b><tg-emoji emoji-id="5258203794772085854">⚡️</tg-emoji> Быстрый старт:</b>\n'
         '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Открой <b>«<tg-emoji emoji-id="5282843764451195532">🖥</tg-emoji> Меню»</b> — там все разделы: идеи, подписки, FAQ и рефералка.\n'
         f'<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Нажми <b>«{PROFILE_AVATAR_TG_HTML} Профиль»</b> внизу — увидишь '
         f"{CREDITS_COIN_TG_HTML} кредиты, статистику и лимиты.\n"
-        '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Загляни в <b>«<tg-emoji emoji-id="5330522514231684724">🌟</tg-emoji> Что умеет бот»</b> — там коротко и понятно, как использовать все возможности.\n\n'
-        '<blockquote><b><tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> Подсказка:</b> <i>чем точнее задача в одном сообщении, тем лучше и быстрее итоговая генерация.</i></blockquote>\n\n'
+        '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Загляни в <b>«<tg-emoji emoji-id="5330522514231684724">🌟</tg-emoji> Что умеет бот»</b> — там коротко и понятно, как использовать все возможности.'
+        "</blockquote>\n\n"
         '<blockquote><i>Продолжая использовать бота, вы подтверждаете, что ознакомились с '
         '<a href="https://telegra.ph/POLZOVATELSKOE-SOGLASHENIE-05-01-22">Публичной офертой</a> и '
         '<a href="https://telegra.ph/POLITIKA-KONFIDENCIALNOSTI-05-01-53">Политикой обработки персональных данных</a>.</i></blockquote>'
@@ -799,6 +800,11 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         from src.handlers.payments import try_apply_pending_wata_after_redirect
 
         if await try_apply_pending_wata_after_redirect(message, start_arg):
+            return
+    if start_arg.lower().startswith(("heleket", "hk")):
+        from src.handlers.payments import try_apply_pending_heleket_after_redirect
+
+        if await try_apply_pending_heleket_after_redirect(message, start_arg):
             return
     raw = (message.text or message.caption or "").strip()
     referrer_id = _parse_ref_start_arg(command.args)
