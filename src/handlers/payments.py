@@ -123,8 +123,10 @@ from src.services.payment_user_messages import (
     wata_already_applied_pack_html,
     wata_already_applied_plan_html,
     wata_declined_html,
+    external_declined_html,
+    external_not_paid_yet_alert,
+    external_not_paid_yet_html,
     wata_not_paid_yet_alert,
-    wata_not_paid_yet_html,
     wata_paid_but_not_applied_html,
 )
 from src.services.wata_orders import (
@@ -218,7 +220,7 @@ async def try_apply_pending_heleket_after_redirect(
             parse_mode=HTML,
         )
         return True
-    text = _wata_finalize_user_message(result)
+    text = _finalize_user_message(result, provider="heleket")
     await message.answer(text, parse_mode=HTML)
     if result.status == WataFinalizeStatus.PAID and result.kind == "plan":
         await _notify_admin_sales(
@@ -1654,14 +1656,14 @@ async def _start_heleket_checkout(
                 pass
 
 
-def _wata_finalize_user_message(result) -> str:
+def _finalize_user_message(result, *, provider: str = "wata") -> str:
     from src.services.wata_orders import WataFinalizeResult
 
     r: WataFinalizeResult = result
     if r.status == WataFinalizeStatus.PENDING:
-        return wata_not_paid_yet_html(kind=r.kind or "plan")
+        return external_not_paid_yet_html(kind=r.kind or "plan", provider=provider)
     if r.status == WataFinalizeStatus.DECLINED:
-        return wata_declined_html()
+        return external_declined_html(provider=provider)
     if r.status == WataFinalizeStatus.ALREADY_PAID:
         if r.kind == "plan" and r.item_id:
             return wata_already_applied_plan_html(
@@ -1701,6 +1703,10 @@ def _wata_finalize_user_message(result) -> str:
             support_username=SUPPORT_BOT_USERNAME,
         )
     return "<blockquote><i>Неизвестный статус проверки.</i></blockquote>"
+
+
+def _wata_finalize_user_message(result) -> str:
+    return _finalize_user_message(result, provider="wata")
 
 
 def _wata_needs_support_notify(status: WataFinalizeStatus) -> bool:
@@ -1996,7 +2002,7 @@ async def pay_heleket_check(callback: CallbackQuery) -> None:
     )
     if result.status == WataFinalizeStatus.PENDING:
         await callback.answer(
-            wata_not_paid_yet_alert(kind=result.kind or "plan"),
+            external_not_paid_yet_alert(kind=result.kind or "plan", provider="heleket"),
             show_alert=True,
         )
         return
@@ -2009,7 +2015,7 @@ async def pay_heleket_check(callback: CallbackQuery) -> None:
         return
     if result.status == WataFinalizeStatus.DECLINED:
         await callback.answer(
-            "Оплата отменена или не завершена. Попробуй снова.",
+            "Оплата на Heleket отменена или не завершена. Попробуй снова.",
             show_alert=True,
         )
         return
@@ -2025,7 +2031,7 @@ async def pay_heleket_check(callback: CallbackQuery) -> None:
             show_alert=True,
         )
         return
-    text = _wata_finalize_user_message(result)
+    text = _finalize_user_message(result, provider="heleket")
     await callback.answer("Оплата подтверждена" if result.status == WataFinalizeStatus.PAID else "Готово")
     if result.status == WataFinalizeStatus.PAID and result.kind == "plan":
         await _notify_admin_sales(

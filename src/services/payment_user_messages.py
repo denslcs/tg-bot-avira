@@ -81,24 +81,59 @@ def pack_purchase_success_html(credits: int) -> str:
     )
 
 
-def wata_not_paid_yet_html(*, kind: str) -> str:
+def _checkout_page_label(provider: str) -> str:
+    return "Heleket" if provider == "heleket" else "Wata"
+
+
+def _checkout_pay_button_label(provider: str) -> str:
+    return "Оплатить криптой" if provider == "heleket" else "Оплатить"
+
+
+def external_not_paid_yet_html(*, kind: str, provider: str = "wata") -> str:
+    page = _checkout_page_label(provider)
     if kind == "pack":
         return (
             "<b>Оплата не подтверждена</b>\n"
-            "<blockquote><i>Пакет ещё не оплачен — сначала заверши платёж на странице Wata, "
+            f"<blockquote><i>Пакет ещё не оплачен — сначала заверши перевод на странице {page}, "
             "затем нажми «Проверить оплату».</i></blockquote>"
         )
     return (
         "<b>Подписка не оплачена</b>\n"
-        "<blockquote><i>Оплата в кассе пока не подтверждена — сначала заверши платёж на странице Wata, "
+        f"<blockquote><i>Оплата пока не подтверждена — сначала заверши перевод на странице {page}, "
         "затем нажми «Проверить оплату».</i></blockquote>"
     )
 
 
-def wata_not_paid_yet_alert(*, kind: str) -> str:
+def external_not_paid_yet_alert(*, kind: str, provider: str = "wata") -> str:
+    page = _checkout_page_label(provider)
+    btn = _checkout_pay_button_label(provider)
     if kind == "pack":
-        return "Пакет ещё не оплачен. Сначала нажми «Оплатить» и заверши платёж на странице Wata."
-    return "Подписка ещё не оплачена. Сначала нажми «Оплатить» и заверши платёж на странице Wata."
+        return (
+            f"Пакет ещё не оплачен. Сначала нажми «{btn}» "
+            f"и заверши перевод на странице {page}."
+        )
+    return (
+        f"Подписка ещё не оплачена. Сначала нажми «{btn}» "
+        f"и заверши перевод на странице {page}."
+    )
+
+
+def wata_not_paid_yet_html(*, kind: str) -> str:
+    return external_not_paid_yet_html(kind=kind, provider="wata")
+
+
+def wata_not_paid_yet_alert(*, kind: str) -> str:
+    return external_not_paid_yet_alert(kind=kind, provider="wata")
+
+
+def external_declined_html(*, provider: str = "wata") -> str:
+    if provider == "heleket":
+        return (
+            "<b>Оплата не прошла</b>\n"
+            "<blockquote><i>Перевод на Heleket не завершён или отменён. "
+            "Если крипта уже ушла — подожди подтверждения сети и нажми «Проверить оплату» снова.</i></blockquote>"
+        )
+    return wata_declined_html()
 
 
 def wata_declined_html() -> str:
