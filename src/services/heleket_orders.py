@@ -79,12 +79,24 @@ async def create_heleket_checkout(
         user_id=user_id, kind=kind, item_id=item_id
     )
     client = HeleketClient(currency=currency)
-    invoice = await client.create_payment(
-        amount=invoice_amount,
-        order_id=order_id,
-        url_success=success_redirect_url,
-        url_return=success_redirect_url,
-    )
+    try:
+        invoice = await client.create_payment(
+            amount=invoice_amount,
+            order_id=order_id,
+            url_success=success_redirect_url,
+            url_return=success_redirect_url,
+        )
+    except HeleketApiError:
+        if not success_redirect_url:
+            raise
+        logger.warning(
+            "heleket create with redirect failed, retry without urls order=%s",
+            order_id,
+        )
+        invoice = await client.create_payment(
+            amount=invoice_amount,
+            order_id=order_id,
+        )
     url = str(invoice.get("url") or "").strip()
     if not url:
         raise HeleketApiError("Heleket не вернула url оплаты")

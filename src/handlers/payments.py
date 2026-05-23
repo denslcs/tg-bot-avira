@@ -720,7 +720,7 @@ def _methods_keyboard(
                 InlineKeyboardButton(
                     text=f"{usd:g} $ · криптовалютой",
                     callback_data=f"{CB_PAY_CRYPTO_PREFIX}{item_id}",
-                    style=BTN_PRIMARY,
+                    style=BTN_SUCCESS,
                     icon_custom_emoji_id=PAY_INLINE_CRYPTO_BTN_EMOJI_ID,
                 )
             ],
@@ -1270,6 +1270,7 @@ async def _wata_success_redirect_url(bot, order_id: str) -> str | None:
 
 
 async def _heleket_success_redirect_url(bot, order_id: str) -> str | None:
+    """Короткий deep-link: полный order_id в start не помещается в лимит Telegram."""
     try:
         me = await bot.get_me()
         username = (me.username or "").strip()
@@ -1277,10 +1278,8 @@ async def _heleket_success_redirect_url(bot, order_id: str) -> str | None:
         username = ""
     if not username:
         return None
-    payload = f"heleket_{order_id}"
-    if len(payload.encode("utf-8")) > 64:
-        payload = "heleket_ok"
-    return f"https://t.me/{username}?start={payload}"
+    _ = order_id
+    return f"https://t.me/{username}?start=heleket_ok"
 
 
 def _heleket_invoice_pricing(

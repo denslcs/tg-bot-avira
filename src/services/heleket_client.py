@@ -41,6 +41,14 @@ def heleket_payment_status_declined(status: str | None) -> bool:
     return str(status or "").strip().lower() in _HELEKET_DECLINED
 
 
+def _heleket_json_body(payload: dict[str, Any]) -> bytes:
+    """Тело запроса как PHP json_encode(UNESCAPED_UNICODE) — с экранированием /."""
+    text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    if "/" in text:
+        text = text.replace("/", "\\/")
+    return text.encode("utf-8")
+
+
 def _make_sign(body: bytes, api_key: str) -> str:
     encoded = base64.b64encode(body).decode("ascii")
     return hashlib.md5((encoded + api_key).encode("utf-8")).hexdigest()
@@ -79,14 +87,11 @@ class HeleketClient:
         order_id: str,
         url_success: str | None = None,
         url_return: str | None = None,
-        lifetime: int = 3600,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "amount": amount,
             "currency": self._currency,
             "order_id": order_id,
-            "is_payment_multiple": False,
-            "lifetime": max(300, min(43200, int(lifetime))),
         }
         if url_success:
             payload["url_success"] = url_success
@@ -98,12 +103,13 @@ class HeleketClient:
         return await self._post("/v1/payment/info", {"order_id": order_id})
 
     async def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
-        body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        body = _heleket_json_body(payload)
         sign = _make_sign(body, self._api_key)
         headers = {
             "merchant": self._merchant,
             "sign": sign,
-            "Content-Type": "application/json",
+            "Content-Type": "application/json;charset=UTF-8",
+            "Accept": "application/json",
         }
         url = f"{self._base}{path}"
         timeout = httpx.Timeout(60.0, connect=15.0)
@@ -122,12 +128,16 @@ class HeleketClient:
             data = resp.json()
         except ValueError as exc:
             raise HeleketApiError("Heleket вернула не-JSON") from exc
-        if isinstance(data, dict) and data.get("state") not in (0, None):
-            errors = data.get("errors")
+        state = data.get("state") if isinstance(data, dict) else None
+        if state not in (0, None, "0"):
+            errors = data.get("errors") if isinstance(data, dict) else None
             if isinstance(errors, dict):
                 msg = json.dumps(errors, ensure_ascii=False)[:400]
             else:
-                msg = str(data.get("message") or data)[:400]
+                msg = str(
+                    (data.get("message") if isinstance(data, dict) else None) or data
+                )[:400]
+            logger.warning("heleket api error path=%s state=%s body=%s", path, state, msg)
             raise HeleketApiError(msg or "Ошибка Heleket")
         result = _unwrap_result(data)
         if not result:
