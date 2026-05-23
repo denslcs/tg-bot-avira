@@ -373,21 +373,28 @@ def _budget_source_label(source: str) -> str:
     labels = {
         "credit_add": "Начисление",
         "credit_spend": "Списание",
-        "admin_add": "Админ начислил",
-        "admin_take": "Админ списал",
-        "image_generate": "Генерация изображения",
+        "admin_add": "Начисление от админа",
+        "admin_take": "Списание админом",
+        "image_generate": "Генерация фото",
         "ready_idea_generate": "Готовая идея",
         "image_refund": "Возврат за генерацию",
         "ready_idea_refund": "Возврат за готовую идею",
-        "subscription_bonus": "Бонус подписки",
+        "subscription_bonus": "Бонус по подписке",
+        "subscription_bonus_scheduled": "Бонус по подписке",
         "bonus_pack": "Бонус-пакет",
         "subscription_purchase": "Покупка подписки",
         "referral_subscription_bonus": "Реф-бонус за подписку друга",
-        "referral_inviter_bonus": "Реф-бонус за приглашение",
-        "referral_pair_sub_bonus": "Реф-бонус за 2 приглашения (с подпиской)",
-        "referral_invitee_welcome": "Приветственный реф-бонус",
+        "referral_inviter_bonus": "За приглашение",
+        "referral_pair_sub_bonus": "Бонус за 2 приглашения",
+        "referral_invitee_welcome": "Бонус за регистрацию по ссылке",
     }
-    return labels.get(source, source or "Операция")
+    return labels.get(source, "Операция с балансом")
+
+
+def _budget_history_line_html(delta: int, source: str) -> str:
+    sign = "+" if delta > 0 else ""
+    amount = f"{sign}{delta}" if delta else "0"
+    return f"• <b>{esc(amount)}</b> кр. {esc(_budget_source_label(source))}"
 
 
 def _main_screen_text(balance: int, bonus_note: str = "") -> str:
@@ -1116,12 +1123,7 @@ async def _send_budget_history(
             "<blockquote>",
         ]
         for item in rows:
-            sign = "+" if item.delta > 0 else ""
-            delta_text = f"{sign}{item.delta}" if item.delta else "0"
-            details = f" — {esc(item.details)}" if item.details else ""
-            lines.append(
-                f"• <b>{esc(delta_text)}</b> кр. · <i>{esc(_budget_source_label(item.source))}</i>{details}"
-            )
+            lines.append(_budget_history_line_html(item.delta, item.source))
         lines.append("</blockquote>")
         text = "\n".join(lines)
     if edit_existing:
