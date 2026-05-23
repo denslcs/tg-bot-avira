@@ -69,6 +69,22 @@ def subscription_cooldown_days_remaining(last_purchase_iso: str | None) -> int:
     return max(1, math.ceil(left.total_seconds() / 86400))
 
 
+def subscription_days_remaining_ceiling(ends_at: object | None) -> int | None:
+    """Сколько полных суток осталось до окончания (округление вверх, UTC). None — нет активной подписки."""
+    raw = normalize_subscription_ends_at_value(ends_at)
+    if not raw:
+        return None
+    try:
+        end_dt = parse_dt_utc(raw)
+    except (ValueError, TypeError):
+        return None
+    now = datetime.now(timezone.utc)
+    if end_dt <= now:
+        return None
+    seconds = (end_dt - now).total_seconds()
+    return max(1, math.ceil(seconds / 86400))
+
+
 def is_within_subscription_renewal_grace(ends_at: object | None, *, grace_days: int = 2) -> bool:
     """True, если подписка уже закончилась, но не более grace_days назад (UTC)."""
     raw = normalize_subscription_ends_at_value(ends_at)

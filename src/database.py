@@ -48,7 +48,21 @@ from src.subscription_catalog import (
 # Ожидание при кратковременной блокировке SQLite вместо немедленной ошибки;
 # WAL (в init_db) даёт меньше конфликтов между читателями при одновременных запросах.
 _BUSY_TIMEOUT_MS = 8000
+_BUDGET_HISTORY_RETENTION_DAYS = 7
 _POSTGRES_POOL: PostgresPool | None = None
+
+
+def _utc_sql_cutoff(*, days_ago: int) -> str:
+    """Порог UTC для сравнения created_at/closed_at в SQL без datetime() (SQLite + Postgres)."""
+    d = max(0, int(days_ago))
+    return (datetime.now(timezone.utc) - timedelta(days=d)).strftime("%Y-%m-%d %H:%M:%S")
+
+
+async def _purge_stale_budget_history(db) -> None:
+    await db.execute(
+        "DELETE FROM user_budget_history WHERE created_at < ?",
+        (_utc_sql_cutoff(days_ago=_BUDGET_HISTORY_RETENTION_DAYS),),
+    )
 
 
 def _is_postgres_backend() -> bool:
@@ -216,6 +230,15 @@ async def _migrate_starter_trial_used(db: aiosqlite.Connection) -> None:
         await db.execute(
             "ALTER TABLE users ADD COLUMN starter_trial_used INTEGER NOT NULL DEFAULT 0"
         )
+
+
+async def _migrate_subscription_expiry_reminders(db: aiosqlite.Connection) -> None:
+    async with db.execute("PRAGMA table_info(users)") as cur:
+        cols = {row[1] for row in await cur.fetchall()}
+    if "subscription_remind_3d_for" not in cols:
+        await db.execute("ALTER TABLE users ADD COLUMN subscription_remind_3d_for TEXT")
+    if "subscription_remind_1d_for" not in cols:
+        await db.execute("ALTER TABLE users ADD COLUMN subscription_remind_1d_for TEXT")
 
 
 async def _migrate_idea_tokens_and_ready_window(db: aiosqlite.Connection) -> None:
@@ -510,6 +533,7 @@ async def init_db() -> None:
         await _migrate_free_image_window(db)
         await _migrate_subscription_last_purchase(db)
         await _migrate_starter_trial_used(db)
+        await _migrate_subscription_expiry_reminders(db)
         await _migrate_idea_tokens_and_ready_window(db)
         await _migrate_last_image_context_usage_kind(db)
         await _migrate_last_image_context_redo_fields(db)
@@ -830,12 +854,7 @@ async def add_credits_with_reason(
     if amount <= 0:
         return False
     async with open_db() as db:
-        await db.execute(
-            """
-            DELETE FROM user_budget_history
-            WHERE datetime(created_at) < datetime('now', '-7 days')
-            """
-        )
+        await _purge_stale_budget_history(db)
         cur = await db.execute(
             """
             UPDATE users
@@ -871,12 +890,7 @@ async def take_credits_with_reason(
     if amount <= 0:
         return False
     async with open_db() as db:
-        await db.execute(
-            """
-            DELETE FROM user_budget_history
-            WHERE datetime(created_at) < datetime('now', '-7 days')
-            """
-        )
+        await _purge_stale_budget_history(db)
         cur = await db.execute(
             """
             UPDATE users
@@ -905,12 +919,7 @@ async def add_budget_history_event(
     delta: int = 0,
 ) -> None:
     async with open_db() as db:
-        await db.execute(
-            """
-            DELETE FROM user_budget_history
-            WHERE datetime(created_at) < datetime('now', '-7 days')
-            """
-        )
+        await _purge_stale_budget_history(db)
         await db.execute(
             """
             INSERT INTO user_budget_history (user_id, delta, source, details)
@@ -929,23 +938,26 @@ async def get_budget_history_recent(
 ) -> list[BudgetHistoryItem]:
     days_safe = max(1, min(30, int(days)))
     limit_safe = max(1, min(100, int(limit)))
+    retention_cutoff = _utc_sql_cutoff(days_ago=_BUDGET_HISTORY_RETENTION_DAYS)
+    window_cutoff = _utc_sql_cutoff(days_ago=days_safe)
     async with open_db() as db:
         await db.execute(
             """
             DELETE FROM user_budget_history
-            WHERE datetime(created_at) < datetime('now', '-7 days')
-            """
+            WHERE created_at < ?
+            """,
+            (retention_cutoff,),
         )
         async with db.execute(
             """
             SELECT delta, source, details, created_at
             FROM user_budget_history
             WHERE user_id = ?
-              AND datetime(created_at) >= datetime('now', ?)
-            ORDER BY datetime(created_at) DESC, id DESC
+              AND created_at >= ?
+            ORDER BY created_at DESC, id DESC
             LIMIT ?
             """,
-            (user_id, f"-{days_safe} days", limit_safe),
+            (user_id, window_cutoff, limit_safe),
         ) as cur:
             rows = await cur.fetchall()
     return [
@@ -2138,6 +2150,65 @@ async def get_latest_pending_wata_order_for_user(user_id: int) -> dict | None:
     return rows[0] if rows else None
 
 
+@dataclass
+class SubscriptionReminderRow:
+    user_id: int
+    subscription_ends_at: str
+    subscription_plan: str | None
+    subscription_remind_3d_for: str | None
+    subscription_remind_1d_for: str | None
+
+
+async def list_subscription_reminder_candidates() -> list[SubscriptionReminderRow]:
+    async with open_db() as db:
+        async with db.execute(
+            """
+            SELECT user_id, subscription_ends_at, subscription_plan,
+                   subscription_remind_3d_for, subscription_remind_1d_for
+            FROM users
+            WHERE subscription_ends_at IS NOT NULL
+            """
+        ) as cur:
+            rows = await cur.fetchall()
+    out: list[SubscriptionReminderRow] = []
+    for row in rows:
+        ends = normalize_subscription_ends_at_value(row[1])
+        if not ends or not subscription_is_active(ends):
+            continue
+        out.append(
+            SubscriptionReminderRow(
+                user_id=int(row[0]),
+                subscription_ends_at=ends,
+                subscription_plan=_normalize_subscription_plan_value(row[2]),
+                subscription_remind_3d_for=normalize_subscription_ends_at_value(row[3]),
+                subscription_remind_1d_for=normalize_subscription_ends_at_value(row[4]),
+            )
+        )
+    return out
+
+
+async def mark_subscription_reminder_sent(
+    user_id: int,
+    *,
+    kind: str,
+    ends_at: str,
+) -> None:
+    ends_norm = normalize_subscription_ends_at_value(ends_at)
+    if not ends_norm:
+        return
+    col = (
+        "subscription_remind_3d_for"
+        if kind == "3d"
+        else "subscription_remind_1d_for"
+    )
+    async with open_db() as db:
+        await db.execute(
+            f"UPDATE users SET {col} = ? WHERE user_id = ?",
+            (ends_norm, int(user_id)),
+        )
+        await db.commit()
+
+
 async def extend_subscription(user_id: int, days: int, plan: str | None = None) -> str | None:
     if days <= 0:
         return None
@@ -2276,13 +2347,14 @@ async def count_dialog_messages_total() -> int:
 
 async def count_tickets_created_since_days(days: int) -> int:
     d = max(1, int(days))
+    cutoff = _utc_sql_cutoff(days_ago=d)
     async with open_db() as db:
         async with db.execute(
             """
             SELECT COUNT(*) FROM support_tickets
-            WHERE datetime(created_at) >= datetime('now', ?)
+            WHERE created_at >= ?
             """,
-            (f"-{d} days",),
+            (cutoff,),
         ) as cur:
             row = await cur.fetchone()
     return int(row[0]) if row else 0
@@ -2290,14 +2362,15 @@ async def count_tickets_created_since_days(days: int) -> int:
 
 async def count_tickets_closed_since_days(days: int) -> int:
     d = max(1, int(days))
+    cutoff = _utc_sql_cutoff(days_ago=d)
     async with open_db() as db:
         async with db.execute(
             """
             SELECT COUNT(*) FROM support_tickets
             WHERE closed_at IS NOT NULL
-              AND datetime(closed_at) >= datetime('now', ?)
+              AND closed_at >= ?
             """,
-            (f"-{d} days",),
+            (cutoff,),
         ) as cur:
             row = await cur.fetchone()
     return int(row[0]) if row else 0
@@ -2305,13 +2378,14 @@ async def count_tickets_closed_since_days(days: int) -> int:
 
 async def get_support_rating_rollups_since_days(days: int) -> tuple[float | None, int]:
     d = max(1, int(days))
+    cutoff = _utc_sql_cutoff(days_ago=d)
     async with open_db() as db:
         async with db.execute(
             """
             SELECT AVG(rating), COUNT(*) FROM support_ratings
-            WHERE datetime(created_at) >= datetime('now', ?)
+            WHERE created_at >= ?
             """,
-            (f"-{d} days",),
+            (cutoff,),
         ) as cur:
             row = await cur.fetchone()
     if not row or row[1] == 0:
@@ -2322,15 +2396,16 @@ async def get_support_rating_rollups_since_days(days: int) -> tuple[float | None
 
 async def get_rating_distribution_since_days(days: int) -> list[tuple[int, int]]:
     d = max(1, int(days))
+    cutoff = _utc_sql_cutoff(days_ago=d)
     async with open_db() as db:
         async with db.execute(
             """
             SELECT rating, COUNT(*) FROM support_ratings
-            WHERE datetime(created_at) >= datetime('now', ?)
+            WHERE created_at >= ?
             GROUP BY rating
             ORDER BY rating
             """,
-            (f"-{d} days",),
+            (cutoff,),
         ) as cur:
             rows = await cur.fetchall()
     return [(int(r[0]), int(r[1])) for r in rows]
@@ -2744,13 +2819,16 @@ async def set_user_ready_mode(user_id: int, mode: str) -> str:
 
 
 async def count_new_users_days(days: int) -> int:
+    """Новые пользователи за N дней (сравнение по канонической UTC-строке, без datetime() в SQL)."""
+    d = max(1, int(days))
+    cutoff = _utc_sql_cutoff(days_ago=d)
     async with open_db() as db:
         async with db.execute(
             """
             SELECT COUNT(*) FROM users
-            WHERE datetime(created_at) >= datetime('now', ?)
+            WHERE created_at >= ?
             """,
-            (f"-{int(days)} days",),
+            (cutoff,),
         ) as cur:
             row = await cur.fetchone()
     return int(row[0]) if row else 0

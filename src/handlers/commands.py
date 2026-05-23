@@ -1087,47 +1087,66 @@ async def quick_panel_ready_mode_inline(callback: CallbackQuery, state: FSMConte
 
 @router.message((F.text == "История бюджета") | (F.text == "📊 История бюджета"))
 async def quick_panel_budget_history(message: Message) -> None:
-    await _send_budget_history(message, back_callback=CB_MENU_BACK_START)
-
-
-async def _send_budget_history(message: Message, *, back_callback: str) -> None:
     if not message.from_user:
         return
-    rows = await get_budget_history_recent(message.from_user.id, days=7, limit=20)
-    if not rows:
-        await message.answer(
-            '<b><tg-emoji emoji-id="6057406808086023473">📉</tg-emoji> История бюджета (7 дней)</b>\n'
-            "<blockquote><i>Пока нет записей за последнюю неделю.</i></blockquote>",
-            parse_mode=HTML,
-            reply_markup=back_to_main_menu_keyboard(back_callback),
-        )
-        return
-    lines = [
-        '<b><tg-emoji emoji-id="6057406808086023473">📉</tg-emoji> История бюджета (7 дней)</b>',
-        "<blockquote>",
-    ]
-    for item in rows:
-        sign = "+" if item.delta > 0 else ""
-        delta_text = f"{sign}{item.delta}" if item.delta else "0"
-        details = f" — {esc(item.details)}" if item.details else ""
-        lines.append(
-            f"• <b>{esc(delta_text)}</b> кр. · <i>{esc(_budget_source_label(item.source))}</i>{details}"
-        )
-    lines.append("</blockquote>")
-    await message.answer(
-        "\n".join(lines),
-        parse_mode=HTML,
-        reply_markup=back_to_main_menu_keyboard(back_callback),
+    await _send_budget_history(
+        message,
+        user_id=message.from_user.id,
+        back_callback=CB_MENU_BACK_START,
     )
+
+
+async def _send_budget_history(
+    message: Message,
+    *,
+    user_id: int,
+    back_callback: str,
+    edit_existing: bool = False,
+) -> None:
+    rows = await get_budget_history_recent(user_id, days=7, limit=20)
+    kb = back_to_main_menu_keyboard(back_callback)
+    if not rows:
+        text = (
+            '<b><tg-emoji emoji-id="6057406808086023473">📉</tg-emoji> История бюджета (7 дней)</b>\n'
+            "<blockquote><i>Пока нет записей за последнюю неделю.</i></blockquote>"
+        )
+    else:
+        lines = [
+            '<b><tg-emoji emoji-id="6057406808086023473">📉</tg-emoji> История бюджета (7 дней)</b>',
+            "<blockquote>",
+        ]
+        for item in rows:
+            sign = "+" if item.delta > 0 else ""
+            delta_text = f"{sign}{item.delta}" if item.delta else "0"
+            details = f" — {esc(item.details)}" if item.details else ""
+            lines.append(
+                f"• <b>{esc(delta_text)}</b> кр. · <i>{esc(_budget_source_label(item.source))}</i>{details}"
+            )
+        lines.append("</blockquote>")
+        text = "\n".join(lines)
+    if edit_existing:
+        await edit_or_send_nav_message(
+            message,
+            text=text,
+            reply_markup=kb,
+            parse_mode=HTML,
+        )
+    else:
+        await message.answer(text, reply_markup=kb, parse_mode=HTML)
 
 
 @router.callback_query(F.data == CB_MENU_BUDGET_HUB)
 async def menu_budget_hub(callback: CallbackQuery) -> None:
-    if not callback.message:
+    if not callback.from_user or not callback.message:
         await callback.answer("Сообщение недоступно.", show_alert=True)
         return
     await callback.answer()
-    await _send_budget_history(callback.message, back_callback=CB_MENU_HUB)
+    await _send_budget_history(
+        callback.message,
+        user_id=callback.from_user.id,
+        back_callback=CB_MENU_HUB,
+        edit_existing=True,
+    )
 
 
 @router.callback_query(F.data == CB_MENU_BACK_START)

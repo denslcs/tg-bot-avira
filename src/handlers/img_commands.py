@@ -2011,7 +2011,6 @@ def _ready_idea_caption(
     *,
     category: str,
     title: str,
-    preview: str,
     index: int,
     total: int,
     photos_required: int,
@@ -2034,7 +2033,6 @@ def _ready_idea_caption(
         f"{category_part}"
         f'<tg-emoji emoji-id="5397782960512444700">📌</tg-emoji> Вариант: <b>{esc(index + 1)}/{esc(total)}</b>\n'
         f"<b>{esc(title)}</b>\n"
-        f"{esc(preview)}\n"
         f"{mode_part}"
         f"{_ready_generation_cost_html(shown_cost)}\n"
         f"<b>{esc(req)}</b>"
@@ -3299,7 +3297,6 @@ async def _open_ready_card(
     cap = _ready_idea_caption(
         category=category,
         title=title,
-        preview=preview,
         index=idx,
         total=total,
         photos_required=photos_required,
@@ -3415,7 +3412,6 @@ async def refresh_ready_browsing_anchor(bot: Bot, *, user_id: int, state: FSMCon
     cap = _ready_idea_caption(
         category=category,
         title=title,
-        preview=preview,
         index=idx,
         total=len(ideas),
         photos_required=photos_required,

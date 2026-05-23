@@ -50,6 +50,10 @@ DB_POOL_MIN: int = max(1, _parse_int(os.getenv("DB_POOL_MIN", "2"), 2))
 DB_POOL_MAX: int = max(DB_POOL_MIN, _parse_int(os.getenv("DB_POOL_MAX", "20"), 20))
 DB_CONNECT_TIMEOUT: int = max(1, _parse_int(os.getenv("DB_CONNECT_TIMEOUT", "10"), 10))
 DB_PATH: str = os.getenv("DB_PATH", "data/bot.sqlite3").strip() or "data/bot.sqlite3"
+# Напоминания о скором окончании подписки (3 и 1 сутки до конца, UTC).
+SUBSCRIPTION_REMINDER_CHECK_INTERVAL_MINUTES: int = max(
+    15, _parse_int(os.getenv("SUBSCRIPTION_REMINDER_CHECK_INTERVAL_MINUTES", "60"), 60)
+)
 START_CREDITS: int = int(os.getenv("START_CREDITS", "20"))
 # Второе сообщение в ЛС сразу после главного экрана /start (новости, новый промпт). Пусто = не слать.
 # В .env можно писать в одну строку; для переноса строк подставьте \n в тексте.

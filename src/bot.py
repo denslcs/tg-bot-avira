@@ -11,6 +11,7 @@ from src.config import ADMIN_IDS, SUPPORT_CHAT_ID, TELEGRAM_BOT_TOKEN
 from src.database import init_db
 from src.inline_panel_exclusive import apply_exclusive_inline_panels
 from src.handlers.routers import register_routers
+from src.handlers.subscription_jobs import run_subscription_reminder_jobs
 from src.selfcheck import run_self_check
 
 _USER_COMMANDS = [
@@ -83,6 +84,7 @@ async def main() -> None:
     dp = Dispatcher(storage=MemoryStorage())
     register_routers(dp)
 
+    run_subscription_reminder_jobs(bot)
     await dp.start_polling(bot)
 
 
