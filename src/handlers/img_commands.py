@@ -797,7 +797,9 @@ _AVATAR_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "avatar_
 _PUTIN_NEGOTIATIONS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "putin_negotiations_preview.png"
 _MUHAMMAD_ALI_VICTORY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "muhammad_ali_victory_preview.png"
 _HOMELANDER_BUTCHER_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "homelander_butcher_preview.png"
+_SOLDIER_BOY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "soldier_boy_preview.png"
 _ROSTOMER_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "rostomer_preview.png"
+_POVJAZANNYJ_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "povjazannyj_preview.png"
 _ITALY_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "italy_preview.png"
 _BACKROOMS_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "backrooms_preview.png"
 _ORANGE_COLOR_READY_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "orange_color_preview.png"
@@ -954,6 +956,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _HOMELANDER_BUTCHER_READY_LISTING_IMAGE
     if t == "Ростомер" and _ROSTOMER_READY_LISTING_IMAGE.is_file():
         return _ROSTOMER_READY_LISTING_IMAGE
+    if t == "Повязанный" and _POVJAZANNYJ_LISTING_IMAGE.is_file():
+        return _POVJAZANNYJ_LISTING_IMAGE
     if t == "На отдыхе в Италии" and _ITALY_READY_LISTING_IMAGE.is_file():
         return _ITALY_READY_LISTING_IMAGE
     if t == "Бекрумс" and _BACKROOMS_READY_LISTING_IMAGE.is_file():
@@ -974,8 +978,8 @@ def _ready_idea_listing_photo_path(title: str) -> Path | None:
         return _RONALDO_PHOTO_LISTING_IMAGE
     if t == _MELLSTROY_PHOTO_TITLE and _MELLSTROY_PHOTO_LISTING_IMAGE.is_file():
         return _MELLSTROY_PHOTO_LISTING_IMAGE
-    if t == "Soldier boy" and _SOLDIER_BOY_SHIELD_REF_IMAGE.is_file():
-        return _SOLDIER_BOY_SHIELD_REF_IMAGE
+    if t == "Soldier boy" and _SOLDIER_BOY_LISTING_IMAGE.is_file():
+        return _SOLDIER_BOY_LISTING_IMAGE
     if t == "Красивый костюм с букетом" and _SUIT_BOUQUET_READY_LISTING_IMAGE.is_file():
         return _SUIT_BOUQUET_READY_LISTING_IMAGE
     if t == "Gucci editorial" and _GUCCI_EDITORIAL_READY_LISTING_IMAGE.is_file():
