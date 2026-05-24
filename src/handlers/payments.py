@@ -70,6 +70,8 @@ from src.handlers.commands import (
     edit_or_send_nav_message,
     _is_generated_image_result_message,
     replace_nav_screen_in_message,
+    replace_nav_screen_or_send_photo,
+    strip_message_keyboard_soft,
 )
 from src.keyboards.callback_data import (
     CB_MENU_BACK_START,
@@ -409,13 +411,9 @@ def _stars_invoice_keyboard(*, stars_amount: int, back_data: str) -> InlineKeybo
     )
 
 
-async def _delete_message_soft(message: Message | None) -> None:
-    if message is None:
-        return
-    try:
-        await message.delete()
-    except Exception:
-        logger.debug("delete message failed (invoice/nav)", exc_info=True)
+async def _strip_invoice_message_soft(message: Message | None) -> None:
+    """Скрыть клавиатуру счёта Stars вместо удаления сообщения."""
+    await strip_message_keyboard_soft(message)
 
 
 def _admin_sales_thread_for_plan(plan_id: str) -> int:
@@ -964,19 +962,11 @@ async def send_subscription_menu(
         )
         if ok:
             return
-        try:
-            await message.delete()
-        except Exception:
-            logger.debug(
-                "send_subscription_menu: не удалось удалить сообщение перед баннером тарифов (fallback)",
-                exc_info=True,
-            )
-        await bot.send_photo(
-            chat_id,
-            photo=FSInputFile(pricing_img),
-            caption=caption,
+        await replace_nav_screen_or_send_photo(
+            message,
+            caption_html=caption,
             reply_markup=kb,
-            parse_mode=HTML,
+            media_path=pricing_img,
         )
         return
     if replace_previous:
@@ -1027,15 +1017,17 @@ async def pay_back_plans(callback: CallbackQuery) -> None:
     caption = _plans_menu_caption_for_display()
     pricing_img = _subscriptions_pricing_image_path()
     if _plans_screen_uses_pricing_image() and not callback.message.photo:
-        try:
-            await callback.message.delete()
-        except Exception:
-            logging.debug("pay_back_plans: не удалось удалить сообщение перед фото тарифов", exc_info=True)
         if pricing_img and pricing_img.is_file():
-            await callback.bot.send_photo(
-                callback.message.chat.id,
-                photo=FSInputFile(pricing_img),
-                caption=caption,
+            await replace_nav_screen_or_send_photo(
+                callback.message,
+                caption_html=caption,
+                reply_markup=kb,
+                media_path=pricing_img,
+            )
+        else:
+            await edit_or_send_nav_message(
+                callback.message,
+                text=caption,
                 reply_markup=kb,
                 parse_mode=HTML,
             )
@@ -2181,7 +2173,7 @@ async def pay_invoice_back_to_methods(callback: CallbackQuery) -> None:
         await callback.answer()
         back_cb = CB_PAY_MENU_HUB if hub else CB_PAY_MENU
         chat_id = callback.message.chat.id
-        await _delete_message_soft(callback.message)
+        await _strip_invoice_message_soft(callback.message)
         if photo_mid is not None:
             try:
                 await callback.bot.edit_message_caption(
@@ -2214,7 +2206,7 @@ async def pay_invoice_back_to_methods(callback: CallbackQuery) -> None:
     )
     back_bonus = CB_PAY_BONUS_MENU_HUB if hub else CB_PAY_BONUS_MENU
     await callback.answer()
-    await _delete_message_soft(callback.message)
+    await _strip_invoice_message_soft(callback.message)
     await callback.message.bot.send_message(
         callback.message.chat.id,
         _pack_methods_text(

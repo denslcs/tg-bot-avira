@@ -22,6 +22,7 @@ CB_MENU_REF_HUB = "menu:ref_hub"
 CB_MENU_SUPPORT_HUB = "menu:support_hub"
 CB_MENU_FAQ_HUB = "menu:faq_hub"
 CB_MENU_CHANNEL_HUB = "menu:channel_hub"
+CB_CHANNEL_GATE_CHECK = "gate:ch"
 CB_MENU_BUDGET_HUB = "menu:budget_hub"
 
 # --- Генерация изображений (handlers/img_commands.py) ---
@@ -92,6 +93,7 @@ __all__ = [
     "CB_IMG_OK",
     "CB_MENU_ABOUT",
     "CB_MENU_BACK_START",
+    "CB_CHANNEL_GATE_CHECK",
     "CB_MENU_CHANNEL",
     "CB_MENU_MELLSTROY",
     "CB_MENU_FAQ",

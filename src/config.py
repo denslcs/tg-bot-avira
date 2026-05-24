@@ -42,6 +42,15 @@ TELEGRAM_BOT_TOKEN: str = _must_getenv("TELEGRAM_BOT_TOKEN")
 SUPPORT_BOT_TOKEN: str = os.getenv("SUPPORT_BOT_TOKEN", "").strip()
 SUPPORT_BOT_USERNAME: str = os.getenv("SUPPORT_BOT_USERNAME", "").strip()
 CHANNEL_URL: str = os.getenv("CHANNEL_URL", "").strip()
+# @username или -100… для getChatMember; если пусто — берётся из CHANNEL_URL (t.me/…).
+CHANNEL_ID: str = os.getenv("CHANNEL_ID", "").strip()
+# Одноразовый gate «подпишись на канал» при первом /start (1=вкл, 0=выкл).
+CHANNEL_GATE_ENABLED: bool = os.getenv("CHANNEL_GATE", "1").strip().lower() not in (
+    "0",
+    "false",
+    "no",
+    "off",
+)
 DB_BACKEND: str = os.getenv("DB_BACKEND", "sqlite").strip().lower() or "sqlite"
 if DB_BACKEND not in {"sqlite", "postgres"}:
     DB_BACKEND = "sqlite"

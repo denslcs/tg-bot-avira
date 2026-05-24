@@ -587,7 +587,19 @@ async def init_db() -> None:
         await _migrate_wata_benefits_applied(db)
         await _migrate_heleket_payment_orders(db)
         await _migrate_subscription_ends_at_canonical(db)
+        await _migrate_users_channel_gate(db)
         await db.commit()
+
+
+async def _migrate_users_channel_gate(db: aiosqlite.Connection) -> None:
+    async with db.execute("PRAGMA table_info(users)") as cur:
+        cols = {row[1] for row in await cur.fetchall()}
+    if "channel_gate_passed" not in cols:
+        await db.execute(
+            "ALTER TABLE users ADD COLUMN channel_gate_passed INTEGER NOT NULL DEFAULT 0"
+        )
+        # Уже зарегистрированные пользователи gate не проходят повторно.
+        await db.execute("UPDATE users SET channel_gate_passed = 1")
 
 
 async def ensure_user(user_id: int, username: str | None) -> None:
@@ -607,6 +619,31 @@ async def ensure_user(user_id: int, username: str | None) -> None:
                 "UPDATE users SET subscription_plan = ? WHERE user_id = ?",
                 ("universe", user_id),
             )
+            await db.execute(
+                "UPDATE users SET channel_gate_passed = 1 WHERE user_id = ?",
+                (user_id,),
+            )
+        await db.commit()
+
+
+async def user_needs_channel_gate(user_id: int) -> bool:
+    async with open_db() as db:
+        async with db.execute(
+            "SELECT COALESCE(channel_gate_passed, 0) FROM users WHERE user_id = ?",
+            (int(user_id),),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return True
+    return not bool(int(row[0] or 0))
+
+
+async def mark_user_channel_gate_passed(user_id: int) -> None:
+    async with open_db() as db:
+        await db.execute(
+            "UPDATE users SET channel_gate_passed = 1 WHERE user_id = ?",
+            (int(user_id),),
+        )
         await db.commit()
 
 

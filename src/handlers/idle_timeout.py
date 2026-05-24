@@ -9,6 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from src.handlers.commands import restore_main_menu_message
+from src.services.channel_gate import needs_channel_gate, send_channel_gate_screen
 
 _IDLE_TIMEOUT_SECONDS = 600
 _LAST_ACTIVITY_TS: dict[int, float] = {}
@@ -51,7 +52,10 @@ class UserIdleMiddleware(BaseMiddleware):
             if isinstance(state, FSMContext):
                 await state.clear()
             if message is not None:
-                await restore_main_menu_message(message, user_id, username)
+                if await needs_channel_gate(user_id):
+                    await send_channel_gate_screen(message.bot, message.chat.id)
+                else:
+                    await restore_main_menu_message(message, user_id, username)
             if isinstance(event, CallbackQuery):
                 await event.answer()
             return None

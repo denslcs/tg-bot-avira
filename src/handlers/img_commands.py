@@ -75,6 +75,7 @@ from src.handlers.commands import (
     _refresh_quick_panel,
     edit_or_send_nav_message,
     replace_nav_screen_in_message,
+    replace_nav_screen_or_send_photo,
     restore_main_menu_message,
 )
 from src.keyboards.main_menu import menu_hub_keyboard, start_menu_keyboard
@@ -518,6 +519,12 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             "CRITICAL IDENTITY LOCK: keep the user face realistic and recognizable. Create a found-footage VHS style frame in Backrooms Level-0 atmosphere: endless yellow-beige wallpaper with subtle repeating pattern, low-pile tan carpet, long empty corridors, sickly fluorescent ceiling panels, liminal uncanny mood, low-fi analog noise, scan lines, mild chromatic aberration, tape artifacts. The user looks toward the camera, dynamic mid-motion (found-footage), slight playful energy — not a stiff studio pose. WARDROBE (unisex): if input is head-only or tight portrait, dress the body in a bright yellow industrial coveralls / boiler suit (same garment for any gender); if full-body reference is visible, keep the user's original outfit. Camera: slight fisheye (~120° FOV), tilted, camera slightly below eye level. Add white VHS date/time stamp overlay in the lower-left corner (1990s camcorder style). Keep photorealistic subject integration with authentic VHS degradation.",
             1,
         ),
+        (
+            "Повязанный",
+            "Живой 9:16-кадр с iPhone: задержание, ГБР в тактике, на столе — пачки евро, карты, iPhone и MacBook; лёгкий motion blur у головы.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve exact facial structure, skin texture, age cues, hairline, and recognizable likeness — no face replacement, no beautification drift. EXPRESSION: light natural smile; subtle motion blur on the head/hair as if captured mid-movement in a chaotic live moment (face still readable). GENDER / OUTFIT (strict from reference): if female-presenting — black athletic jumpsuit with front zipper, partly unzipped at the chest; if male-presenting — black T-shirt and wide black jeans; if ambiguous — black minimal streetwear (dark top + wide dark trousers). POSE: realistic detention / restraint moment — hands controlled by officers, body language tense but not theatrical. TABLE PROPS (foreground): on a table, large sums of cash shown as dense bundles of crisp new euro banknotes straight from a bank, each bundle tied with paper bands/ribbons, arranged in separate groups totaling roughly five million euros worth visually, with slight uneven stacking and natural mess. About twenty bank cards laid in one line with small random offsets (not perfectly aligned). Several iPhones of different models in a row plus two closed MacBook laptops nearby, all placed imperfectly (casual raid/evidence-table look). OFFICERS: Russian GBR (rapid-response group) personnel in black tactical gear — helmets, body armor vests, tactical boots; three officers in frame: one holding/controlling the subject's hands, one standing close beside, one partially visible at the edge; natural documentary positions, officer faces softly out of focus / not the hero of the shot. ATMOSPHERE: photorealistic detention scene, live candid raid energy, slight chaos, natural shadows, no glossy staged advertising look, no studio polish. CAMERA: shot on iPhone 16 Pro Max, vertical 9:16, harsh realistic indoor light, documentary smartphone color science, mild noise acceptable. NEGATIVE: cartoon, anime, plastic skin, wrong user face, perfect studio lighting, smiling officers, readable text overlays, watermark, extra limbs, duplicated faces, fantasy uniforms, US SWAT instead of plausible Russian tactical raid look.",
+            1,
+        ),
     ],
     "celebrities": [
         (
@@ -628,6 +635,12 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
             "Avatar",
             "Как бы ты выглядел будучи одним из народа Нави.",
             "CRITICAL IDENTITY LOCK: Use the uploaded user photo as the only identity reference. Keep face structure, age, skin texture, and hairstyle recognizable and realistic. Transform the user into a highly detailed, photorealistic Avatar-universe character (Na'vi aesthetics, blue skin, cinematic tribal costume design, premium textures). GENDER ADAPTATION RULE: infer presentation from the user photo and choose matching character styling automatically. If the user appears male, use a Jake-inspired warrior costume and masculine silhouette. If the user appears female, use a Neytiri-inspired warrior costume and feminine silhouette. Keep the final result respectful, realistic, and coherent. Camera and mood: slightly low upward-facing angle, dramatic cinematic lighting, high contrast, deep saturated blue background, warm highlights on one side of the face and soft velvety shadows on the other. No props, no extra accessories. Emphasize detailed costume materials, realistic skin texture, controlled color grading, and an editorial close portrait feeling.",
+            1,
+        ),
+        (
+            "Soldier boy",
+            "Ночной paparazzi-кадр на iPhone: Soldier Boy из сериала The Boys у Rolls-Royce с сигарой и щитом, рядом ты в streetwear — вспышка, роскошь и городской драйв.",
+            "CRITICAL IDENTITY LOCK: Use the attached user photo as the ONLY identity reference for ME. Preserve exact facial features, skin texture, haircut, age cues, and proportions — no beautification, no face replacement, no identity drift. UNISEX WARDROBE (mandatory): ME must wear stylish contemporary streetwear. If clothing is visible in the reference — adapt it naturally into a coherent streetwear look that fits the person's build and presentation. If the reference is face-only, head-only, tight portrait, or no outfit is visible — infer full body and dress ME in unisex streetwear by default (e.g. oversized hoodie or bomber jacket, relaxed trousers or cargo pants, clean sneakers); then refine fit to apparent gender presentation from the face (male-presenting / female-presenting / ambiguous neutral). CHARACTER LOCK (strict): Soldier Boy must be the character from the Amazon Prime TV series \"The Boys\" (NOT Captain America, NOT a generic soldier, NOT any other franchise). Photoreal recognizable likeness: WWII-era star-spangled superhero costume from the show, rugged veteran charisma, iconic round shield, cigar. SCENE: A nighttime iPhone photo of this Soldier Boy from The Boys leaning against the hood of a Rolls-Royce, holding his iconic shield and smoking a cigar. The camera flash is clearly on, giving the image a raw paparazzi vibe with harsh lighting and realistic shadows. Standing next to him is ME in streetwear as described above. ATMOSPHERE: chaotic, stylish, and cinematic, with luxury aesthetics mixed with edgy urban energy. CAMERA: shot on iPhone, harsh on-camera flash, raw paparazzi documentary feel, realistic shadows, high dynamic range, true-to-life colors, no beauty filters. NEGATIVE: wrong user face, cartoon, plastic skin, extra fingers, watermark, Captain America or Marvel-style costume, wrong Soldier Boy likeness, soft studio lighting, wrong outfit gender stereotype against the reference.",
             1,
         ),
     ],
@@ -862,7 +875,13 @@ async def _purge_prior_ready_hub_ui(
             logging.debug("purge hub anchor", exc_info=True)
 
 
-async def _purge_ready_category_album_messages_only(bot, chat_id: int, prior_data: dict) -> None:
+async def _purge_ready_category_album_messages_only(
+    bot,
+    chat_id: int,
+    prior_data: dict,
+    *,
+    keep_message_id: int | None = None,
+) -> None:
     """Только старые id альбома «готовых идей»; якорное сообщение (меню) не трогаем — его можно отредактировать."""
     ids = list(prior_data.get("_ready_category_album_ids") or [])
     seen: set[int] = set()
@@ -870,6 +889,8 @@ async def _purge_ready_category_album_messages_only(bot, chat_id: int, prior_dat
         if mid in seen:
             continue
         seen.add(mid)
+        if keep_message_id is not None and mid == keep_message_id:
+            continue
         try:
             await bot.delete_message(chat_id, mid)
         except Exception:
@@ -1009,35 +1030,18 @@ async def _edit_ready_nav_message(
     reply_markup: InlineKeyboardMarkup | None,
     listing_photo: Path | None,
 ) -> Message | None:
-    """
-    Смена экрана готовых идей: сначала replace (одно сообщение — превью совпадает с подписью).
-
-    Если нужна другая картинка, а edit_media не вышел — delete + send_photo, не edit_caption на старом фото.
-    """
+    """Смена экрана готовых идей: replace (edit_media / caption / text), без delete+send."""
     reply_markup = _strip_ready_listing_mode_switch_rows(reply_markup)
     if listing_photo is not None and listing_photo.is_file():
-        ok = await replace_nav_screen_in_message(
-            message,
-            caption_html=caption,
-            reply_markup=reply_markup,
-            new_media_path=listing_photo,
-        )
-        if ok:
-            return message
         try:
-            try:
-                await message.delete()
-            except Exception:
-                logging.debug("_edit_ready_nav_message: delete before resend listing photo failed", exc_info=True)
-            return await message.bot.send_photo(
-                message.chat.id,
-                photo=FSInputFile(listing_photo),
-                caption=caption,
+            return await replace_nav_screen_or_send_photo(
+                message,
+                caption_html=caption,
                 reply_markup=reply_markup,
-                parse_mode=HTML,
+                media_path=listing_photo,
             )
         except Exception:
-            logging.warning("_edit_ready_nav_message: send_photo after replace failed", exc_info=True)
+            logging.warning("_edit_ready_nav_message: replace/send listing photo failed", exc_info=True)
     return await edit_or_send_nav_message(
         message, text=caption, reply_markup=reply_markup, parse_mode=HTML
     )
@@ -1637,23 +1641,15 @@ def _ideas_for_category(
 def _ready_browser_keyboard(
     index: int,
     total: int,
-    back_callback: str = CB_MENU_BACK_START,
     *,
     category_slug: str | None = None,
     single_shortcut_mode: bool = False,
 ) -> InlineKeyboardMarkup:
-    """Листание карточек готовых идей. Не добавлять сюда fast/medium/premium — режим только из панели (🎛 Режим)."""
+    """Листание карточек готовых идей. «Назад» — к экрану категорий."""
+    _ = category_slug
     prev_i = (index - 1) % total
     next_i = (index + 1) % total
-    cs = (category_slug or "").strip().lower()
-    cat_icon = _READY_CATEGORY_PREMIUM_IDS.get(cs)
-    cats_btn: dict = {
-        "text": "Категории",
-        "callback_data": f"{CB_READY_NAV_PREFIX}back_cats",
-        "style": BTN_PRIMARY,
-    }
-    if cat_icon:
-        cats_btn["icon_custom_emoji_id"] = cat_icon
+    back_to_categories = f"{CB_READY_NAV_PREFIX}back_cats"
     if single_shortcut_mode:
         return InlineKeyboardMarkup(
             inline_keyboard=[
@@ -1668,7 +1664,7 @@ def _ready_browser_keyboard(
                 [
                     InlineKeyboardButton(
                         text="Назад",
-                        callback_data=back_callback,
+                        callback_data=back_to_categories,
                         icon_custom_emoji_id="5256247952564825322",
                     )
                 ],
@@ -1696,11 +1692,10 @@ def _ready_browser_keyboard(
                     icon_custom_emoji_id="5260450573768990626",
                 ),
             ],
-            [InlineKeyboardButton(**cats_btn)],
             [
                 InlineKeyboardButton(
                     text="Назад",
-                    callback_data=back_callback,
+                    callback_data=back_to_categories,
                     icon_custom_emoji_id="5256247952564825322",
                 )
             ],
@@ -1836,9 +1831,7 @@ def _ready_category_caption() -> str:
     return (
         '<b><tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> Готовые идеи</b>\n'
         "Выбери категорию и идею, затем нажми «Выбрать».\n"
-        "Модель для готовых идей переключается внизу: кнопка <b>«🎛 Режим»</b> на панели быстрого доступа.\n"
-        "Дальше бот подскажет, что отправить: фото, текст или оба шага.\n"
-        '<tg-emoji emoji-id="5330320040883411678">🗺</tg-emoji> Стоимость: <b>15–65 кр.</b> (зависит от режима и подписки).'
+        "Дальше бот подскажет, что отправить: фото, текст или оба шага."
     )
 
 
@@ -3043,7 +3036,7 @@ async def _send_ready_ideas_screen(
     keep_mid = message.message_id if edit else None
     await _strip_old_ready_ui_keyboards(bot, chat_id, state, keep_message_id=keep_mid)
     # Не удаляем якорь главного меню: сначала пробуем edit_media / подпись на том же сообщении.
-    await _purge_ready_category_album_messages_only(bot, chat_id, prior)
+    await _purge_ready_category_album_messages_only(bot, chat_id, prior, keep_message_id=keep_mid)
 
     await state.clear()
     if not is_openrouter_image_configured():
@@ -3064,26 +3057,19 @@ async def _send_ready_ideas_screen(
                     new_media_path=listing if listing is not None and listing.is_file() else None,
                 )
                 if not ok:
-                    try:
-                        await message.delete()
-                    except Exception:
-                        logging.debug(
-                            "_send_ready_ideas_screen: delete before missing-config fallback failed",
-                            exc_info=True,
-                        )
+                    listing = _ready_categories_listing_photo()
                     kb = _missing_config_kb(back_callback)
                     if listing is not None and listing.is_file():
-                        await bot.send_photo(
-                            chat_id,
-                            photo=FSInputFile(listing),
-                            caption=_IMAGE_GEN_MISSING_TEXT,
+                        await replace_nav_screen_or_send_photo(
+                            message,
+                            caption_html=_IMAGE_GEN_MISSING_TEXT,
                             reply_markup=kb,
-                            parse_mode=HTML,
+                            media_path=listing,
                         )
                     else:
-                        await bot.send_message(
-                            chat_id,
-                            _IMAGE_GEN_MISSING_TEXT,
+                        await edit_or_send_nav_message(
+                            message,
+                            text=_IMAGE_GEN_MISSING_TEXT,
                             reply_markup=kb,
                             parse_mode=HTML,
                         )
@@ -3115,33 +3101,34 @@ async def _send_ready_ideas_screen(
                 logging.debug("quick panel after ready ideas hub (from result msg)", exc_info=True)
             return
         media_path = listing_photo if listing_photo is not None and listing_photo.is_file() else None
-        ok = await replace_nav_screen_in_message(
-            message,
-            caption_html=cap,
-            reply_markup=kb,
-            new_media_path=media_path,
+        if media_path is not None:
+            edited = await replace_nav_screen_or_send_photo(
+                message,
+                caption_html=cap,
+                reply_markup=kb,
+                media_path=media_path,
+            )
+        else:
+            edited = await edit_or_send_nav_message(
+                message,
+                text=cap,
+                reply_markup=kb,
+                parse_mode=HTML,
+            )
+        target = edited or message
+        await state.update_data(
+            _ready_back_cb=back_callback,
+            _ready_user_id=user_id,
+            _ready_mode=await get_user_ready_mode(user_id),
+            _ready_category_album_ids=[target.message_id],
         )
-        if ok:
-            await state.update_data(
-                _ready_back_cb=back_callback,
-                _ready_user_id=user_id,
-                _ready_mode=await get_user_ready_mode(user_id),
-                _ready_category_album_ids=[message.message_id],
-            )
-            await _set_img_flow_anchor(state, message)
-            await _remember_ready_ui_message(state, message)
-            try:
-                await _refresh_quick_panel(bot, chat_id, user_id)
-            except Exception:
-                logging.debug("quick panel after ready ideas hub (edit)", exc_info=True)
-            return
+        await _set_img_flow_anchor(state, target)
+        await _remember_ready_ui_message(state, target)
         try:
-            await message.delete()
+            await _refresh_quick_panel(bot, chat_id, user_id)
         except Exception:
-            logging.debug(
-                "_send_ready_ideas_screen: не удалось удалить сообщение перед хабом (fallback)",
-                exc_info=True,
-            )
+            logging.debug("quick panel after ready ideas hub (edit)", exc_info=True)
+        return
 
     first, album_ids = await _send_ready_hub_messages(bot, chat_id, cap, kb, paths)
     await state.update_data(
@@ -3246,11 +3233,25 @@ async def _open_ready_card(
     keep_mid = message.message_id if edit else None
     await _strip_old_ready_ui_keyboards(bot, chat_id, state, keep_message_id=keep_mid)
     hub_cleared = False
-    if data.get("_ready_category_album_ids"):
+    album_ids_raw = list(data.get("_ready_category_album_ids") or [])
+    album_mids: list[int] = []
+    for v in album_ids_raw:
+        try:
+            album_mids.append(int(v))
+        except (TypeError, ValueError):
+            continue
+    anchor_only_hub = (
+        edit
+        and len(album_mids) == 1
+        and album_mids[0] == message.message_id
+    )
+    if album_mids and not anchor_only_hub:
         await _purge_prior_ready_hub_ui(bot, chat_id, message, data)
         await state.update_data(_ready_category_album_ids=[])
         edit = False
         hub_cleared = True
+    elif anchor_only_hub:
+        await state.update_data(_ready_category_album_ids=[])
     back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
     include_hidden = bool(data.get("_ready_include_hidden_start_only"))
     ready_user_id = int(data.get("_ready_user_id") or 0)
@@ -3315,32 +3316,11 @@ async def _open_ready_card(
         _ready_browser_keyboard(
             idx,
             total,
-            back_callback=back_callback,
             category_slug=category,
             single_shortcut_mode=single_shortcut_mode,
         )
     )
     photo_path = _ready_idea_listing_photo_path(title)
-
-    if edit and photo_path is not None and not message.photo:
-        # Текст нельзя заменить на фото через edit — только delete + send или второе сообщение.
-        try:
-            try:
-                await message.delete()
-            except Exception:
-                logging.debug("ready card: delete text msg before photo", exc_info=True)
-            sent = await bot.send_photo(
-                chat_id,
-                photo=FSInputFile(photo_path),
-                caption=cap,
-                reply_markup=kb,
-                parse_mode=HTML,
-            )
-            await _set_img_flow_anchor(state, sent)
-            await _remember_ready_ui_message(state, sent)
-            return
-        except Exception:
-            logging.warning("ready card send_photo failed, fallback", exc_info=True)
 
     if edit:
         edited = await _edit_ready_nav_message(message, caption=cap, reply_markup=kb, listing_photo=photo_path)
@@ -3419,12 +3399,10 @@ async def refresh_ready_browsing_anchor(bot: Bot, *, user_id: int, state: FSMCon
         mode=ready_mode,
         show_category_title=not single_shortcut_mode,
     )
-    back_callback = str(data.get("_ready_back_cb") or CB_MENU_BACK_START)
     kb = _strip_ready_listing_mode_switch_rows(
         _ready_browser_keyboard(
             idx,
             len(ideas),
-            back_callback=back_callback,
             category_slug=category,
             single_shortcut_mode=single_shortcut_mode,
         )
@@ -3533,22 +3511,29 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
         ok_paths = [p for p in paths if p.is_file()]
         listing = ok_paths[0] if ok_paths else None
         msg = callback.message
-        if not _is_generated_image_result_message(msg):
-            ok = await replace_nav_screen_in_message(
+        if not _is_generated_image_result_message(msg) and listing is not None and listing.is_file():
+            edited = await replace_nav_screen_or_send_photo(
                 msg,
                 caption_html=cap,
                 reply_markup=kb,
-                new_media_path=listing,
+                media_path=listing,
             )
-            if ok:
-                await state.update_data(_ready_category_album_ids=[msg.message_id])
-                await _set_img_flow_anchor(state, msg)
+            await state.update_data(_ready_category_album_ids=[edited.message_id])
+            await _set_img_flow_anchor(state, edited)
+            await callback.answer()
+            return
+        if not _is_generated_image_result_message(msg):
+            edited = await edit_or_send_nav_message(
+                msg,
+                text=cap,
+                reply_markup=kb,
+                parse_mode=HTML,
+            )
+            if edited is not None:
+                await state.update_data(_ready_category_album_ids=[edited.message_id])
+                await _set_img_flow_anchor(state, edited)
                 await callback.answer()
                 return
-        try:
-            await msg.delete()
-        except Exception:
-            logging.debug("ready back_cats: delete before hub resend failed", exc_info=True)
         first, album_ids = await _send_ready_hub_messages(bot, chat_id, cap, kb, paths)
         await state.update_data(_ready_category_album_ids=album_ids)
         await _set_img_flow_anchor(state, first)

@@ -9,6 +9,8 @@
 from aiogram import Dispatcher
 
 from src.handlers.admin_panel import router as admin_panel_router
+from src.handlers.channel_gate_handlers import router as channel_gate_router
+from src.handlers.channel_gate_middleware import ChannelGateMiddleware
 from src.handlers.commands import router as commands_router
 from src.handlers.faq_handlers import router as faq_router
 from src.handlers.global_errors import register_global_error_handler
@@ -19,9 +21,13 @@ from src.handlers.payments import router as payments_router
 
 
 def register_routers(dp: Dispatcher) -> None:
+    gate_mw = ChannelGateMiddleware()
+    dp.message.outer_middleware(gate_mw)
+    dp.callback_query.outer_middleware(gate_mw)
     idle_mw = UserIdleMiddleware()
     dp.message.outer_middleware(idle_mw)
     dp.callback_query.outer_middleware(idle_mw)
+    dp.include_router(channel_gate_router)
     dp.include_router(commands_router)
     dp.include_router(payments_router)
     dp.include_router(faq_router)

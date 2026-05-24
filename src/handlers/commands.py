@@ -97,6 +97,7 @@ from src.keyboards.callback_data import (
 )
 from src.keyboards.main_menu import back_to_main_menu_keyboard, menu_hub_keyboard, start_menu_keyboard
 from src.keyboards.reply_panel import quick_panel_keyboard
+from src.services.channel_gate import needs_channel_gate, send_channel_gate_screen
 from src.keyboards.styles import BTN_PRIMARY, BTN_SUCCESS
 
 router = Router(name="commands")
@@ -471,6 +472,22 @@ def _is_generated_image_result_message(message: Message) -> bool:
     return False
 
 
+def _is_telegram_not_modified(exc: BaseException) -> bool:
+    if isinstance(exc, TelegramBadRequest):
+        msg = str(exc).lower()
+        return "message is not modified" in msg or "exactly the same" in msg
+    return False
+
+
+async def strip_message_keyboard_soft(message: Message | None) -> None:
+    if message is None:
+        return
+    try:
+        await message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        logging.debug("strip_message_keyboard_soft failed", exc_info=True)
+
+
 async def replace_nav_screen_in_message(
     message: Message,
     *,
@@ -480,12 +497,10 @@ async def replace_nav_screen_in_message(
 ) -> bool:
     """Заменить экран в том же сообщении: edit_media → edit_caption → edit_text. Без delete+send.
 
-    Не трогает сообщения с результатом генерации. Если задан ``new_media_path`` и он есть на диске:
-    для **фото** — только ``edit_media`` (новая картинка + подпись). При сбое **не** правим только
-    подпись на старом фото — иначе «чужое» превью остаётся на месте.
-
-    Для **текста** нельзя подставить файл через Bot API — возвращаем False; вызывающий шлёт фото
-    отдельно (часто delete + send_photo), иначе подпись обновилась бы без нужной картинки.
+    Не трогает сообщения с результатом генерации. Если задан ``new_media_path`` и он есть на диске —
+    ``edit_media`` (новая картинка + подпись), в том числе для текстового сообщения (Telegram
+    превращает его в фото). При сбое **не** правим только подпись на старом фото — иначе «чужое»
+    превью остаётся на месте.
 
     Без ``new_media_path`` у фото — ``edit_caption``; у текста — ``edit_text``.
     """
@@ -493,20 +508,22 @@ async def replace_nav_screen_in_message(
         return False
     parse_mode = HTML
     if new_media_path is not None and new_media_path.is_file():
-        if message.photo:
-            try:
-                await message.edit_media(
-                    media=InputMediaPhoto(
-                        media=FSInputFile(new_media_path),
-                        caption=caption_html,
-                        parse_mode=parse_mode,
-                    ),
-                    reply_markup=reply_markup,
-                )
+        try:
+            await message.edit_media(
+                media=InputMediaPhoto(
+                    media=FSInputFile(new_media_path),
+                    caption=caption_html,
+                    parse_mode=parse_mode,
+                ),
+                reply_markup=reply_markup,
+            )
+            return True
+        except TelegramBadRequest as exc:
+            if _is_telegram_not_modified(exc):
                 return True
-            except Exception:
-                logging.debug("replace_nav_screen_in_message: edit_media failed", exc_info=True)
-            return False
+            logging.debug("replace_nav_screen_in_message: edit_media failed", exc_info=True)
+        except Exception:
+            logging.debug("replace_nav_screen_in_message: edit_media failed", exc_info=True)
         return False
     if message.photo:
         try:
@@ -516,6 +533,10 @@ async def replace_nav_screen_in_message(
                 parse_mode=parse_mode,
             )
             return True
+        except TelegramBadRequest as exc:
+            if _is_telegram_not_modified(exc):
+                return True
+            logging.debug("replace_nav_screen_in_message: edit_caption (no new file) failed", exc_info=True)
         except Exception:
             logging.debug("replace_nav_screen_in_message: edit_caption (no new file) failed", exc_info=True)
     try:
@@ -525,9 +546,39 @@ async def replace_nav_screen_in_message(
             parse_mode=parse_mode,
         )
         return True
+    except TelegramBadRequest as exc:
+        if _is_telegram_not_modified(exc):
+            return True
+        logging.debug("replace_nav_screen_in_message: edit_text failed", exc_info=True)
     except Exception:
         logging.debug("replace_nav_screen_in_message: edit_text failed", exc_info=True)
-        return False
+    return False
+
+
+async def replace_nav_screen_or_send_photo(
+    message: Message,
+    *,
+    caption_html: str,
+    reply_markup: InlineKeyboardMarkup | None,
+    media_path: Path,
+) -> Message:
+    """Edit in place when possible; otherwise send a new photo and strip the old keyboard (no delete)."""
+    if await replace_nav_screen_in_message(
+        message,
+        caption_html=caption_html,
+        reply_markup=reply_markup,
+        new_media_path=media_path,
+    ):
+        return message
+    sent = await message.bot.send_photo(
+        message.chat.id,
+        photo=FSInputFile(media_path),
+        caption=caption_html,
+        reply_markup=reply_markup,
+        parse_mode=HTML,
+    )
+    await strip_message_keyboard_soft(message)
+    return sent
 
 
 async def edit_or_send_nav_message(
@@ -623,6 +674,54 @@ async def edit_or_send_nav_message(
     except Exception:
         logging.exception("edit_or_send_nav_message: send fallback failed")
         return None
+
+
+async def deliver_post_start_experience(
+    message: Message,
+    *,
+    user_id: int,
+    username: str | None,
+    bonus_note: str = "",
+) -> None:
+    """Главное меню + панель быстрого доступа + объявление (после /start или gate)."""
+    balance = await get_credits(user_id)
+    ready_mode = await get_user_ready_mode(user_id)
+    text = _main_screen_text(balance, bonus_note)
+    kb = start_menu_keyboard(balance)
+    banner = _start_banner_path()
+    try:
+        if banner:
+            await message.answer_photo(
+                FSInputFile(banner),
+                caption=text,
+                reply_markup=kb,
+                parse_mode=HTML,
+            )
+        else:
+            await message.answer(
+                text,
+                reply_markup=kb,
+                parse_mode=HTML,
+                disable_web_page_preview=True,
+            )
+    except Exception:
+        logging.exception("deliver_post_start_experience: failed to send main menu")
+        await message.answer(
+            text,
+            reply_markup=kb,
+            parse_mode=HTML,
+            disable_web_page_preview=True,
+        )
+    await message.answer(
+        "Панель быстрого доступа включена ⤵️",
+        reply_markup=quick_panel_keyboard(balance, mode_label=_ready_mode_label(ready_mode)),
+    )
+    ann_text = START_ANNOUNCEMENT.strip() if START_ANNOUNCEMENT else ""
+    if START_ANNOUNCEMENT_IMAGE:
+        cap = ann_text[:1024] if ann_text else None
+        await message.answer_photo(FSInputFile(START_ANNOUNCEMENT_IMAGE), caption=cap)
+    elif ann_text:
+        await message.answer(ann_text[:4096])
 
 
 async def send_main_menu_screen(
@@ -824,46 +923,17 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         if applied:
             bonus_note = "\n🎉 Реферальный бонус: тебе +10 кредитов."
             logging.info("referral applied: invitee=%s inviter=%s", user_id, referrer_id)
-    balance = await get_credits(user_id)
-    ready_mode = await get_user_ready_mode(user_id)
 
-    text = _main_screen_text(balance, bonus_note)
-    kb = start_menu_keyboard(balance)
-    banner = _start_banner_path()
-    try:
-        if banner:
-            await message.answer_photo(
-                FSInputFile(banner),
-                caption=text,
-                reply_markup=kb,
-                parse_mode=HTML,
-            )
-        else:
-            await message.answer(
-                text,
-                reply_markup=kb,
-                parse_mode=HTML,
-                disable_web_page_preview=True,
-            )
-    except Exception:
-        logging.exception("cmd_start: failed to send main menu")
-        await message.answer(
-            text,
-            reply_markup=kb,
-            parse_mode=HTML,
-            disable_web_page_preview=True,
-        )
-    await message.answer(
-        "Панель быстрого доступа включена ⤵️",
-        reply_markup=quick_panel_keyboard(balance, mode_label=_ready_mode_label(ready_mode)),
+    if await needs_channel_gate(user_id):
+        await send_channel_gate_screen(message.bot, message.chat.id)
+        return
+
+    await deliver_post_start_experience(
+        message,
+        user_id=user_id,
+        username=message.from_user.username,
+        bonus_note=bonus_note,
     )
-
-    ann_text = START_ANNOUNCEMENT.strip() if START_ANNOUNCEMENT else ""
-    if START_ANNOUNCEMENT_IMAGE:
-        cap = ann_text[:1024] if ann_text else None
-        await message.answer_photo(FSInputFile(START_ANNOUNCEMENT_IMAGE), caption=cap)
-    elif ann_text:
-        await message.answer(ann_text[:4096])
 
 
 @router.message(F.text.func(_is_quick_panel_profile_button))
