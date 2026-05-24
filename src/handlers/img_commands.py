@@ -72,6 +72,7 @@ from src.formatting import CREDITS_COIN_TG_HTML, HTML, esc
 from src.image_gen_gate import image_generation_slot
 from src.handlers.commands import (
     _is_generated_image_result_message,
+    _is_telegram_not_modified,
     _refresh_quick_panel,
     edit_or_send_nav_message,
     replace_nav_screen_in_message,
@@ -522,7 +523,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Повязанный",
             "Живой 9:16-кадр с iPhone: задержание, ГБР в тактике, на столе — пачки евро, карты, iPhone и MacBook; лёгкий motion blur у головы.",
-            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve exact facial structure, skin texture, age cues, hairline, and recognizable likeness — no face replacement, no beautification drift. EXPRESSION: light natural smile; subtle motion blur on the head/hair as if captured mid-movement in a chaotic live moment (face still readable). GENDER / OUTFIT (strict from reference): if female-presenting — black athletic jumpsuit with front zipper, partly unzipped at the chest; if male-presenting — black T-shirt and wide black jeans; if ambiguous — black minimal streetwear (dark top + wide dark trousers). POSE: realistic detention / restraint moment — hands controlled by officers, body language tense but not theatrical. TABLE PROPS (foreground): on a table, large sums of cash shown as dense bundles of crisp new euro banknotes straight from a bank, each bundle tied with paper bands/ribbons, arranged in separate groups totaling roughly five million euros worth visually, with slight uneven stacking and natural mess. About twenty bank cards laid in one line with small random offsets (not perfectly aligned). Several iPhones of different models in a row plus two closed MacBook laptops nearby, all placed imperfectly (casual raid/evidence-table look). OFFICERS: Russian GBR (rapid-response group) personnel in black tactical gear — helmets, body armor vests, tactical boots; three officers in frame: one holding/controlling the subject's hands, one standing close beside, one partially visible at the edge; natural documentary positions, officer faces softly out of focus / not the hero of the shot. ATMOSPHERE: photorealistic detention scene, live candid raid energy, slight chaos, natural shadows, no glossy staged advertising look, no studio polish. CAMERA: shot on iPhone 16 Pro Max, vertical 9:16, harsh realistic indoor light, documentary smartphone color science, mild noise acceptable. NEGATIVE: cartoon, anime, plastic skin, wrong user face, perfect studio lighting, smiling officers, readable text overlays, watermark, extra limbs, duplicated faces, fantasy uniforms, US SWAT instead of plausible Russian tactical raid look.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve exact facial structure, skin texture, age cues, hairline, and recognizable likeness — no face replacement, no beautification drift. EXPRESSION: light natural smile; subtle motion blur on the head/hair as if captured mid-movement in a chaotic live moment (face still readable). GENDER / OUTFIT (strict from reference): if female-presenting — black athletic jumpsuit with front zipper, partly unzipped at the chest; if male-presenting — black T-shirt and wide black jeans; if ambiguous — black minimal streetwear (dark top + wide dark trousers). POSE: realistic detention / restraint moment — hands controlled by officers, body language tense but not theatrical. TABLE PROPS (foreground): on a table, large sums of cash shown as dense bundles of crisp new euro banknotes straight from a bank, each bundle tied with paper bands/ribbons, arranged in separate groups totaling roughly five million euros worth visually, with slight uneven stacking and natural mess. About twenty bank cards laid in one line with small random offsets (not perfectly aligned). Several iPhones of different models in a row plus two closed MacBook laptops nearby, all placed imperfectly (casual raid/evidence-table look). OFFICERS: Russian GBR (Группа быстрого реагирования) personnel in black tactical gear — helmets, body armor vests, tactical boots; three officers in frame: one holding/controlling the subject's hands, one standing close beside, one partially visible at the edge; natural documentary positions, officer faces softly out of focus / not the hero of the shot. INSIGNIA / PATCH CLARITY (strict, high priority): all uniform patches and emblems must be physically realistic and graphically sharp — no AI gibberish, no melted symbols, no random Latin letters. Shoulder patches (each officer): clean embroidered/PVC patch with exact Cyrillic word \"РОССИЯ\" (letters Р-О-С-С-И-Я only, straight baseline, evenly spaced, high contrast); centered below it a simplified but crisp Russian double-headed eagle emblem (symmetric silhouette, clear wings and crowns, not blurry smear). Chest or shoulder tag may show exact Cyrillic \"ГБР\" (only three letters Г-Б-Р, bold, legible, no extra characters). Patch edges must look stitched or molded; colors stable (gold/yellow emblem on dark field or white text on black). DEVICES & PROPS TEXT RULE: iPhones and closed MacBooks with accurate Apple-style proportions; Apple logo on MacBook lid clean and centered; phone screens off or dark (no UI text). Bank cards: realistic chips and color blocks only — do NOT render readable card numbers, names, or bank logos (avoid fake illegible microtext). Euro bundles: plausible €50/€100 color cues and banded stacks without microscopic unreadable bill typography. ATMOSPHERE: photorealistic detention scene, live candid raid energy, slight chaos, natural shadows, no glossy staged advertising look, no studio polish. CAMERA: shot on iPhone 16 Pro Max, vertical 9:16, harsh realistic indoor light, documentary smartphone color science, mild noise acceptable. NEGATIVE: cartoon, anime, plastic skin, wrong user face, perfect studio lighting, smiling officers, watermark, chat caption overlays, extra limbs, duplicated faces, fantasy uniforms, US SWAT instead of plausible Russian tactical raid look, garbled Cyrillic, misspelled РОССИЯ, wrong or extra ГБР letters, melted/distorted double-headed eagle, pseudo-text on patches and vests, illegible bank card numbers, warped Apple logos, random alphabet soup on uniforms.",
             1,
         ),
     ],
@@ -640,7 +641,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Soldier boy",
             "Ночной paparazzi-кадр на iPhone: Soldier Boy из сериала The Boys у Rolls-Royce с сигарой и щитом, рядом ты в streetwear — вспышка, роскошь и городской драйв.",
-            "CRITICAL IDENTITY LOCK: Use the attached user photo as the ONLY identity reference for ME. Preserve exact facial features, skin texture, haircut, age cues, and proportions — no beautification, no face replacement, no identity drift. UNISEX WARDROBE (mandatory): ME must wear stylish contemporary streetwear. If clothing is visible in the reference — adapt it naturally into a coherent streetwear look that fits the person's build and presentation. If the reference is face-only, head-only, tight portrait, or no outfit is visible — infer full body and dress ME in unisex streetwear by default (e.g. oversized hoodie or bomber jacket, relaxed trousers or cargo pants, clean sneakers); then refine fit to apparent gender presentation from the face (male-presenting / female-presenting / ambiguous neutral). CHARACTER LOCK (strict): Soldier Boy must be the character from the Amazon Prime TV series \"The Boys\" (NOT Captain America, NOT a generic soldier, NOT any other franchise). Photoreal recognizable likeness: WWII-era star-spangled superhero costume from the show, rugged veteran charisma, iconic round shield, cigar. SCENE: A nighttime iPhone photo of this Soldier Boy from The Boys leaning against the hood of a Rolls-Royce, holding his iconic shield and smoking a cigar. The camera flash is clearly on, giving the image a raw paparazzi vibe with harsh lighting and realistic shadows. Standing next to him is ME in streetwear as described above. ATMOSPHERE: chaotic, stylish, and cinematic, with luxury aesthetics mixed with edgy urban energy. CAMERA: shot on iPhone, harsh on-camera flash, raw paparazzi documentary feel, realistic shadows, high dynamic range, true-to-life colors, no beauty filters. NEGATIVE: wrong user face, cartoon, plastic skin, extra fingers, watermark, Captain America or Marvel-style costume, wrong Soldier Boy likeness, soft studio lighting, wrong outfit gender stereotype against the reference.",
+            "CRITICAL IDENTITY LOCK: Use the attached user photo as the ONLY identity reference for ME. Preserve exact facial features, skin texture, haircut, age cues, and proportions — no beautification, no face replacement, no identity drift. UNISEX WARDROBE (mandatory): ME must wear stylish contemporary streetwear. If clothing is visible in the reference — adapt it naturally into a coherent streetwear look that fits the person's build and presentation. If the reference is face-only, head-only, tight portrait, or no outfit is visible — infer full body and dress ME in unisex streetwear by default (e.g. oversized hoodie or bomber jacket, relaxed trousers or cargo pants, clean sneakers); then refine fit to apparent gender presentation from the face (male-presenting / female-presenting / ambiguous neutral). CHARACTER LOCK (strict): Soldier Boy must be the character from the Amazon Prime TV series \"The Boys\" (NOT Captain America, NOT a generic soldier, NOT any other franchise). Photoreal recognizable likeness: WWII-era star-spangled superhero costume from the show, rugged veteran charisma, cigar. SHIELD LOCK (strict, high priority): he holds ONLY Soldier Boy's own iconic shield from The Boys — a round, heavy, weathered vintage metal prop shield with scratched matte patriotic paint (star-spangled WWII propaganda-hero look, battle-worn dents, not glossy). This is NOT Captain America's / Marvel shield: forbid the classic Cap design (perfect concentric red-white-blue rings with one large white star on a blue circle, vibranium-style sleek finish, Avengers/MCU shield). Soldier Boy shield must look grittier, older, and distinct — aged show-accurate prop he carries in The Boys, never Steve Rogers / Captain America shield. SCENE: A nighttime iPhone photo of this Soldier Boy from The Boys leaning against the hood of a Rolls-Royce, holding his own shield (as above) and smoking a cigar. The camera flash is clearly on, giving the image a raw paparazzi vibe with harsh lighting and realistic shadows. Standing next to him is ME in streetwear as described above. ATMOSPHERE: chaotic, stylish, and cinematic, with luxury aesthetics mixed with edgy urban energy. CAMERA: shot on iPhone, harsh on-camera flash, raw paparazzi documentary feel, realistic shadows, high dynamic range, true-to-life colors, no beauty filters. NEGATIVE: wrong user face, cartoon, plastic skin, extra fingers, watermark, Captain America shield, Marvel/Avengers shield, Steve Rogers, Cap-style concentric star shield, glossy vibranium shield, Captain America or Marvel-style costume, wrong Soldier Boy likeness, soft studio lighting, wrong outfit gender stereotype against the reference.",
             1,
         ),
     ],
@@ -1016,11 +1017,52 @@ async def _edit_message_progress_text(
     *,
     reply_markup: InlineKeyboardMarkup | None = None,
 ) -> None:
-    """Текст прогресса/статуса: у фото-сообщений правим подпись, не edit_text."""
+    """Текст прогресса/статуса: edit_caption или edit_text по фактическому типу в Telegram."""
+    chat_id = msg.chat.id
+    message_id = msg.message_id
+    bot = msg.bot
+
+    async def _try_caption() -> bool:
+        try:
+            await bot.edit_message_caption(
+                chat_id=chat_id,
+                message_id=message_id,
+                caption=text,
+                reply_markup=reply_markup,
+                parse_mode=HTML,
+            )
+            return True
+        except TelegramBadRequest as exc:
+            if _is_telegram_not_modified(exc):
+                return True
+            return False
+
+    async def _try_text() -> bool:
+        try:
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=text,
+                reply_markup=reply_markup,
+                parse_mode=HTML,
+            )
+            return True
+        except TelegramBadRequest as exc:
+            if _is_telegram_not_modified(exc):
+                return True
+            return False
+
     if msg.photo:
-        await msg.edit_caption(caption=text, parse_mode=HTML, reply_markup=reply_markup)
+        if await _try_caption():
+            return
+        if await _try_text():
+            return
     else:
-        await msg.edit_text(text, parse_mode=HTML, reply_markup=reply_markup)
+        if await _try_text():
+            return
+        if await _try_caption():
+            return
+    logging.debug("progress edit failed chat=%s mid=%s (caption and text)", chat_id, message_id)
 
 
 async def _edit_ready_nav_message(
@@ -2638,13 +2680,11 @@ async def _execute_ready_with_refs_generation(
     ok, meta = prep
     if not ok or meta is None:
         return
-    wait_msg = await _edit_ready_nav_message(
-        message,
-        caption=_gen_progress_caption(0),
-        reply_markup=None,
-        listing_photo=_ready_categories_listing_photo(),
-    )
-    if wait_msg is None:
+    try:
+        await _edit_message_progress_text(message, _gen_progress_caption(0), reply_markup=None)
+        wait_msg = message
+    except Exception:
+        logging.debug("ready gen: progress on anchor failed, sending wait message", exc_info=True)
         wait_msg = await message.bot.send_message(chat_id, _gen_progress_caption(0), parse_mode=HTML)
     try:
         _prio = await _image_gen_priority_from_user_id(user_id)
