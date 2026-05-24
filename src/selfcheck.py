@@ -7,7 +7,7 @@ from pathlib import Path
 from aiogram import Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from src.config import DATABASE_URL, DB_BACKEND, PROJECT_ROOT
+from src.config import ADMIN_IDS, DATABASE_URL, DB_BACKEND, PROJECT_ROOT, TELEGRAM_BOT_TOKEN
 from src.services.wata_client import WataApiError, WataClient, wata_configured
 from src.services.wata_orders import build_wata_order_id
 from src.database import init_db, open_db
@@ -344,6 +344,53 @@ async def _check_db_backend_health() -> tuple[list[str], list[str]]:
     return checks, errors
 
 
+async def _check_channel_gate() -> tuple[list[str], list[str]]:
+    from aiogram import Bot
+
+    from src.services.channel_gate import (
+        channel_gate_active,
+        resolve_channel_chat_id,
+        resolve_channel_chat_id_for_api,
+    )
+
+    checks: list[str] = []
+    errors: list[str] = []
+    if not channel_gate_active():
+        checks.append("Channel gate disabled or CHANNEL_URL/CHANNEL_ID not configured.")
+        return checks, errors
+    static = resolve_channel_chat_id()
+    if static is None:
+        errors.append(
+            "CHANNEL_GATE=1 but channel id not resolved: for invite CHANNEL_URL set CHANNEL_ID=-100… "
+            "and make the bot a channel admin."
+        )
+        return checks, errors
+    token = (TELEGRAM_BOT_TOKEN or "").strip()
+    if not token:
+        errors.append("Channel gate: TELEGRAM_BOT_TOKEN missing (live check skipped).")
+        return checks, errors
+    bot = Bot(token=token)
+    try:
+        chat_id = await resolve_channel_chat_id_for_api(bot)
+        if chat_id is None:
+            errors.append(
+                "Channel gate: bot cannot resolve channel (getChat). Set CHANNEL_ID=-100… and add bot as channel admin."
+            )
+            return checks, errors
+        checks.append(f"Channel gate: resolved channel chat_id={chat_id}.")
+        probe_uid = ADMIN_IDS[0] if ADMIN_IDS else None
+        if probe_uid is not None:
+            member = await bot.get_chat_member(chat_id=chat_id, user_id=int(probe_uid))
+            checks.append(f"Channel gate: getChatMember probe OK (admin status={member.status!s}).")
+        else:
+            checks.append("Channel gate: getChatMember probe skipped (ADMIN_IDS empty).")
+    except Exception as exc:
+        errors.append(f"Channel gate live check failed: {exc}")
+    finally:
+        await bot.session.close()
+    return checks, errors
+
+
 async def run_self_check() -> SelfCheckResult:
     checks: list[str] = []
     errors: list[str] = []
@@ -381,6 +428,9 @@ async def run_self_check() -> SelfCheckResult:
     db_checks, db_errors = await _check_db_backend_health()
     checks.extend(db_checks)
     errors.extend(db_errors)
+    gate_checks, gate_errors = await _check_channel_gate()
+    checks.extend(gate_checks)
+    errors.extend(gate_errors)
 
     return SelfCheckResult(ok=not errors, checks=checks, errors=errors)
 
