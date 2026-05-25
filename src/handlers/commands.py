@@ -1590,7 +1590,11 @@ async def _profile_card_html(
         )
         return missing, back_to_main_menu_keyboard(back_callback)
     balance = await get_credits(user_id)
-    approx_images = max(0, balance // 30)
+    ready_mode = await get_user_ready_mode(user_id)
+    from src.handlers import img_commands as img
+
+    gen_unit_cost = await img._ready_idea_cost_for_user_mode(user_id, ready_mode)
+    approx_images = max(0, balance // gen_unit_cost) if gen_unit_cost > 0 else 0
     ready_bonus_uses = int(profile.idea_tokens or 0)
     ru, rlim = await get_daily_image_generation_usage(user_id, "ready")
     username = f"@{profile.username}" if profile.username else "-"
@@ -1636,7 +1640,8 @@ async def _profile_card_html(
         "<blockquote>"
         f"<i>Ник:</i> <b>{esc(username)}</b>\n"
         f'<i><tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты:</i> <b>{esc(balance)}</b>\n'
-        f'<i><tg-emoji emoji-id="5257974976094412956">🖼</tg-emoji> Примерно доступно генераций:</i> <b>{esc(approx_images)}</b>\n'
+        f'<i><tg-emoji emoji-id="5257974976094412956">🖼</tg-emoji> Примерно доступно генераций</i> '
+        f"<i>({_ready_mode_label(ready_mode)}, {esc(gen_unit_cost)} кр.):</i> <b>{esc(approx_images)}</b>\n"
         f"<i>🎯 Готовые идеи:</i> <b>{esc(ready_cycle)}</b>\n"
         f'<i><tg-emoji emoji-id="5258254475386167466">🖼</tg-emoji> Картинки:</i> <b>{esc(img_cycle)}</b>\n'
         f'<i><tg-emoji emoji-id="5203996991054432397">🎁</tg-emoji> Бонусные запуски (реф):</i> <b>{esc(ready_bonus_uses)}</b>\n'
