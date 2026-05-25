@@ -1168,8 +1168,9 @@ _GEN_MODE_BTN_TEXT_EMOJI_ID = "5395444784611480792"
 _GEN_MODE_BTN_REFS_EMOJI_ID = "5271604874419647061"
 
 _GEN_MODE_PICK_HTML = (
-    '<b>Выберите режим генерации изображения '
-    f'<tg-emoji emoji-id="{_GEN_MODE_PICK_EMOJI_ID}">🎨</tg-emoji></b>\n\n'
+    '<b>'
+    f'<tg-emoji emoji-id="{_GEN_MODE_PICK_EMOJI_ID}">🎨</tg-emoji> '
+    "Выберите режим генерации изображения</b>\n\n"
     "<blockquote>"
     "<i>Текстом - описание без референсных фото.\n"
     f"Текстом с изображениями - генерация с добавлением фото, за каждое "
@@ -1558,6 +1559,9 @@ def _dedupe_model_choices(items: list[tuple[str, str, int, str]]) -> list[tuple[
     return out
 
 
+_MODEL_PICK_INTRO = "Ниже кратко, в каких стилях каждая из них обычно сильна."
+
+
 def _model_pick_caption_html(
     *,
     for_admin: bool,
@@ -1565,11 +1569,7 @@ def _model_pick_caption_html(
     intro: str | None = None,
 ) -> str:
     if intro is None:
-        intro = (
-            "Режим администратора — доступны все модели. Ниже кратко, в каких стилях каждая из них обычно сильна."
-            if for_admin
-            else "Тариф в профиле определяет список моделей. Ниже — подсказки по стилю. Выбери вариант и опиши картинку."
-        )
+        intro = _MODEL_PICK_INTRO
     lines = [
         "<b>Выбор модели ИИ</b>",
         f"<blockquote><i>{esc(intro)}</i></blockquote>",
@@ -3169,7 +3169,6 @@ async def _send_waiting_refs_photos_step(
     model: str,
     base_cost: int,
     replace_message: Message | None = None,
-    model_style_hint: str | None = None,
 ) -> None:
     await state.update_data(
         selected_model=model,
@@ -3182,8 +3181,6 @@ async def _send_waiting_refs_photos_step(
     )
     await state.set_state(ImageGenState.waiting_refs_photos)
     body = _WAITING_REFS_PHOTOS_HTML
-    if model_style_hint:
-        body += f"\n<blockquote><i>{esc(model_style_hint)}</i></blockquote>"
     kb = _waiting_refs_photos_keyboard()
     if replace_message is not None:
         edited = await edit_or_send_nav_message(
@@ -3267,7 +3264,6 @@ async def _send_waiting_prompt_step(
     model: str,
     cost: int,
     replace_message: Message | None = None,
-    model_style_hint: str | None = None,
 ) -> None:
     await state.update_data(
         selected_model=model,
@@ -3278,8 +3274,6 @@ async def _send_waiting_prompt_step(
     )
     await state.set_state(ImageGenState.waiting_prompt)
     body = _WAITING_PROMPT_HTML
-    if model_style_hint:
-        body += f"\n<blockquote><i>{esc(model_style_hint)}</i></blockquote>"
     if replace_message is not None:
         edited = await edit_or_send_nav_message(
             replace_message,
@@ -3366,7 +3360,6 @@ async def _show_image_model_pick(
                 model=m[1],
                 base_cost=m[2],
                 replace_message=message,
-                model_style_hint=m[3],
             )
         else:
             await _send_waiting_prompt_step(
@@ -3376,7 +3369,6 @@ async def _show_image_model_pick(
                 model=m[1],
                 cost=m[2],
                 replace_message=message,
-                model_style_hint=m[3],
             )
         return
     await state.update_data(
@@ -3384,29 +3376,7 @@ async def _show_image_model_pick(
         _gen_mode=gm,
     )
     await state.set_state(ImageGenState.choosing_model)
-    if gm == "refs":
-        if is_admin:
-            refs_intro = (
-                "Режим администратора — доступны все модели. "
-                f"За каждое фото +{REF_PHOTO_EXTRA_CREDITS} кр. "
-                f"До {MAX_REF_PHOTOS_PER_MESSAGE} фото за раз."
-            )
-        elif has_sub:
-            refs_intro = (
-                "Те же модели, что в режиме «текстом», по вашему тарифу. "
-                f"За каждое фото +{REF_PHOTO_EXTRA_CREDITS} кр. "
-                f"До {MAX_REF_PHOTOS_PER_MESSAGE} фото за раз."
-            )
-        else:
-            refs_intro = (
-                "Базовая модель Klein. "
-                f"За каждое фото +{REF_PHOTO_EXTRA_CREDITS} кр. "
-                f"До {MAX_REF_PHOTOS_PER_MESSAGE} фото. "
-                f"Лимит как у «текстом»: {NONSUB_IMAGE_WINDOW_MAX} картинки за цикл без подписки."
-            )
-        cap = _model_pick_caption_html(for_admin=is_admin, choices=choices, intro=refs_intro)
-    else:
-        cap = _model_pick_caption_html(for_admin=is_admin, choices=choices)
+    cap = _model_pick_caption_html(for_admin=is_admin, choices=choices)
     await edit_or_send_nav_message(
         message,
         text=cap,
@@ -3494,7 +3464,6 @@ async def subscriber_picked_model(callback: CallbackQuery, state: FSMContext) ->
             model=model_id,
             base_cost=cost,
             replace_message=callback.message,
-            model_style_hint=hint,
         )
     else:
         await _send_waiting_prompt_step(
@@ -3504,7 +3473,6 @@ async def subscriber_picked_model(callback: CallbackQuery, state: FSMContext) ->
             model=model_id,
             cost=cost,
             replace_message=callback.message,
-            model_style_hint=hint,
         )
 
 
@@ -3518,15 +3486,7 @@ async def remind_pick_model_or_ignore(message: Message, state: FSMContext) -> No
         data = await state.get_data()
         gm = (data.get("_gen_mode") or "text").strip()
         choices = _model_choices_for_gen_mode("universe", gm)
-        if gm == "refs":
-            refs_intro = (
-                "Режим администратора — доступны все модели. "
-                f"За каждое фото к стоимости модели +{REF_PHOTO_EXTRA_CREDITS} кр. "
-                f"До {MAX_REF_PHOTOS_PER_MESSAGE} фото за раз."
-            )
-            cap = _model_pick_caption_html(for_admin=True, choices=choices, intro=refs_intro)
-        else:
-            cap = _model_pick_caption_html(for_admin=True, choices=choices)
+        cap = _model_pick_caption_html(for_admin=True, choices=choices)
         await message.answer(
             cap,
             reply_markup=_subscriber_model_pick_keyboard(choices),
@@ -3540,13 +3500,7 @@ async def remind_pick_model_or_ignore(message: Message, state: FSMContext) -> No
         gm = (data.get("_gen_mode") or "text").strip()
         if gm == "refs":
             choices = _model_choices_for_gen_mode("", gm)
-            refs_intro = (
-                "Базовая модель Klein. "
-                f"За каждое фото +{REF_PHOTO_EXTRA_CREDITS} кр. "
-                f"До {MAX_REF_PHOTOS_PER_MESSAGE} фото. "
-                f"Лимит: {NONSUB_IMAGE_WINDOW_MAX} картинки за цикл без подписки."
-            )
-            cap = _model_pick_caption_html(for_admin=False, choices=choices, intro=refs_intro)
+            cap = _model_pick_caption_html(for_admin=False, choices=choices)
             await message.answer(
                 cap,
                 reply_markup=_subscriber_model_pick_keyboard(choices),
@@ -3565,15 +3519,7 @@ async def remind_pick_model_or_ignore(message: Message, state: FSMContext) -> No
     gm = (data.get("_gen_mode") or "text").strip()
     await state.update_data(_model_pick_plan=plan_id)
     choices = _model_choices_for_gen_mode(plan_id, gm)
-    if gm == "refs":
-        refs_intro = (
-            "Те же модели, что в режиме «текстом», по вашему тарифу. "
-            f"За каждое фото к стоимости модели +{REF_PHOTO_EXTRA_CREDITS} кр. "
-            f"До {MAX_REF_PHOTOS_PER_MESSAGE} фото за раз."
-        )
-        cap = _model_pick_caption_html(for_admin=False, choices=choices, intro=refs_intro)
-    else:
-        cap = _model_pick_caption_html(for_admin=False, choices=choices)
+    cap = _model_pick_caption_html(for_admin=False, choices=choices)
     await message.answer(
         cap,
         reply_markup=_subscriber_model_pick_keyboard(choices),
