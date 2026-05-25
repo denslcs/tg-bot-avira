@@ -121,7 +121,7 @@ def _back_row(back_callback: str) -> list[InlineKeyboardButton]:
     ]
 
 
-# Невидимый символ — только чтобы обновить reply-клавиатуру с актуальным балансом.
+# Невидимый символ - только чтобы обновить reply-клавиатуру с актуальным балансом.
 _QUICK_PANEL_STUB = "\u200b"
 
 _READY_MODE_LABEL_BY_ID: dict[str, str] = {
@@ -139,7 +139,7 @@ _READY_MODE_IDS: frozenset[str] = frozenset({"fast", "medium", "premium"})
 _READY_MODE_HELP_PREFIX = "menu:ready_mode_help:"
 _READY_MODE_BACK_PREFIX = "menu:ready_mode_back:"
 
-# Клиенты Telegram часто добавляют U+FE0F к эмодзи в тексте кнопки (🎛️ vs 🎛) — фильтры без нормализации не срабатывают.
+# Клиенты Telegram часто добавляют U+FE0F к эмодзи в тексте кнопки (🎛️ vs 🎛) - фильтры без нормализации не срабатывают.
 _U_FE0F = "\ufe0f"
 
 
@@ -181,7 +181,7 @@ def _read_ready_mode_picker_generation(data: dict) -> int | None:
 
 
 def _parse_ready_mode_panel_callback(data: str | None) -> tuple[str | None, int | None]:
-    """(suffix, gen) для ``menu:ready_mode:`` — либо ``{gen}:{mode}``, либо устаревший ``{mode}``."""
+    """(suffix, gen) для ``menu:ready_mode:`` - либо ``{gen}:{mode}``, либо устаревший ``{mode}``."""
     if not data or not data.startswith(CB_READY_MODE_PREFIX):
         return None, None
     tail = data[len(CB_READY_MODE_PREFIX) :].strip()
@@ -261,17 +261,17 @@ def _ready_mode_picker_body_html(*, balance: int, mode: str, cost: int) -> str:
 def _ready_mode_help_body_html() -> str:
     return (
         "<b>🎛 Что выбрать?</b>\n\n"
-        "Режимы — это выбор модели, которая будет генерировать готовые идеи. "
+        "Режимы - это выбор модели, которая будет генерировать готовые идеи. "
         "Каждый режим по-своему уникален: один генерирует быстрее, другой качественнее.\n\n"
-        "<b>⚡ Fast</b> — базовый режим, генерирует быстрее всех при помощи модели <b>Nano Banana 2</b>. "
-        "Некоторые готовые идеи делает не хуже остальных, но где нужен максимальный реализм — может уступать.\n\n"
-        "<b>🚀 Medium</b> — основной режим для готовых идей (стоит по умолчанию). "
+        "<b>⚡ Fast</b> - базовый режим, генерирует быстрее всех при помощи модели <b>Nano Banana 2</b>. "
+        "Некоторые готовые идеи делает не хуже остальных, но где нужен максимальный реализм - может уступать.\n\n"
+        "<b>🚀 Medium</b> - основной режим для готовых идей (стоит по умолчанию). "
         "Генерирует лучше Fast, хорошо сохраняет черты лица и точнее подгоняет под промпт. "
         "Модель: <b>Nano Banana PRO</b>.\n\n"
-        "<b>💎 Premium</b> — самый дорогой режим на новой модели <b>Chat GPT Image 2</b>. "
-        "Его сильная сторона — реализм и максимально живое фото, но генерирует заметно дольше предыдущих режимов.\n\n"
+        "<b>💎 Premium</b> - самый дорогой режим на новой модели <b>Chat GPT Image 2</b>. "
+        "Его сильная сторона - реализм и максимально живое фото, но генерирует заметно дольше предыдущих режимов.\n\n"
         "<blockquote><i>Рекомендация: если бот не смог сгенерировать картинку или плохо сгенерировал лицо, попробуй поменять режим на другой. "
-        "Если какой-то из режимов очень плохо справляется и не оправдывает ваши ожидания — всегда можно написать в поддержку, мы обязательно решим эту проблему!</i></blockquote>"
+        "Если какой-то из режимов очень плохо справляется и не оправдывает ваши ожидания - всегда можно написать в поддержку, мы обязательно решим эту проблему!</i></blockquote>"
     )
 
 
@@ -405,10 +405,10 @@ def _main_screen_text(balance: int, bonus_note: str = "") -> str:
         "<i>Создание и изменение фото в пару кликов.</i>\n\n"
         "<blockquote>"
         '<b><tg-emoji emoji-id="5258203794772085854">⚡️</tg-emoji> Быстрый старт:</b>\n'
-        '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Открой <b>«<tg-emoji emoji-id="5282843764451195532">🖥</tg-emoji> Меню»</b> — там все разделы: идеи, подписки, FAQ и рефералка.\n'
-        f'<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Нажми <b>«{PROFILE_AVATAR_TG_HTML} Профиль»</b> внизу — увидишь '
+        '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Открой <b>«<tg-emoji emoji-id="5282843764451195532">🖥</tg-emoji> Меню»</b> - там все разделы: идеи, подписки, FAQ и рефералка.\n'
+        f'<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Нажми <b>«{PROFILE_AVATAR_TG_HTML} Профиль»</b> внизу - увидишь '
         f"{CREDITS_COIN_TG_HTML} кредиты, статистику и лимиты.\n"
-        '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Загляни в <b>«<tg-emoji emoji-id="5330522514231684724">🌟</tg-emoji> Что умеет бот»</b> — там коротко и понятно, как использовать все возможности.'
+        '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Загляни в <b>«<tg-emoji emoji-id="5330522514231684724">🌟</tg-emoji> Что умеет бот»</b> - там коротко и понятно, как использовать все возможности.'
         "</blockquote>\n\n"
         '<blockquote><i>Продолжая использовать бота, вы подтверждаете, что ознакомились с '
         '<a href="https://telegra.ph/POLZOVATELSKOE-SOGLASHENIE-05-01-22">Публичной офертой</a> и '
@@ -443,7 +443,7 @@ def _start_banner_path() -> Path | None:
 
 
 def _is_generated_image_result_message(message: Message) -> bool:
-    """Сообщение с готовой картинкой из генерации — не редактировать и не удалять."""
+    """Сообщение с готовой картинкой из генерации - не редактировать и не удалять."""
     if not message.photo:
         return False
     cap = message.caption or ""
@@ -497,12 +497,12 @@ async def replace_nav_screen_in_message(
 ) -> bool:
     """Заменить экран в том же сообщении: edit_media → edit_caption → edit_text. Без delete+send.
 
-    Не трогает сообщения с результатом генерации. Если задан ``new_media_path`` и он есть на диске —
+    Не трогает сообщения с результатом генерации. Если задан ``new_media_path`` и он есть на диске -
     ``edit_media`` (новая картинка + подпись), в том числе для текстового сообщения (Telegram
-    превращает его в фото). При сбое **не** правим только подпись на старом фото — иначе «чужое»
+    превращает его в фото). При сбое **не** правим только подпись на старом фото - иначе «чужое»
     превью остаётся на месте.
 
-    Без ``new_media_path`` у фото — ``edit_caption``; у текста — ``edit_text``.
+    Без ``new_media_path`` у фото - ``edit_caption``; у текста - ``edit_text``.
     """
     if _is_generated_image_result_message(message):
         return False
@@ -590,13 +590,13 @@ async def edit_or_send_nav_message(
     disable_web_page_preview: bool = False,
 ) -> Message | None:
     """
-    Навигация: текстовые сообщения — edit_text.
+    Навигация: текстовые сообщения - edit_text.
 
-    Сообщение с результатом генерации (картинка) не редактируем — шлём новый текст.
+    Сообщение с результатом генерации (картинка) не редактируем - шлём новый текст.
 
     Баннер главного меню и другие UI-фото без результата генерации: при тексте
-    подписи ≤1024 — edit_caption на том же сообщении (картинка не отделяется от меню).
-    Иначе — отдельное текстовое сообщение и снятие клавиатуры с фото (редкий случай).
+    подписи ≤1024 - edit_caption на том же сообщении (картинка не отделяется от меню).
+    Иначе - отдельное текстовое сообщение и снятие клавиатуры с фото (редкий случай).
     """
     if message is None:
         return None
@@ -730,7 +730,7 @@ async def send_main_menu_screen(
     user_id: int,
     username: str | None,
 ) -> None:
-    """Главный экран как после /start: баланс в тексте, меню, при наличии — фото-баннер."""
+    """Главный экран как после /start: баланс в тексте, меню, при наличии - фото-баннер."""
     await ensure_user(user_id, username)
     balance = await get_credits(user_id)
     ready_mode = await get_user_ready_mode(user_id)
@@ -765,7 +765,7 @@ async def restore_main_menu_message(message: Message, user_id: int, username: st
         banner = _start_banner_path()
 
         if message.photo and not _is_generated_image_result_message(message):
-            # После готовых идей на том же сообщении может быть превью Minecraft и т.д. —
+            # После готовых идей на том же сообщении может быть превью Minecraft и т.д. -
             # только edit_caption не меняет картинку; возвращаем стартовый баннер.
             if banner and banner.is_file():
                 try:
@@ -1027,7 +1027,7 @@ async def _ready_mode_picker_is_current_message(
 
 @router.callback_query(F.data.startswith(CB_READY_MODE_LEGACY_PREFIX))
 async def ready_mode_legacy_inline(callback: CallbackQuery, state: FSMContext) -> None:
-    """Старые ``img:idea_mode:*`` на карточках в чате — применяем режим в БД, не перерисовываем сообщение (это карточка идеи)."""
+    """Старые ``img:idea_mode:*`` на карточках в чате - применяем режим в БД, не перерисовываем сообщение (это карточка идеи)."""
     if not callback.from_user or not callback.message:
         await callback.answer()
         return
@@ -1259,18 +1259,18 @@ async def menu_hub(callback: CallbackQuery) -> None:
 async def cmd_help(message: Message) -> None:
     await message.answer(
         "📌 <b>Что доступно</b>\n\n"
-        "🏠 <code>/start</code> — <i>главное меню, баланс и картинки</i>\n"
-        "❓ <code>/help</code> — <i>этот список</i>\n"
-        "💳 <code>/pay</code> — <i>подписка и оплата</i>\n"
-        "👤 <code>/profile</code> — <i>статус аккаунта и подписки</i>\n"
-        "🫂 <code>/ref</code> — <i>реферальная система</i>\n"
-        '<tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> <code>/ideas</code> — <i>готовые идеи для картинок</i>\n'
-        "📋 <code>/faq</code> — <i>частые вопросы</i>\n"
-        "🔄 <code>/newchat</code> или <code>/clear</code> — <i>очистить память диалога</i>\n"
-        "💬 <code>/support</code> — <i>обращение в поддержку</i>\n"
-        '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> <code>/resolved</code> — <i>закрыть тикет (в боте поддержки)</i>\n'
-        "🆔 <code>/myid</code> — <i>твой Telegram ID</i>\n\n"
-        "<blockquote>🎨 Картинки — через кнопки в <code>/start</code>.</blockquote>",
+        "🏠 <code>/start</code> - <i>главное меню, баланс и картинки</i>\n"
+        "❓ <code>/help</code> - <i>этот список</i>\n"
+        "💳 <code>/pay</code> - <i>подписка и оплата</i>\n"
+        "👤 <code>/profile</code> - <i>статус аккаунта и подписки</i>\n"
+        "🫂 <code>/ref</code> - <i>реферальная система</i>\n"
+        '<tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> <code>/ideas</code> - <i>готовые идеи для картинок</i>\n'
+        "📋 <code>/faq</code> - <i>частые вопросы</i>\n"
+        "🔄 <code>/newchat</code> или <code>/clear</code> - <i>очистить память диалога</i>\n"
+        "💬 <code>/support</code> - <i>обращение в поддержку</i>\n"
+        '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> <code>/resolved</code> - <i>закрыть тикет (в боте поддержки)</i>\n'
+        "🆔 <code>/myid</code> - <i>твой Telegram ID</i>\n\n"
+        "<blockquote>🎨 Картинки - через кнопки в <code>/start</code>.</blockquote>",
         reply_markup=back_to_main_menu_keyboard(),
         parse_mode=HTML,
     )
@@ -1287,19 +1287,19 @@ async def menu_about(callback: CallbackQuery) -> None:
         "<b>Что умеет бот</b>\n"
         "<blockquote>"
         "<b>Генерации</b>\n"
-        "• <b>Создать картинку</b> — по тексту.\n"
-        "• <b>Готовые идеи</b> — готовые сценарии из каталога; шаги — в карточке.\n\n"
+        "• <b>Создать картинку</b> - по тексту.\n"
+        "• <b>Готовые идеи</b> - готовые сценарии из каталога; шаги - в карточке.\n\n"
         f"<b>Кредиты</b> {CREDITS_COIN_TG_HTML}\n"
-        "Списываются только за генерации. Баланс и остаток — в профиле.\n\n"
+        "Списываются только за генерации. Баланс и остаток - в профиле.\n\n"
         "<b>Режимы</b> (готовые идеи)\n"
-        "<b>fast</b> — быстрее; <b>medium</b> — баланс; <b>premium</b> — выше качество. "
-        "Переключение — кнопка «Режим».\n\n"
+        "<b>fast</b> - быстрее; <b>medium</b> - баланс; <b>premium</b> - выше качество. "
+        "Переключение - кнопка «Режим».\n\n"
         "<b>Подписка</b>\n"
         "Даёт кредиты на баланс и снимает лимиты «без подписки». "
-        "Чем выше тариф — тем дешевле генерации и больше моделей на выбор. "
-        "У Galaxy и Universe — приоритет в очереди.\n\n"
+        "Чем выше тариф - тем дешевле генерации и больше моделей на выбор. "
+        "У Galaxy и Universe - приоритет в очереди.\n\n"
         "<b>Без подписки</b>\n"
-        "Ограниченное число картинок и «готовых идей» за период; подробности — в профиле и «Частые вопросы»."
+        "Ограниченное число картинок и «готовых идей» за период; подробности - в профиле и «Частые вопросы»."
         "</blockquote>"
     )
     await edit_or_send_nav_message(
@@ -1321,7 +1321,7 @@ async def menu_faq(callback: CallbackQuery) -> None:
 
     await edit_or_send_nav_message(
         callback.message,
-        text='<b><tg-emoji emoji-id="5314504236132747481">⁉️</tg-emoji> Частые вопросы</b>\n<blockquote><i>Выбери тему — пришлю короткий ответ.</i></blockquote>',
+        text='<b><tg-emoji emoji-id="5314504236132747481">⁉️</tg-emoji> Частые вопросы</b>\n<blockquote><i>Выбери тему - пришлю короткий ответ.</i></blockquote>',
         reply_markup=_faq_keyboard(back_callback=back_callback),
         parse_mode=HTML,
     )
@@ -1416,7 +1416,7 @@ async def _build_referral_message(
     *,
     back_callback: str = CB_MENU_BACK_START,
 ) -> tuple[str, InlineKeyboardMarkup]:
-    """bot_username — из await bot.me(); у aiogram.Bot нет атрибута .username."""
+    """bot_username - из await bot.me(); у aiogram.Bot нет атрибута .username."""
     await ensure_user(user_id, username)
     try:
         invited = await get_referral_count(user_id)
@@ -1462,10 +1462,10 @@ async def _build_referral_message(
         f"<i>(база +20 за каждого: {esc(invited * 20)}; бонус 5%: {esc(referral_sub_bonus_total)})</i>"
         "</blockquote>\n\n"
         "<blockquote><i>"
-        "За каждого приглашённого — <b>+20</b> кредитов тебе; новому пользователю при первом <code>/start</code> по твоей ссылке — <b>+10</b> кредитов. "
-        "За каждых <b>двух</b> приглашённых: без подписки — <b>+1</b> бонусный запуск «Готовых идей»; "
-        "при активной подписке — <b>+10</b> кредитов вместо запуска.\n"
-        "Если приглашённый покупает подписку — тебе дополнительно начисляется <b>+5%</b> "
+        "За каждого приглашённого - <b>+20</b> кредитов тебе; новому пользователю при первом <code>/start</code> по твоей ссылке - <b>+10</b> кредитов. "
+        "За каждых <b>двух</b> приглашённых: без подписки - <b>+1</b> бонусный запуск «Готовых идей»; "
+        "при активной подписке - <b>+10</b> кредитов вместо запуска.\n"
+        "Если приглашённый покупает подписку - тебе дополнительно начисляется <b>+5%</b> "
         "от кредитов этой подписки (именно бонус, не полная сумма)."
         "</i></blockquote>\n\n"
         "<b>🔗 Твоя ссылка</b>\n"
@@ -1593,7 +1593,7 @@ async def _profile_card_html(
     approx_images = max(0, balance // 30)
     ready_bonus_uses = int(profile.idea_tokens or 0)
     ru, rlim = await get_daily_image_generation_usage(user_id, "ready")
-    username = f"@{profile.username}" if profile.username else "—"
+    username = f"@{profile.username}" if profile.username else "-"
     is_admin = user_id in ADMIN_IDS
     active_sub_real = subscription_is_active(profile.subscription_ends_at)
     # Админу доступен безлимит всегда, но оплаченный срок показываем отдельно.
@@ -1614,7 +1614,7 @@ async def _profile_card_html(
             priority_note = "\n<i>⚡ приоритет в очереди</i>"
     elif is_admin:
         sub_status = "админ-безлимит"
-        sub_till = "—"
+        sub_till = "-"
         plan_name = plan_subscription_title_html("universe")
         priority_note = "\n<i>⚡ приоритет в очереди</i>"
     else:
@@ -1622,12 +1622,12 @@ async def _profile_card_html(
         sub_till = (
             format_subscription_ends_at(profile.subscription_ends_at)
             if profile.subscription_ends_at
-            else "—"
+            else "-"
         )
-        plan_name = "—"
+        plan_name = "-"
     gen_total = await count_generated_images_total(user_id)
     ns_img = await get_nonsub_image_quota_status(user_id)
-    # При активной подписке квота «без подписки» не считается — функция возвращает None.
+    # При активной подписке квота «без подписки» не считается - функция возвращает None.
     fu, flim = ns_img if ns_img is not None else (0, 0)
     ready_cycle = "без лимита" if active_sub else f"{ru}/{rlim}"
     img_cycle = "без лимита" if active_sub else f"{fu}/{flim}"
@@ -1659,7 +1659,7 @@ async def send_profile_card(
     text, kb = await _profile_card_html(user_id, username_raw, back_callback=back_callback)
     if user_id in ADMIN_IDS:
         text = (
-            "<blockquote><b>Режим администратора</b> — "
+            "<blockquote><b>Режим администратора</b> - "
             f"{CREDITS_COIN_TG_HTML} кредиты за генерацию изображений не списываются.</blockquote>\n"
             + text
         )
@@ -1687,7 +1687,7 @@ async def cmd_newchat(message: Message) -> None:
 
 @router.message(Command("resolved"))
 async def cmd_resolved_main(message: Message) -> None:
-    """В основном боте тикеты ведёт support-бот — направляем пользователя туда."""
+    """В основном боте тикеты ведёт support-бот - направляем пользователя туда."""
     if not SUPPORT_BOT_USERNAME:
         await message.answer(
             "<blockquote><i>Чат поддержки не подключён.</i> Нужен "
@@ -1716,7 +1716,7 @@ async def cmd_resolved_main(message: Message) -> None:
 async def cmd_support(message: Message) -> None:
     if not SUPPORT_BOT_USERNAME:
         await message.answer(
-            "<blockquote><i>Поддержка не подключена</i> — проверь <code>SUPPORT_BOT_USERNAME</code> в <code>.env</code>.</blockquote>",
+            "<blockquote><i>Поддержка не подключена</i> - проверь <code>SUPPORT_BOT_USERNAME</code> в <code>.env</code>.</blockquote>",
             reply_markup=back_to_main_menu_keyboard(),
             parse_mode=HTML,
         )
@@ -1741,7 +1741,7 @@ async def cmd_myid(message: Message) -> None:
     if not message.from_user:
         return
     await message.answer(
-        f"<blockquote><code>{esc(message.from_user.id)}</code> — <i>твой Telegram ID</i></blockquote>",
+        f"<blockquote><code>{esc(message.from_user.id)}</code> - <i>твой Telegram ID</i></blockquote>",
         reply_markup=back_to_main_menu_keyboard(),
         parse_mode=HTML,
     )
@@ -1769,20 +1769,20 @@ async def cmd_chatid(message: Message) -> None:
             await message.answer(
                 "<b>Как узнать ID для уведомлений о покупках</b>\n\n"
                 "1) Добавь <b>этого же бота</b> в свою админ-группу (форум с темами).\n"
-                "2) <b>ID группы</b> — напиши в группе команду <code>/chatid</code> "
+                "2) <b>ID группы</b> - напиши в группе команду <code>/chatid</code> "
                 "(можно в любой теме или в «Общем»). Бот пришлёт число вида <code>-100…</code> "
-                "— его клади в <code>ADMIN_SALES_NOTIFY_CHAT_ID</code>.\n"
-                "3) <b>ID каждой темы</b> — зайди <i>внутрь темы</i> ("
+                "- его клади в <code>ADMIN_SALES_NOTIFY_CHAT_ID</code>.\n"
+                "3) <b>ID каждой темы</b> - зайди <i>внутрь темы</i> ("
                 f"{all_plans_premium_line_html(sep=', ')}) и "
                 "в этой теме снова напиши <code>/chatid</code>. Появится "
-                "<code>message_thread_id</code> — его в соответствующий "
+                "<code>message_thread_id</code> - его в соответствующий "
                 "<code>ADMIN_SALES_THREAD_*</code> в <code>.env</code>.\n"
                 "4) Повтори шаг 3 для всех тем: "
                 f"{all_plans_premium_line_html(sep=', ')} и бонусы/пакеты.\n"
                 "5) Перезапусти бота.\n\n"
-                "<blockquote><i>Если написать <code>/chatid</code> только в личке без пересылки — "
+                "<blockquote><i>Если написать <code>/chatid</code> только в личке без пересылки - "
                 "показывается эта памятка. Пересланное из группы иногда даёт только chat id, "
-                "без id темы — надёжнее писать <code>/chatid</code> прямо в каждой теме.</i></blockquote>",
+                "без id темы - надёжнее писать <code>/chatid</code> прямо в каждой теме.</i></blockquote>",
                 parse_mode=HTML,
             )
             return
@@ -1794,7 +1794,7 @@ async def cmd_chatid(message: Message) -> None:
             lines.append(f"<b>message_thread_id:</b> <code>{message.message_thread_id}</code>")
         else:
             lines.append(
-                "<i>ID темы обычно не передаётся при пересылке — открой тему в группе и напиши там</i> <code>/chatid</code>."
+                "<i>ID темы обычно не передаётся при пересылке - открой тему в группе и напиши там</i> <code>/chatid</code>."
             )
         await message.answer("\n".join(lines), parse_mode=HTML)
         return
@@ -1810,7 +1810,7 @@ async def cmd_chatid(message: Message) -> None:
         )
     else:
         lines.append(
-            "<i>Топик не определён — если это форум, открой нужную <b>тему</b> и повтори <code>/chatid</code> там.</i>"
+            "<i>Топик не определён - если это форум, открой нужную <b>тему</b> и повтори <code>/chatid</code> там.</i>"
         )
     await message.answer("\n".join(lines), parse_mode=HTML)
 

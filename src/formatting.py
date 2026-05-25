@@ -23,7 +23,7 @@ PROFILE_SUBSCRIPTION_LABEL_TG_HTML = '<tg-emoji emoji-id="5427168083074628963">�
 PROFILE_VALID_UNTIL_LABEL_TG_HTML = '<tg-emoji emoji-id="5893102202817352158">🕞</tg-emoji>'
 PROFILE_GENERATED_IMAGES_LABEL_TG_HTML = '<tg-emoji emoji-id="5305265301917549162">📎</tg-emoji>'
 
-# Даты и время в сообщениях пользователям — Europe/Moscow (без подписи «UTC» / «МСК»).
+# Даты и время в сообщениях пользователям - Europe/Moscow (без подписи «UTC» / «МСК»).
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 
 
@@ -46,7 +46,7 @@ def plan_subscription_title_html(plan_id: str) -> str:
     """Премиум-эмодзи тарифа + название (Starter, Nova, …) для HTML."""
     pid = (plan_id or "").strip().lower()
     if pid not in PLANS:
-        return esc(plan_id or "—")
+        return esc(plan_id or "-")
     raw_title = PLANS[pid].title
     title_wo_emoji = raw_title.split(" ", 1)[-1]
     emoji_id = PLAN_PREMIUM_EMOJI_IDS.get(pid)
@@ -79,13 +79,13 @@ def all_plans_premium_line_html(*, sep: str = " · ") -> str:
 def starter_already_purchased_message_html() -> str:
     """Сообщение «Starter уже покупали» для HTML."""
     return (
-        f"Вы уже оформляли пробную подписку {plan_subscription_title_html('starter')} — купить её повторно нельзя.\n\n"
+        f"Вы уже оформляли пробную подписку {plan_subscription_title_html('starter')} - купить её повторно нельзя.\n\n"
         f"<blockquote>Выбери полный тариф: {full_plans_after_starter_html(sep=', ')} в разделе "
         "<code>/start</code> → <b>Оплатить</b>.</blockquote>"
     )
 
 
-def format_subscription_ends_at(iso_str: str | None, *, default: str = "—") -> str:
+def format_subscription_ends_at(iso_str: str | None, *, default: str = "-") -> str:
     """Дата/время для людей: ДД.ММ.ГГГГ ЧЧ:ММ (московское время)."""
     text = (iso_str or "").strip()
     if text.lower() in ("none", "null"):

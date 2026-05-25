@@ -20,7 +20,7 @@ from src.services.subscription_time import (
 
 ReminderKind = Literal["3d", "1d"]
 
-# Окна в часах (UTC): одно напоминание за 3 суток до конца, одно — за 1 сутки.
+# Окна в часах (UTC): одно напоминание за 3 суток до конца, одно - за 1 сутки.
 _REMINDER_3D_MIN_HOURS = 48
 _REMINDER_3D_MAX_HOURS = 72
 _REMINDER_1D_MIN_HOURS = 0
@@ -48,7 +48,7 @@ def should_send_subscription_reminder(
 ) -> bool:
     """
     Одно сообщение «за 3 дня» и одно «за 1 день» на каждый subscription_ends_at.
-    Если пользователь продлил заранее — дата сдвинулась, старые отметки не совпадают → не шлём лишнее.
+    Если пользователь продлил заранее - дата сдвинулась, старые отметки не совпадают → не шлём лишнее.
     """
     ends_norm = normalize_subscription_ends_at_value(ends_at)
     if not ends_norm or not subscription_is_active(ends_norm):
@@ -84,6 +84,6 @@ def subscription_expiry_reminder_html(
         f"<blockquote>"
         f"<i>Тариф:</i> <b>{title}</b>\n"
         f"<i>{PROFILE_VALID_UNTIL_LABEL_TG_HTML} Действует до:</i> <b>{esc(end_h)}</b>\n\n"
-        f"<i>Срок истекает {when}. Продли заранее — доступ и лимиты сохранятся без паузы.</i>"
+        f"<i>Срок истекает {when}. Продли заранее - доступ и лимиты сохранятся без паузы.</i>"
         f"</blockquote>"
     )

@@ -1,7 +1,7 @@
 """
 Единое место для callback_data inline-кнопок (главное меню, оплата, генерация).
 
-Строки не дублируем в хендлерах — импортируем отсюда, чтобы не разъезжались фильтры и клавиатуры.
+Строки не дублируем в хендлерах - импортируем отсюда, чтобы не разъезжались фильтры и клавиатуры.
 """
 
 # --- Главный экран / навигация (handlers/commands.py) ---
@@ -43,10 +43,10 @@ CB_READY_IDEAS_HUB = "menu:ready_ideas_hub"
 CB_APPLY_READY_PREFIX = "img:idea:"
 CB_READY_CAT_PREFIX = "img:idea_cat:"
 CB_READY_NAV_PREFIX = "img:idea_nav:"
-# Режим fast/medium/premium для «Готовых идей» — только панель /commands (🎛 Режим), не карточки img:idea_*.
-# Формат кнопок: ``menu:ready_mode:{gen}:{mode}`` (gen — монотонно на каждое новое меню; устаревшие без gen не принимаются после первого открытия).
+# Режим fast/medium/premium для «Готовых идей» - только панель /commands (🎛 Режим), не карточки img:idea_*.
+# Формат кнопок: ``menu:ready_mode:{gen}:{mode}`` (gen - монотонно на каждое новое меню; устаревшие без gen не принимаются после первого открытия).
 CB_READY_MODE_PREFIX = "menu:ready_mode:"
-# Старые сообщения с img:idea_mode:* — не менять режим, подсказать открыть панель.
+# Старые сообщения с img:idea_mode:* - не менять режим, подсказать открыть панель.
 CB_READY_MODE_LEGACY_PREFIX = "img:idea_mode:"
 CB_READY_BEARD_SIZE_PREFIX = "img:idea_beard_size:"
 CB_READY_PHOTO_BACK = "img:idea_photo_back"

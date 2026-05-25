@@ -29,7 +29,7 @@ _cache_io_lock = asyncio.Lock()
 
 
 class OpenRouterApiError(RuntimeError):
-    """Ответ OpenRouter с HTTP ≥ 400 — ожидаемая ситуация для логов без traceback."""
+    """Ответ OpenRouter с HTTP ≥ 400 - ожидаемая ситуация для логов без traceback."""
 
     def __init__(self, message: str, *, http_status: int) -> None:
         super().__init__(message)
@@ -105,14 +105,14 @@ def _normalize_prompt_for_cache(text: str) -> str:
 
 
 def _cache_key(model: str, normalized_prompt: str) -> str:
-    # Учитываем фиксированный выход 1:1 / 1K — иначе старый кэш другого размера совпадёт по промпту.
+    # Учитываем фиксированный выход 1:1 / 1K - иначе старый кэш другого размера совпадёт по промпту.
     size_tag = OPENROUTER_IMAGE_OUTPUT_SIZE or "default"
     raw = f"{model.strip()}\n1:1\n{size_tag}\n{normalized_prompt}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def _standard_image_config() -> dict[str, str]:
-    """OpenRouter: всегда aspect_ratio 1:1; image_size — только если задан в конфиге."""
+    """OpenRouter: всегда aspect_ratio 1:1; image_size - только если задан в конфиге."""
     cfg: dict[str, str] = {"aspect_ratio": "1:1"}
     if OPENROUTER_IMAGE_OUTPUT_SIZE:
         cfg["image_size"] = OPENROUTER_IMAGE_OUTPUT_SIZE
@@ -120,7 +120,7 @@ def _standard_image_config() -> dict[str, str]:
 
 
 def _image_config_attempts() -> list[dict[str, str]]:
-    """Сначала полный конфиг; если провайдер не принимает image_size — повтор только с 1:1."""
+    """Сначала полный конфиг; если провайдер не принимает image_size - повтор только с 1:1."""
     full = _standard_image_config()
     if "image_size" in full:
         return [full, {"aspect_ratio": "1:1"}]
@@ -209,8 +209,8 @@ async def openrouter_text_to_image_bytes(
     Разрешение: в запросе всегда aspect_ratio 1:1 (≈1024×1024 по доке OpenRouter);
     image_size передаётся только если задан OPENROUTER_IMAGE_OUTPUT_SIZE (иначе меньше риск лишних Мп в биллинге).
 
-    use_cache=False — всегда новый запрос к API (кнопка «Ещё раз»): кэш не читается и не пишется.
-    use_cache=True — при совпадении модели и нормализованного промпта отдаются байты с диска.
+    use_cache=False - всегда новый запрос к API (кнопка «Ещё раз»): кэш не читается и не пишется.
+    use_cache=True - при совпадении модели и нормализованного промпта отдаются байты с диска.
     """
     if not OPENROUTER_API_KEY:
         raise RuntimeError("Не задан OPENROUTER_API_KEY")

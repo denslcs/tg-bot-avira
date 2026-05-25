@@ -42,18 +42,18 @@ _SUPPORT_HEAD_TG = f'<tg-emoji emoji-id="{_SUPPORT_CHAT_PREMIUM_EMOJI_ID}">💬<
 _WARN_HEAD_TG = f'<tg-emoji emoji-id="{_FAQ_WARNING_PREMIUM_EMOJI_ID}">⚠️</tg-emoji>'
 
 _READY_LIMITS_FAQ_BODY = (
-    f"{_READY_IDEA_HEAD_TG} «Готовые идеи» — отдельный режим от обычной генерации.\n"
+    f"{_READY_IDEA_HEAD_TG} «Готовые идеи» - отдельный режим от обычной генерации.\n"
     f"Стоимость зависит от режима и подписки: fast / medium / premium, в диапазоне 15–65 {CREDITS_COIN_TG_HTML}.\n\n"
     f"{PROFILE_SUBSCRIPTION_LABEL_TG_HTML} С подпиской: лимита по «Готовым идеям» нет.\n"
     f"{PROFILE_VALID_UNTIL_LABEL_TG_HTML} Без подписки: 1 запуск за цикл, новый цикл через 30 суток после исчерпания.\n"
-    f"{_GIFT_HEAD_TG} Рефералка /ref: без подписки — +1 бонусный запуск за каждых 2 друзей; "
-    f"с подпиской за тех же условий — +10 {CREDITS_COIN_TG_HTML} кредитов вместо запуска."
+    f"{_GIFT_HEAD_TG} Рефералка /ref: без подписки - +1 бонусный запуск за каждых 2 друзей; "
+    f"с подпиской за тех же условий - +10 {CREDITS_COIN_TG_HTML} кредитов вместо запуска."
 )
 
 _CREDITS_FAQ_BODY = (
     "Кредиты тратятся только на генерацию изображений.\n\n"
-    f"• «Создать картинку» — {OPENROUTER_IMAGE_COST_CREDITS} кредитов за 1 генерацию.\n"
-    f"• «Готовые идеи» — от 15 до 65 кредитов (по режиму и подписке).\n"
+    f"• «Создать картинку» - {OPENROUTER_IMAGE_COST_CREDITS} кредитов за 1 генерацию.\n"
+    f"• «Готовые идеи» - от 15 до 65 кредитов (по режиму и подписке).\n"
     f"• Обычные сообщения и навигация {CREDITS_COIN_TG_HTML} кредиты не списывают.\n\n"
     "Профиль и лимиты смотри в /profile."
 )
@@ -72,7 +72,7 @@ _FAQ: list[tuple[str, str, str]] = [
     (
         "support",
         f"{_SUPPORT_HEAD_TG} Как написать в поддержку?",
-        f"{_SUPPORT_HEAD_TG} Нажми /support — откроется бот поддержки.\n"
+        f"{_SUPPORT_HEAD_TG} Нажми /support - откроется бот поддержки.\n"
         "Если поддержка не подключена, бот подскажет что делать.",
     ),
     (
@@ -87,7 +87,7 @@ _FAQ: list[tuple[str, str, str]] = [
         f"{PROFILE_SUBSCRIPTION_LABEL_TG_HTML} Что за подписка?",
         f"Подписка действует 30 дней и даёт бонусные {CREDITS_COIN_TG_HTML} кредиты при покупке.\n"
         "Пока подписка активна, лимиты без подписки не применяются.\n"
-        "Статус и срок — в /profile. Продление — через «Оплатить».",
+        "Статус и срок - в /profile. Продление - через «Оплатить».",
     ),
 ]
 
@@ -153,7 +153,7 @@ def _faq_back_callback_from_message(message: Message | None) -> str:
 async def cmd_faq(message: Message) -> None:
     await message.answer(
         f'<b><tg-emoji emoji-id="{_FAQ_LIST_PREMIUM_EMOJI_ID}">📋</tg-emoji> Частые вопросы</b>\n'
-        "<blockquote><i>Выбери тему — пришлю короткий ответ.</i></blockquote>",
+        "<blockquote><i>Выбери тему - пришлю короткий ответ.</i></blockquote>",
         reply_markup=_faq_keyboard(),
         parse_mode=HTML,
     )

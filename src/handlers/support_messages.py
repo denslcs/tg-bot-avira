@@ -92,7 +92,7 @@ async def _post_anonymous_feedback(bot, ticket_id: int, score: int, feedback_tex
     if thread_id is None:
         return
     body = (feedback_text or "").strip()
-    fb_block = body if body else "— без текстового отзыва"
+    fb_block = body if body else "- без текстового отзыва"
     text = (
         "Анонимный отзыв\n"
         f"Оценка: {score}/5\n"
@@ -210,8 +210,8 @@ async def _upsert_finish_panel(bot, ticket_id: int, thread_id: int) -> None:
     n = admin_outbox_len(ticket_id)
     text = (
         f"В очереди на отправку пользователю: {n} частей.\n"
-        "Пока не нажал «Закончить ответ», можно писать в теме ещё сообщения — у каждого будут свои «Отправить» / «Отмена».\n"
-        "Когда готово — «Закончить ответ»: пользователь получит текст и вопрос «решён ли вопрос»."
+        "Пока не нажал «Закончить ответ», можно писать в теме ещё сообщения - у каждого будут свои «Отправить» / «Отмена».\n"
+        "Когда готово - «Закончить ответ»: пользователь получит текст и вопрос «решён ли вопрос»."
     )
     kb = _admin_finish_keyboard(ticket_id)
     ctrl = get_admin_control_message(ticket_id)
@@ -252,8 +252,8 @@ async def admin_reply_in_topic(message: Message) -> None:
         return
     chunk_id = register_admin_chunk(ticket.ticket_id, text)
     await message.reply(
-        f"Черновик ответа — часть #{chunk_id} (только эта часть).\n"
-        "«Отправить» — в очередь пользователю; «Отмена» — отменить только эту часть.",
+        f"Черновик ответа - часть #{chunk_id} (только эта часть).\n"
+        "«Отправить» - в очередь пользователю; «Отмена» - отменить только эту часть.",
         reply_markup=_admin_chunk_keyboard(ticket.ticket_id, chunk_id),
     )
 
@@ -407,13 +407,13 @@ async def support_private_messages(message: Message) -> None:
 
         username = f"@{message.from_user.username}" if message.from_user.username else "без_username"
         profile = await get_user_admin_profile(user_id)
-        sub_till = "—"
+        sub_till = "-"
         sub_line = "не активна"
         days_in_bot = 0
         generated_total = await count_generated_images_total(user_id)
         if profile:
             days_in_bot = _days_in_main_bot(profile.created_at)
-            sub_till = profile.subscription_ends_at or "—"
+            sub_till = profile.subscription_ends_at or "-"
             if subscription_is_active(profile.subscription_ends_at):
                 plan = (profile.subscription_plan or "").strip()
                 sub_line = f"активна ({plan})" if plan else "активна"
@@ -477,8 +477,8 @@ async def ticket_resolution_callback(callback: CallbackQuery) -> None:
     if action == "yes":
         await callback.message.edit_text(
             "Рад, что помогло 🎉\n"
-            "Оцени ответ поддержки от 1 до 5 (1 — плохо, 5 — отлично).\n"
-            "Потом по желанию можно оставить анонимный отзыв — или нажать «В другой раз» и закрыть без оценки.",
+            "Оцени ответ поддержки от 1 до 5 (1 - плохо, 5 - отлично).\n"
+            "Потом по желанию можно оставить анонимный отзыв - или нажать «В другой раз» и закрыть без оценки.",
             reply_markup=_rating_keyboard(ticket_id),
         )
         await callback.answer()
@@ -555,7 +555,7 @@ async def rate_later_callback(callback: CallbackQuery) -> None:
     if callback.message:
         await callback.message.edit_text(
             "Ок, тикет закрыт без оценки.\n"
-            "Если позже захочешь поделиться мнением — об этом можно написать в новом обращении.",
+            "Если позже захочешь поделиться мнением - об этом можно написать в новом обращении.",
             reply_markup=None,
         )
     await callback.answer("Закрыто.")
@@ -586,12 +586,12 @@ async def ticket_rating_callback(callback: CallbackQuery) -> None:
     if score <= 3:
         offer = (
             f"Оценка: {score}/5.\n"
-            "Напиши, пожалуйста, что не устроило — так мы сможем исправиться.\n"
+            "Напиши, пожалуйста, что не устроило - так мы сможем исправиться.\n"
             "Или отложи отзыв."
         )
     else:
         offer = (
-            f"Оценка: {score}/5 — спасибо!\n"
+            f"Оценка: {score}/5 - спасибо!\n"
             "Хочешь оставить короткий отзыв о поддержке? Или пропусти."
         )
     if callback.message:
@@ -632,7 +632,7 @@ async def feedback_skip_callback(callback: CallbackQuery) -> None:
     if callback.message:
         await callback.message.edit_text(
             f"Спасибо за оценку {score}/5! Тикет закрыт ✔️\n"
-            "Текстового отзыва нет — мы всё равно учли оценку (анонимно для команды).",
+            "Текстового отзыва нет - мы всё равно учли оценку (анонимно для команды).",
             reply_markup=None,
         )
     await callback.answer("Готово.")

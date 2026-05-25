@@ -57,11 +57,11 @@ async def cmd_start(message: Message) -> None:
 async def cmd_help(message: Message) -> None:
     text = (
         "Команды поддержки:\n"
-        "- /support — открыть тикет\n"
-        "- /resolved — закрыть тикет (клиент)\n"
-        "- /help — эта справка\n\n"
+        "- /support - открыть тикет\n"
+        "- /resolved - закрыть тикет (клиент)\n"
+        "- /help - эта справка\n\n"
         "Сотрудникам с доступом админа: в меню бота есть /admin и остальные команды; "
-        "в панели — кнопки с подробными пояснениями."
+        "в панели - кнопки с подробными пояснениями."
     )
     if message.from_user and message.from_user.id in ADMIN_IDS:
         text += "\n\nОткройте /admin для панели (теги, заметки, SLA, отчёт)."
@@ -247,7 +247,7 @@ async def cmd_ticket_status(message: Message) -> None:
     if not full:
         await message.answer("Тикет не найден.")
         return
-    tag = full.tag or "—"
+    tag = full.tag or "-"
     first = full.first_admin_reply_at or "ещё не было ответа пользователю"
     await message.answer(
         f"Тикет #{full.ticket_id}\n"
@@ -286,7 +286,7 @@ async def cmd_tag(message: Message) -> None:
     if len(parts) < 2:
         await message.answer(
             "Формат: /tag bug | payment | general | clear\n"
-            "clear — убрать тег."
+            "clear - убрать тег."
         )
         return
     key = parts[1].strip().lower()

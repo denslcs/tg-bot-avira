@@ -120,9 +120,9 @@ async def polza_text_to_image_bytes(
     user_id: int | None = None,
 ) -> bytes:
     """
-    Текст → PNG/JPEG bytes. POST /v1/media, при pending — опрос GET /v1/media/{id}.
-    aspect_ratio 1:1; image_resolution — только если POLZA_IMAGE_INPUT_RESOLUTION задан (GPT Image его не поддерживает).
-    Поле user — Telegram user_id для учёта у Polza; доступ по тарифу проверяется в боте до вызова.
+    Текст → PNG/JPEG bytes. POST /v1/media, при pending - опрос GET /v1/media/{id}.
+    aspect_ratio 1:1; image_resolution - только если POLZA_IMAGE_INPUT_RESOLUTION задан (GPT Image его не поддерживает).
+    Поле user - Telegram user_id для учёта у Polza; доступ по тарифу проверяется в боте до вызова.
     """
     if not POLZAAI_API_KEY:
         raise PolzaApiError("Не задан POLZAAI_API_KEY")
@@ -180,7 +180,7 @@ async def polza_text_to_image_bytes(
         if not media_id:
             raise PolzaApiError("Polza не вернула id задачи")
 
-        # pending / processing — опрос
+        # pending / processing - опрос
         status_url = f"{url}/{media_id}"
         for attempt in range(POLL_MAX_ATTEMPTS):
             await asyncio.sleep(POLL_INTERVAL_SEC)

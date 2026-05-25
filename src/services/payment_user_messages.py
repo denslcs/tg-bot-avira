@@ -44,7 +44,7 @@ def plan_purchase_success_html(
             )
         return (
             "<b>Спасибо за покупку!</b>\n"
-            f"Подписка <b>{title}</b> продлена заранее — к сроку добавлены "
+            f"Подписка <b>{title}</b> продлена заранее - к сроку добавлены "
             f"<b>{esc(period_days)}</b> дн.\n\n"
             "<blockquote>"
             f"<i>Действует до:</i> <b>{esc(end_h)}</b>\n"
@@ -94,12 +94,12 @@ def external_not_paid_yet_html(*, kind: str, provider: str = "wata") -> str:
     if kind == "pack":
         return (
             "<b>Оплата не подтверждена</b>\n"
-            f"<blockquote><i>Пакет ещё не оплачен — сначала заверши перевод на странице {page}, "
+            f"<blockquote><i>Пакет ещё не оплачен - сначала заверши перевод на странице {page}, "
             "затем нажми «Проверить оплату».</i></blockquote>"
         )
     return (
         "<b>Подписка не оплачена</b>\n"
-        f"<blockquote><i>Оплата пока не подтверждена — сначала заверши перевод на странице {page}, "
+        f"<blockquote><i>Оплата пока не подтверждена - сначала заверши перевод на странице {page}, "
         "затем нажми «Проверить оплату».</i></blockquote>"
     )
 
@@ -131,7 +131,7 @@ def external_declined_html(*, provider: str = "wata") -> str:
         return (
             "<b>Оплата не прошла</b>\n"
             "<blockquote><i>Перевод на Heleket не завершён или отменён. "
-            "Если крипта уже ушла — подожди подтверждения сети и нажми «Проверить оплату» снова.</i></blockquote>"
+            "Если крипта уже ушла - подожди подтверждения сети и нажми «Проверить оплату» снова.</i></blockquote>"
         )
     return wata_declined_html()
 
@@ -140,7 +140,7 @@ def wata_declined_html() -> str:
     return (
         "<b>Оплата не прошла</b>\n"
         "<blockquote><i>Банк или касса отклонили платёж. "
-        "Деньги не должны списаться; если удержание всё же есть — "
+        "Деньги не должны списаться; если удержание всё же есть - "
         "оно обычно возвращается автоматически в течение нескольких дней.</i></blockquote>"
     )
 
@@ -158,7 +158,7 @@ def wata_paid_but_not_applied_html(
     return (
         "<b>Оплата получена, подписка не активирована</b>\n"
         "<blockquote><i>Деньги списаны, но зачислить автоматически не удалось. "
-        f"{sup} Укажи номер заказа — оформим подписку или инициируем возврат через кассу.</i>\n"
+        f"{sup} Укажи номер заказа - оформим подписку или инициируем возврат через кассу.</i>\n"
         f"<i>Заказ:</i> <code>{esc(order_id)}</code>{txn_line}</blockquote>"
     )
 
@@ -167,7 +167,7 @@ def wata_already_applied_plan_html(item_id: str, *, support_username: str = "") 
     _ = support_username
     return (
         "<blockquote><i>Эта оплата уже была зачислена ранее.</i> "
-        f"Подписка <b>{plan_subscription_title_html(item_id)}</b> должна быть активна — "
+        f"Подписка <b>{plan_subscription_title_html(item_id)}</b> должна быть активна - "
         "проверь <code>/profile</code> или отправь <code>/start</code>.</i></blockquote>"
     )
 
@@ -177,5 +177,5 @@ def wata_already_applied_pack_html(item_id: str) -> str:
     title = pack.title if pack else item_id
     return (
         "<blockquote><i>Эта оплата уже была зачислена ранее.</i> "
-        f"Пакет <b>{esc(title)}</b> — проверь баланс в <code>/profile</code>.</i></blockquote>"
+        f"Пакет <b>{esc(title)}</b> - проверь баланс в <code>/profile</code>.</i></blockquote>"
     )

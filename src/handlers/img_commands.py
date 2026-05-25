@@ -198,12 +198,12 @@ _READY_CATEGORY_EMOJI_FALLBACK: dict[str, str] = {
 def _ready_category_title_html(slug: str) -> str:
     """Премиум-эмодзи + название категории для HTML (подписи к превью идей)."""
     s = (slug or "").strip().lower()
-    title = dict(READY_IDEA_CATEGORIES).get(s) or (slug or "—")
+    title = dict(READY_IDEA_CATEGORIES).get(s) or (slug or "-")
     eid = _READY_CATEGORY_PREMIUM_IDS.get(s)
     if not eid:
         return f"<b>{esc(title)}</b>"
     fb = _READY_CATEGORY_EMOJI_FALLBACK.get(s, "⭐")
-    # Жирным только название; <tg-emoji> снаружи — так клиенты корректнее рисуют custom emoji в caption.
+    # Жирным только название; <tg-emoji> снаружи - так клиенты корректнее рисуют custom emoji в caption.
     return f'<tg-emoji emoji-id="{eid}">{fb}</tg-emoji> <b>{esc(title)}</b>'
 
 _POSTER_TEXT_READY_TITLE = "Постер с текстом"
@@ -358,7 +358,7 @@ _SUPERHERO_POOL: tuple[tuple[str, str], ...] = (
     ("The Boys", "A-Train"),
     ("The Boys", "Black Noir"),
 )
-# Последний (universe, hero) для идеи «Mirror superhero» — чтобы не повторять костюм два раза подряд.
+# Последний (universe, hero) для идеи «Mirror superhero» - чтобы не повторять костюм два раза подряд.
 _SUPERHERO_LAST_BY_USER: dict[int, tuple[str, str]] = {}
 
 
@@ -531,7 +531,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         ),
         (
             "Повязанный",
-            "Живой 9:16-кадр с iPhone: задержание, ФСБ в тактике, на столе — пачки евро, карты, iPhone и MacBook; лёгкий motion blur у головы.",
+            "Живой 9:16-кадр с iPhone: задержание, ФСБ в тактике, на столе - пачки евро, карты, iPhone и MacBook; лёгкий motion blur у головы.",
             "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve exact facial structure, skin texture, age cues, hairline, and recognizable likeness — no face replacement, no beautification drift. EXPRESSION: light natural smile; subtle motion blur on the head/hair as if captured mid-movement in a chaotic live moment (face still readable). GENDER / OUTFIT (strict from reference): if female-presenting — black athletic jumpsuit with front zipper, partly unzipped at the chest; if male-presenting — black T-shirt and wide black jeans; if ambiguous — black minimal streetwear (dark top + wide dark trousers). POSE: realistic detention / restraint moment — hands controlled by officers, body language tense but not theatrical. TABLE PROPS (foreground): on a table, large sums of cash shown as dense bundles of crisp new euro banknotes straight from a bank, each bundle tied with paper bands/ribbons, arranged in separate groups totaling roughly five million euros worth visually, with slight uneven stacking and natural mess. About twenty bank cards laid in one line with small random offsets (not perfectly aligned). Several iPhones of different models in a row plus two closed MacBook laptops nearby, all placed imperfectly (casual raid/evidence-table look). OFFICERS: Russian FSB (Федеральная служба безопасности) tactical personnel in black gear — helmets, body armor vests, tactical boots; three officers in frame: one holding/controlling the subject's hands, one standing close beside, one partially visible at the edge; natural documentary positions, officer faces softly out of focus / not the hero of the shot. INSIGNIA / PATCH PLACEMENT (strict, highest priority): (A) SHOULDER ONLY — Russian flag: each officer has exactly ONE flag patch on the shoulder/arm area — a single rectangular tricolor (white top, blue middle, red bottom), crisp edges, correct stripe order; no second flag patch, no duplicate flags, no flag on chest/vest/back/helmet. The shoulder flag patch must have ZERO text — no Cyrillic, no \"ФСБ\", no \"РОССИЯ\", no eagles, no coat of arms. (B) CHEST ONLY — \"ФСБ\": the three Cyrillic letters Ф-С-Б appear ONLY on the chest/vest front tag (bold, high contrast, legible); NEVER on shoulders, sleeves, back, helmet, or on the flag patch. No other Cyrillic words on uniforms. Patch edges stitched or molded; stable colors. DEVICES & PROPS TEXT RULE: iPhones and closed MacBooks with accurate Apple-style proportions; Apple logo on MacBook lid clean and centered; phone screens off or dark (no UI text). Bank cards: realistic chips and color blocks only — do NOT render readable card numbers, names, or bank logos (avoid fake illegible microtext). Euro bundles: plausible €50/€100 color cues and banded stacks without microscopic unreadable bill typography. ATMOSPHERE: photorealistic detention scene, live candid raid energy, slight chaos, natural shadows, no glossy staged advertising look, no studio polish. CAMERA: shot on iPhone 16 Pro Max, vertical 9:16, harsh realistic indoor light, documentary smartphone color science, mild noise acceptable. NEGATIVE: cartoon, anime, plastic skin, wrong user face, perfect studio lighting, smiling officers, watermark, chat caption overlays, extra limbs, duplicated faces, fantasy uniforms, US SWAT instead of plausible Russian tactical raid look, shoulder text РОССИЯ, double-headed eagle, coat of arms, garbled Cyrillic, wrong or extra letters on chest tag, ГБР instead of ФСБ, pseudo-text on patches, multiple flag patches on one shoulder, duplicate Russian flags, flag on chest or vest, ФСБ on shoulder or sleeve, ФСБ printed on flag patch, Cyrillic on shoulder patches, illegible bank card numbers, warped Apple logos, random alphabet soup on uniforms, wrong flag colors or vertical stripes.",
             1,
         ),
@@ -539,7 +539,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     "celebrities": [
         (
             _RONALDO_PHOTO_TITLE,
-            "Динамичный кадр матча с Роналдо на поле — 9:16, кинематографичный спорт.",
+            "Динамичный кадр матча с Роналдо на поле - 9:16, кинематографичный спорт.",
             "CRITICAL IDENTITY LOCK: use the face from the uploaded image only — photoreal, recognizable; do not warp the user's face or blend it with Cristiano Ronaldo. "
             "UNISEX KIT (mandatory): infer gender presentation from the upload. "
             "Male-presenting: standard men's Real Madrid home kit with normal pro football shorts. "
@@ -577,7 +577,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         ),
         (
             "UFC: лицом к лицу с Макгрегором",
-            "Промо как перед боем: ты и Конор в профиль нос к носу, Дана чуть сзади, баннер UFC и софиты — напряжение до щелчка.",
+            "Промо как перед боем: ты и Конор в профиль нос к носу, Дана чуть сзади, баннер UFC и софиты - напряжение до щелчка.",
             "Cinematic ultra-high-quality photograph of an intense face-off stare-down at a major UFC-style promo event. STRICT PROFILE COMPOSITION: powerful intimate close-up, both subjects in perfect side profile at eye level, 50mm portrait-lens perspective, natural perspective, hyperrealistic 8K, subtle cinematic film grain, shallow depth of field emphasizing the eye-to-eye confrontation. LEFT PROFILE (viewer's left): the USER from the uploaded photo — CRITICAL IDENTITY LOCK: preserve all unique facial traits, bone structure, skin texture, skull shape, and hair from the reference; unshakable concentration and stern resolve; stylish premium black crewneck sweater. RIGHT PROFILE (viewer's right): Conor McGregor — photoreal recognizable likeness: signature fade haircut, thick groomed reddish-brown beard; iconic purple check-pattern suit jacket and white dress shirt; equally tense challenging expression, eyes locked on the opponent. PROXIMITY: faces maximally close, noses almost touching at the horizontal center of frame; the narrow gap between faces is the sharpest focal plane. BACKGROUND MEDIATOR: slightly behind and between them, Dana White partially visible, concerned attentive expression, softened by shallow depth of field. SETTING: realistic detailed but softly blurred large UFC-style promo banner with readable generic event text including \"UFC\", \"FIGHT NIGHT\", \"LAS VEGAS\"; distant silhouettes of broadcast cameras and studio equipment. LIGHTING: dramatic high-contrast studio/key lights sculpting cheekbones and emotion on both subjects; deeply cinematic look; highly detailed skin pores and subtle sweat beads. NEGATIVE: frontal faces, cartoon, plastic skin, wrong user face, extra people in focus, watermark, mangled logos as unreadable blobs.",
             1,
         ),
@@ -597,7 +597,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         ),
         (
             _POLAROID_CURTAIN_TITLE,
-            "Два фото любых «вдвоём» — как на старом Polaroid: мягкая вспышка в темноте, лёгкая размытость, за спинами белая занавеска. Порядок снимков не важен.",
+            "Два фото любых «вдвоём» - как на старом Polaroid: мягкая вспышка в темноте, лёгкая размытость, за спинами белая занавеска. Порядок снимков не важен.",
             "IMPORTANT REFERENCE MAPPING: image #1 is the first subject reference, image #2 is the second subject reference — two people, two animals, or a mixed pair; upload order is arbitrary (first vs second photo does not assign roles beyond #1/#2 mapping). CRITICAL IDENTITY LOCK FOR BOTH: preserve each subject faithfully — for humans: facial structure, skin texture, age, hair, expression; for animals: species, markings, fur pattern, pose cues — both must stay clearly recognizable. OUTPUT STYLE: authentic Polaroid instant-film snapshot look — casual ordinary photo, no sharp dominant prop or staged object as the hero of the frame; natural two-subject composition. LIGHTING: soft even illumination across the entire frame, like a compact camera flash in a dark room — flash falloff spreading gently over the whole image, not a harsh spotlight; subtle overall softness / mild blur consistent with small-format instant film and slight motion or vintage lens character. BACKGROUND: replace everything behind both subjects with a plain white curtain / white drape — seamless, neutral, no busy details; subjects separated from curtain by natural distance. MOOD: intimate simple snapshot of two subjects together. NEGATIVE: swapped identities, beauty-face replacement on humans, crisp HDR studio backdrop, extra subjects, readable text overlays, heavy vignette that hides faces.",
             2,
         ),
@@ -605,7 +605,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     "texts": [
         (
             _POSTER_TEXT_READY_TITLE,
-            "Вертикальный постер: ты в кадре + надпись в твоём стиле. После фото введи текст заголовка — подстроим цвет и фактуру под картинку.",
+            "Вертикальный постер: ты в кадре + надпись в твоём стиле. После фото введи текст заголовка - подстроим цвет и фактуру под картинку.",
             "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity for the main subject. Preserve face structure, skin texture, age, eyes, and expression — integrate the person naturally into a stylized high-end 3D/CG poster (NOT a flat template). ART DIRECTION: vertical poster composition, hero subject from reference, cinematic lighting, smooth detailed shading, atmospheric depth, designer splash-screen quality. Environment: rich moody palette with strong accent lights (e.g. emissive glow blobs, rim light, neon-tinged highlights) that can inform the headline treatment. The exact headline string and typography integration rules are specified in the reference hint below — follow them exactly. NEGATIVE: flat clipart, cheap social-media template, tiny illegible text, random watermark, wrong face, beauty-plastic skin.",
             1,
         ),
@@ -617,7 +617,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         ),
         (
             _PLASTER_FASHION_STUDIO_TITLE,
-            "Премиум fashion в чистом светлом зале: ты в дорогом костюме у массивных объёмных букв из матового гипса — как съёмка для обложки. Потом придумаешь слово или короткую фразу, и она станет скульптурной надписью рядом с тобой; при желании — два яруса текста, верх и низ.",
+            "Премиум fashion в чистом светлом зале: ты в дорогом костюме у массивных объёмных букв из матового гипса - как съёмка для обложки. Потом придумаешь слово или короткую фразу, и она станет скульптурной надписью рядом с тобой; при желании - два яруса текста, верх и низ.",
             "CRITICAL — FACIAL IDENTITY: The uploaded photo is the ONLY source for the model's appearance. Transfer face without alteration: preserve sex, age, bone structure, skin texture, hair, and all individual traits; no face replacement, no beautification drift. UNISEX WARDROBE: elegant tailored trouser suit (pantsuit) — if male-presenting, classic slim-fit suit with trousers; if female-presenting, refined women's pantsuit or equivalent elegant tailored suit; if ambiguous, neutral premium tailoring that matches the face. MAIN COMPOSITION: stylish subject in relaxed pose, shoulder casually leaning against massive freestanding 3D letter sculptures; thoughtful, slightly mysterious expression; body organically integrated into the scene, subtle sense of pressing into the textured plaster surface of the letterforms. TYPOGRAPHY (mandatory): volumetric words built from matte gray plaster — exact spelling, language, line breaks, and capitalization are specified ONLY in the runtime reference hint below from the user's typed text (not fixed placeholder words). Letters are separate physical objects standing in space (NOT wall-mounted), massive block constructions; if two lines are requested, use two stacked tiers overlapping as a layered installation; soft natural cast shadows. TECH: ultra-detailed photorealistic photography, masterpiece image quality, tack-sharp eye focus on the model's face, professional color grading, top-tier studio lighting, 8K feel. DEPTH: shallow depth of field — face in sharp focus; plaster word sculpture slightly softer but text must remain fully legible. AESTHETIC: premium fashion-editorial minimalism, clean background, luxury modern magazine cover mood, contemporary fashion photography. NEGATIVE: wrong face, different age or gender than reference, flat 2D text stickers, letters fused into a flat wall, illegible text, watermark, cluttered background, website URLs or brand watermarks on the letters.",
             1,
         ),
@@ -649,7 +649,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         ),
         (
             "Soldier boy",
-            "Ночной paparazzi-кадр на iPhone: Soldier Boy из сериала The Boys у Rolls-Royce с сигарой и щитом, рядом ты в streetwear — вспышка, роскошь и городской драйв.",
+            "Ночной paparazzi-кадр на iPhone: Soldier Boy из сериала The Boys у Rolls-Royce с сигарой и щитом, рядом ты в streetwear - вспышка, роскошь и городской драйв.",
             "CRITICAL IDENTITY LOCK: Use the attached user photo as the ONLY identity reference for ME. Preserve exact facial features, skin texture, haircut, age cues, and proportions — no beautification, no face replacement, no identity drift. UNISEX WARDROBE (mandatory): ME must wear stylish contemporary streetwear. If clothing is visible in the reference — adapt it naturally into a coherent streetwear look that fits the person's build and presentation. If the reference is face-only, head-only, tight portrait, or no outfit is visible — infer full body and dress ME in unisex streetwear by default (e.g. oversized hoodie or bomber jacket, relaxed trousers or cargo pants, clean sneakers); then refine fit to apparent gender presentation from the face (male-presenting / female-presenting / ambiguous neutral). CHARACTER LOCK (strict): Soldier Boy must be the character from the Amazon Prime TV series \"The Boys\" (NOT Captain America, NOT a generic soldier, NOT any other franchise). Photoreal recognizable likeness: WWII-era star-spangled superhero costume from the show, rugged veteran charisma, cigar. SHIELD LOCK (strict, highest priority): Soldier Boy holds ONLY his show-accurate shield from The Boys — a large HEATER / kite shield (triangular: wide at top, pointed bottom, slightly double-curved top edge), NOT a circle. Material: antique bronze/brass/gold weathered metal with scratches, dents, dark patina in recesses — monochromatic gold/bronze ONLY (NO red-white-blue Captain America colors). Design: raised eagle-head crest at top center; below it a circular boss with a five-pointed star; layered raised chevron/V ridges pointing down toward the tip; framed by vertical/diagonal raised lines — match attached shield reference image #2 exactly for shape and ornament. FORBIDDEN: Captain America round shield, concentric red-white-blue rings, large white star on blue disk, glossy vibranium MCU/Avengers shield, any circular disc shield. SCENE: A nighttime iPhone photo of this Soldier Boy from The Boys leaning against the hood of a Rolls-Royce, holding his heater shield (as above) and smoking a cigar. The camera flash is clearly on, giving the image a raw paparazzi vibe with harsh lighting and realistic shadows. Standing next to him is ME in streetwear as described above. ATMOSPHERE: chaotic, stylish, and cinematic, with luxury aesthetics mixed with edgy urban energy. CAMERA: shot on iPhone, harsh on-camera flash, raw paparazzi documentary feel, realistic shadows, high dynamic range, true-to-life colors, no beauty filters. NEGATIVE: wrong user face, cartoon, plastic skin, extra fingers, watermark, round shield, circular shield, Captain America shield, Marvel/Avengers shield, Steve Rogers, Cap-style concentric star shield, red-white-blue shield, glossy vibranium shield, Captain America or Marvel-style costume, wrong Soldier Boy likeness, soft studio lighting, wrong outfit gender stereotype against the reference.",
             1,
         ),
@@ -657,7 +657,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     "superheroes": [
         (
             _SUPERHERO_MIRROR_TITLE,
-            "Один эффектный супергеройский кадр — как постер к фильму, где главный герой это ты.",
+            "Один эффектный супергеройский кадр - как постер к фильму, где главный герой это ты.",
             "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY identity source. Preserve exact face geometry, skin texture, age cues, hairline, and recognizable likeness — no face replacement. Create ONE single highly detailed photorealistic mirror-selfie frame (not a collage), showing the same person in a premium superhero-inspired look. UNISEX MANDATE (strict): adapt body fit, armor tailoring, makeup intensity, and silhouette to the person's presentation from the reference; no gender stereotypes, no caricature. SUPERHERO COSTUME RULE: use one selected hero-inspired suit with high-fidelity practical textures (fabric weave, armor plates, seams, utility belt, boots, gloves, cape if applicable), realistic wear and lighting response; no toy/plastic cosplay look. SCENE: modern apartment/bedroom interior, coherent realistic background and reflections. CAMERA FEEL: believable smartphone mirror selfie, natural hand/phone placement, coherent perspective, soft indoor daylight mixed with ambient room lighting. FRAMING: one strong hero shot with subject large in frame (at least knee-up), clear facial detail priority, premium editorial composition. QUALITY PRIORITY: maximize face fidelity and detail on the user (eyes, skin texture, likeness), then costume materials and lighting realism. STRICT CLEAN OUTPUT: no watermark, no platform logo, no app signature, no generated-by stamp, no random corner marks. NEGATIVE: collage/multi-panel layout, tiny distant subject, blurred face, wrong identity, cartoon/anime style, malformed limbs, unreadable text overlays, watermark.",
             1,
         ),
@@ -689,7 +689,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         ),
         (
             _MMORPG_HERO_TITLE,
-            "Погрузись в мир MMORPG: тёмное фэнтези, эпический герой и дух большой RPG — как в лучших кинематографичных трейлерах.",
+            "Погрузись в мир MMORPG: тёмное фэнтези, эпический герой и дух большой RPG - как в лучших кинематографичных трейлерах.",
             "Premium MMORPG / RPG hero portrait — STRICT PHOTOREAL WARCRAFT LOOK (not cinematic trailer, not game-shader): final result must look like a realistic dark-fantasy photo, as if captured with a real camera in real light, while keeping full Warcraft universe canon for race/class/armor/location. NOT like pre-rendered Blizzard cinematic frame, NOT like in-game engine render, character select screen, splash art, or stylized illustration. Avoid clean \"cartoon CG\" look: no plastic skin, no toy-like metal, no flat gradient lighting, no overly smooth faces. Target: grounded realism with physically plausible lighting, realistic skin pores and microtexture, natural hair strands, believable metal wear (scratches, edge wear, micro-scratches), leather grain, fabric weave, and coherent reflections. CRITICAL IDENTITY LOCK (highest priority): image #1 is the ONLY face/body identity source. The OUTPUT must still read unmistakably as THIS SAME PERSON — even when transformed into Warcraft race traits. Preserve eye spacing/shape, brow-to-eye relationship, nose structure, mouth/lip silhouette, jaw/chin geometry, cheek volume, and age cues; apply race anatomy as a layer, not a replacement face. Do NOT replace with another person; no beautification drift; no generic NPC face template. UNISEX / PRESENTATION: infer apparent gender presentation from the reference and match armor silhouette/proportions accordingly (no default male/female stereotype set). "
             "RANDOM BUILD (mandatory — pick ONE internally consistent set; do not label text on image): "
             "(1) RACE — RANDOM PICK exactly ONE race from this World of Warcraft list only: Orc, Undead, Human, Elf, Gnome, Goblin, Worgen, Draenei, Troll, Void Elf, Nightborne. Do not invent or use races outside this list. Apply race styling as a veneer: tusks/ears/horns/skin tone must conform to the user's facial geometry from image #1, not erase it. "
@@ -717,7 +717,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         ),
         (
             "Бордовый кино-портрет",
-            "Вертикальный кадр: резкий киносвет, контраст, чуть снизу вверх — подбородок и шея, фон — густой тёмно-красный против светлой кожи и тёмной одежды.",
+            "Вертикальный кадр: резкий киносвет, контраст, чуть снизу вверх - подбородок и шея, фон - густой тёмно-красный против светлой кожи и тёмной одежды.",
             "CRITICAL IDENTITY LOCK: Use the uploaded user photo as the ONLY source of facial identity — same face shape, features, skin texture, age, hair; no face replacement, no different person. UNISEX: dark minimal clothing (e.g. black or charcoal top, jacket, or tailored dark piece) suited to apparent gender from the reference; keep silhouette elegant and cohesive with the face. COMPOSITION: vertical portrait orientation, editorial fashion / cinema poster quality. LIGHTING: sharp cinematic lighting with strong directional keys and intense contrast — sculpted cheekbones, defined jaw, rich shadow falloff; premium studio or motion-picture still look. CAMERA: slightly low angle looking upward to emphasize jawline and neck, imposing yet refined, sculptural elegance; subject may hold a calm confident gaze toward camera or slightly past lens. BACKGROUND: saturated deep dark red / burgundy seamless or gradient — bold color contrast against lighter natural skin tones and dark wardrobe. ASPECT: portrait ~3:4 or 9:16 feel. NEGATIVE: flat lighting, pastel flat bg, wrong face, beauty-plastic skin, watermark, text, props stealing focus.",
             1,
         ),
@@ -725,13 +725,13 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     "art_styles": [
         (
             _SONY_ERICSSON_T100_TITLE,
-            "Легендарная T100: одно фото — твоё лицо в 1-бит на зелёном ЖК, сверху строка «добро пожаловать», как на старой кнопочной трубке.",
+            "Легендарная T100: одно фото - твоё лицо в 1-бит на зелёном ЖК, сверху строка «добро пожаловать», как на старой кнопочной трубке.",
             "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Face shape, features, expression, and distinctive traits must match the reference with maximum fidelity while being converted into retro 1-bit pixel-art on the phone screen — same person, readable likeness at ultra-low resolution. SCENE: Classic candybar mobile phone Sony Ericsson T100 (early-2000s design), photorealistic plastic body and keypad partially visible; main focus on the small LCD screen. SCREEN SPECS (visual simulation): monochrome green LCD palette typical of that era; logical content as if 84×48 pixels — black-and-white / 1-bit style pixel illustration of the character on the display, clearly visible square pixel grid, sharp contrast, no smooth gradients inside the portrait (dithering allowed). On-screen portrait: pixel-art head/face centered like classic phone wallpapers. TOP OF SCREEN TEXT: classic Sony Ericsson UI style banner — narrow black band at top of LCD with bitmap/pixel font; Cyrillic greeting exactly: «добро пожаловать» (legible, fits the narrow display). OVERALL IMAGE: 9:16 vertical composition, nostalgic early-2000s mobile aesthetic, medium framing on the handset, shallow depth of field acceptable on the phone edges. STYLE: ultra-low-res look on the LCD area only; the phone casing may be rendered with realistic detail. MOOD: nostalgic \"old school\" mobile phone wallpaper. NEGATIVE: wrong face, different person, high-res face inside the LCD, modern smartphone, color photo inside the LCD, illegible gibberish instead of the greeting, watermark, UI clutter beyond the one greeting line and the portrait.",
             1,
         ),
         (
             _CHALK_ON_ASPHALT_TITLE,
-            "Сначала фото — из него портрет мелом; потом своя надпись разноцветными буквами над рисунком. Лужицы, снег у края, вид сверху как с телефона.",
+            "Сначала фото - из него портрет мелом; потом своя надпись разноцветными буквами над рисунком. Лужицы, снег у края, вид сверху как с телефона.",
             "Photorealistic scene. CRITICAL IDENTITY LOCK: The chalk artwork on the ground must faithfully reproduce the people and the full composition from the uploaded reference photo — same faces, poses, body language, and framing; every person must stay clearly recognizable; translate the entire scene into colored street-chalk technique only (no photorealistic humans standing on the asphalt — only the drawing). LARGE chalk illustration on old cracked asphalt: soft slightly smudged lines like real sidewalk chalk; dusty matte chalk colors with authentic chalky texture; light smudge marks and chalk dust around the figures. SURFACE: weathered rough asphalt with visible cracks, small stones, grit; puddles of water, mud, and remnants of wet snow along the frame edges. PROPS: real pieces of colored chalk lying next to the drawing — red, yellow, blue, pink, and white; scattered chalk dust and finger smudges on the pavement. HANDWRITTEN QUOTE on the asphalt directly above the drawing: multicolor chalk by hand (childlike uneven street lettering). The exact characters, line breaks, language, and wording are specified ONLY in the runtime reference hint from the user's typed text — no fixed placeholder quote. CAMERA: from above at a slight angle, as if someone photographs the ground with a phone; natural daylight, soft overcast sky, slightly cool color temperature. ATMOSPHERE: ordinary urban courtyard; high detail on asphalt and chalk; authentic street-art feeling. NEGATIVE: wrong faces, different people than reference, illegible or substituted quote text, photoreal people instead of chalk drawing, watermark, clean studio floor.",
             1,
         ),
@@ -739,7 +739,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     "horror": [
         (
             "Ступени у огня",
-            "Ночь, широкие ступени особняка, рваный белый наряд, грязь и кровь на лице, сигарета, жёсткая вспышка — дом догорает в темноте позади.",
+            "Ночь, широкие ступени особняка, рваный белый наряд, грязь и кровь на лице, сигарета, жёсткая вспышка - дом догорает в темноте позади.",
             "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve facial structure, skin texture, age, hair, and overall likeness — no face replacement, no different person. UNISEX WARDROBE from reference: if female-presenting — torn, dirty white wedding dress, heavily stained; if male-presenting — torn dirty white formal wedding suit / tuxedo remnants (jacket, shirt) with the same distressed staining; if ambiguous — torn white ceremonial outfit that still reads clearly as post-wedding formal wear. POSE: subject sitting on wide stone steps of a luxurious mansion at night, relaxed but exhausted, slightly slouched; holding a cigarette, visible smoke drifting in cold night air (adult subject). FACE: messy hair; face smeared with dirt, ash, and blood stains; raw natural skin; tired but calm expression with a hint of dark satisfaction. BACKGROUND: burning mansion behind them, mostly lost in deep darkness; faint fire glow and small flames on the ruined building; light smoke and ash in the air. COMPOSITION: centered subject, medium full shot, slightly low angle, shallow depth of field, cinematic framing, portrait ~3:4 feel. LIGHTING: harsh direct on-camera flash on the subject, strong frontal flash, overexposed highlights on skin and clothing, sharp hard shadows behind, deep black shadows around, minimal ambient, slight falloff into darkness, subtle fire glow as secondary rim light. STYLE: ultra realistic, film still, 35mm photography, raw flash photography, high detail, visible skin texture, pores, imperfections, slight noise, high-ISO character; no over-stylization. MOOD: dark humor, survival, relief after chaos, eerie calm, unsettling post-violence silence. NEGATIVE: cartoon, anime, watermark, text overlay, plastic skin, beauty blur, extra limbs, duplicate faces.",
             1,
         ),
@@ -751,7 +751,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         ),
         (
             "Найденная фотка: тоннель",
-            "Жуткий raw-кадр из мокрого тоннеля: ты на переднем плане, а в воде за спиной — пугающее существо как практический грим.",
+            "Жуткий raw-кадр из мокрого тоннеля: ты на переднем плане, а в воде за спиной - пугающее существо как практический грим.",
             "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve exact facial structure, skin texture, age cues, hairline, and expression character — no face replacement, no beauty retouch, no identity drift. This request generates an image in a disturbing horror style, resembling a rough \"found photograph\" shot at night on a cheap early-2000s camera. ALL creature elements must be practical effects only (latex masks/prosthetics/practical makeup/suit performer), not CGI, not clean 3D render, not VFX creature design. COMPOSITION: vertical portrait frame, subject in foreground (mid shot), wet hair strands, damp skin, direct tired stare; subtle panic/fatigue in expression. UNISEX STYLING: soaked dark T-shirt or dark minimal top, no gender-specific costume cliches, natural fit adapted from the reference. LOCATION: dirty underground drainage/sewer tunnel with shallow reflective water, stained concrete walls, claustrophobic depth, low visibility. BACKGROUND THREAT: one humanoid practical-FX creature emerging from water several meters behind the subject; partially out of focus but clearly threatening. LIGHTING: harsh on-camera flash, strong reflections on wet skin and puddles, hard shadows, deep black falloff. IMAGE QUALITY: gritty early-digital snapshot feel — visible noise, slight compression artifacts, mild color cast, imperfect exposure. MOOD: accidental capture of immediate danger, raw and unsettling realism. NEGATIVE: polished cinematic beauty look, fantasy armor, cartoon/anime, painterly style, obvious CGI monster, perfect studio setup, text overlays, watermark, duplicate faces, extra limbs/fingers.",
             1,
         ),
@@ -759,7 +759,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     "add_photo": [
         (
             _OBJECT_IN_SCENE_TITLE,
-            "Сначала фото объекта, потом фото места — бот вставит первое во второе.",
+            "Сначала фото объекта, потом фото места - бот вставит первое во второе.",
             "COMPOSITE TASK — SINGLE OUTPUT PHOTO. Photorealistic integration only, never side-by-side collage. "
             "Image #1 = source subject (object, vehicle, furniture, product, animal, or person). "
             "Image #2 = destination scene where this subject must naturally exist. "
@@ -778,7 +778,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
     ],
 }
 
-# Доп. изображения для API (extra_refs). Превью листинга — отдельные *_LISTING_IMAGE / _ready_idea_listing_photo_path.
+# Доп. изображения для API (extra_refs). Превью листинга - отдельные *_LISTING_IMAGE / _ready_idea_listing_photo_path.
 _READY_IDEA_STATIC_REF_BY_TITLE: dict[str, str | list[str]] = {
     "Absolute Cinema": str(
         PROJECT_ROOT / "assets" / "ready_ideas" / "custom" / "absolute_cinema_preview.png"
@@ -857,14 +857,14 @@ _OBJECT_IN_SCENE_LISTING_IMAGE = PROJECT_ROOT / "assets" / "ready_ideas" / "add_
 def _start_listing_banner_path() -> Path | None:
     """Единое превью раздела «Готовые идеи»: список категорий и фолбэк для идеи без своего превью.
 
-    Файл: assets/start/ready_ideas_preview.png (одна картинка; баннер главного меню — другой файл).
+    Файл: assets/start/ready_ideas_preview.png (одна картинка; баннер главного меню - другой файл).
     """
     p = PROJECT_ROOT / "assets" / "start" / "ready_ideas_preview.png"
     return p if p.is_file() else None
 
 
 def _ready_ideas_category_hub_photo_paths() -> list[Path]:
-    """Одно фото для экрана категорий — тот же путь, что и _start_listing_banner_path."""
+    """Одно фото для экрана категорий - тот же путь, что и _start_listing_banner_path."""
     p = _start_listing_banner_path()
     return [p] if p else []
 
@@ -900,7 +900,7 @@ async def _purge_ready_category_album_messages_only(
     *,
     keep_message_id: int | None = None,
 ) -> None:
-    """Только старые id альбома «готовых идей»; якорное сообщение (меню) не трогаем — его можно отредактировать."""
+    """Только старые id альбома «готовых идей»; якорное сообщение (меню) не трогаем - его можно отредактировать."""
     ids = list(prior_data.get("_ready_category_album_ids") or [])
     seen: set[int] = set()
     for mid in ids:
@@ -1111,7 +1111,7 @@ async def _edit_ready_nav_message(
 
 
 def _ready_categories_listing_photo() -> Path | None:
-    """Превью по умолчанию для «Готовых идей» — ready_ideas_preview.png."""
+    """Превью по умолчанию для «Готовых идей» - ready_ideas_preview.png."""
     return _start_listing_banner_path()
 
 # Подпись для внутреннего контекста «Ещё раз» (пользователю не показываем).
@@ -1159,7 +1159,7 @@ def _image_prompt_too_long_html() -> str:
 
 _WAITING_REFS_PHOTOS_HTML = (
     "<b>🎨 Картинка по фото и тексту</b>\n\n"
-    f"<i>Сейчас отправь фото одним сообщением — до <b>{MAX_REF_PHOTOS_PER_MESSAGE}</b> шт., "
+    f"<i>Сейчас отправь фото одним сообщением - до <b>{MAX_REF_PHOTOS_PER_MESSAGE}</b> шт., "
     "без текста в подписи (можно альбомом).</i>"
 )
 
@@ -1190,9 +1190,9 @@ _POLZA_MISSING_TEXT = (
     "(см. .env.example).</blockquote>"
 )
 
-# После успешной генерации не удаляем служебное сообщение — только обновляем текст.
+# После успешной генерации не удаляем служебное сообщение - только обновляем текст.
 _GEN_STATUS_DONE_TEXT = (
-    '<i><tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Генерация завершена.</i> Результат — в следующем сообщении.'
+    '<i><tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Генерация завершена.</i> Результат - в следующем сообщении.'
 )
 
 # Имитация прогресса: OpenRouter/Polza не отдают реальный %, только «пока ждём».
@@ -1203,8 +1203,8 @@ _GEN_PROGRESS_FINISH_STEP_SEC = 0.12
 
 _GEN_FAILURE_TEXT = (
     "<b>Генерация не завершена</b>\n\n"
-    "<blockquote><i>Прости за сбой — картинку получить не удалось. "
-    "Попробуй позже или измени запрос. Если повторяется — напиши в поддержку.</i></blockquote>"
+    "<blockquote><i>Прости за сбой - картинку получить не удалось. "
+    "Попробуй позже или измени запрос. Если повторяется - напиши в поддержку.</i></blockquote>"
 )
 
 
@@ -1356,7 +1356,7 @@ async def _await_generation_with_progress(
     *,
     priority: bool = False,
 ) -> tuple[bytes, bool]:
-    """Пока ждём API — полоска до 90%; после успеха — дожим до 100%, затем «готово» и фото."""
+    """Пока ждём API - полоска до 90%; после успеха - дожим до 100%, затем «готово» и фото."""
     async with image_generation_slot(priority=priority):
         task = asyncio.create_task(gen())
         p = 0
@@ -1547,7 +1547,7 @@ class ImageGenState(StatesGroup):
 
 
 def _dedupe_model_choices(items: list[tuple[str, str, int, str]]) -> list[tuple[str, str, int, str]]:
-    """Один id модели — одна кнопка (если в .env Klein и Pro совпали)."""
+    """Один id модели - одна кнопка (если в .env Klein и Pro совпали)."""
     seen: set[str] = set()
     out: list[tuple[str, str, int, str]] = []
     for label, mid, cost, hint in items:
@@ -1586,7 +1586,7 @@ def _model_choices_for_subscription_plan(plan_id: str) -> list[tuple[str, str, i
     Nova: только Klein 4B.
     SuperNova: Klein 4B + Nano Banana.
     Galaxy: Klein 4B + Nano Banana + GPT Image 1.5 (Polza).
-    Universe / Starter: полный набор (как Universe). Starter — пробный 3 дня, одна покупка.
+    Universe / Starter: полный набор (как Universe). Starter - пробный 3 дня, одна покупка.
     Неизвестный plan_id: как Universe.
     Без подписки панель не используется.
     """
@@ -1626,7 +1626,7 @@ def _model_choices_for_subscription_plan(plan_id: str) -> list[tuple[str, str, i
         return _dedupe_model_choices([klein, gemini])
     if p == "galaxy":
         return _dedupe_model_choices([klein, gemini, gpt_img_15])
-    # starter, universe и неизвестный plan — полная матрица
+    # starter, universe и неизвестный plan - полная матрица
     return _dedupe_model_choices([klein, gemini, gpt_img_15, pro, gemini_preview, gpt5_img])
 
 
@@ -1647,7 +1647,7 @@ def _refs_base_cost_by_model_id() -> dict[str, int]:
 
 
 def _model_choices_for_gen_mode(plan_id: str, gen_mode: str) -> list[tuple[str, str, int, str]]:
-    """Текст — как по тарифу; текст+фото — те же модели по тарифу, другие базовые цены."""
+    """Текст - как по тарифу; текст+фото - те же модели по тарифу, другие базовые цены."""
     text_choices = _model_choices_for_subscription_plan(plan_id)
     if (gen_mode or "").strip() != "refs":
         return text_choices
@@ -1693,7 +1693,7 @@ def _refs_total_cost(base_cost: int, photo_count: int) -> int:
 
 
 def _resolve_refs_api_model(model: str) -> str:
-    """Polza — только text-to-image; для референсов используем OpenRouter multimodal."""
+    """Polza - только text-to-image; для референсов используем OpenRouter multimodal."""
     if is_polza_image_model(model):
         fallback = (
             (OPENROUTER_IMAGE_GPT54_IMAGE2_MODEL or "").strip()
@@ -1705,7 +1705,7 @@ def _resolve_refs_api_model(model: str) -> str:
 
 
 async def _effective_image_model_and_cost(user_id: int, requested_model: str) -> tuple[str, int]:
-    """Модель и цена согласно текущей подписке (без подписки — только Klein)."""
+    """Модель и цена согласно текущей подписке (без подписки - только Klein)."""
     profile = await get_user_admin_profile(user_id)
     has_sub = bool(profile and subscription_is_active(profile.subscription_ends_at))
     if not has_sub:
@@ -1776,7 +1776,7 @@ async def _prepare_image_charge_and_daily_slot(
         else:
             await message.answer(
                 "<b>Готовые идеи без подписки</b>\n"
-                f"<blockquote>Бесплатный слот в цикле уже использован — следующий будет через <b>{NONSUB_IMAGE_WINDOW_DAYS}</b> суток "
+                f"<blockquote>Бесплатный слот в цикле уже использован - следующий будет через <b>{NONSUB_IMAGE_WINDOW_DAYS}</b> суток "
                 "от момента исчерпания (в то же время суток). Оформи подписку в <code>/start</code> → <b>Оплатить</b> "
                 "или получи дополнительный запуск: <b>+1 за каждых 2 приглашённых друзей</b> по <code>/ref</code>.</blockquote>",
                 parse_mode=HTML,
@@ -1823,7 +1823,7 @@ async def _prepare_image_charge_and_daily_slot(
             await message.answer(
                 "<b>Лимит без подписки</b>\n"
                 f"<blockquote>В цикле доступно не более <b>{NONSUB_IMAGE_WINDOW_MAX}</b> генераций картинок; после полного исчерпания "
-                f"следующий цикл — через <b>{NONSUB_IMAGE_WINDOW_DAYS}</b> суток от этого момента (в то же время суток). "
+                f"следующий цикл - через <b>{NONSUB_IMAGE_WINDOW_DAYS}</b> суток от этого момента (в то же время суток). "
                 "Кредиты лимит не обходят. Оформи подписку в <code>/start</code> → <b>Оплатить</b> или дождись обновления цикла.</blockquote>",
                 parse_mode=HTML,
             )
@@ -1928,7 +1928,7 @@ def _ready_browser_keyboard(
     category_slug: str | None = None,
     single_shortcut_mode: bool = False,
 ) -> InlineKeyboardMarkup:
-    """Листание карточек готовых идей. «Назад» — к экрану категорий."""
+    """Листание карточек готовых идей. «Назад» - к экрану категорий."""
     _ = category_slug
     prev_i = (index - 1) % total
     next_i = (index + 1) % total
@@ -2031,7 +2031,7 @@ def _ready_wait_photo_keyboard(
 
 
 def _ready_wait_photo_keyboard_for_state(data: dict) -> InlineKeyboardMarkup:
-    # Стартовый шорткат (сейчас только «Фото с Роналдо»): не связан с листингом категорий — только выход в главное меню.
+    # Стартовый шорткат (сейчас только «Фото с Роналдо»): не связан с листингом категорий - только выход в главное меню.
     if bool(data.get("_ready_include_hidden_start_only")):
         return InlineKeyboardMarkup(
             inline_keyboard=[
@@ -2319,7 +2319,7 @@ def _ready_idea_caption(
 def _ready_photo_upload_hint(
     *, category: str, need: int, received: int, idea_title: str | None = None
 ) -> str:
-    """Подсказка шага загрузки фото; для части идей «для двоих» — порядок мужчина → женщина."""
+    """Подсказка шага загрузки фото; для части идей «для двоих» - порядок мужчина → женщина."""
     cat = (category or "").strip().lower()
     t = (idea_title or "").strip()
     req = _ready_idea_requirement_line(title=t, photos_required=need)
@@ -2328,15 +2328,15 @@ def _ready_photo_upload_hint(
         if received <= 0:
             return (
                 f"<b>{esc(req)}</b>\n"
-                "<b>Шаг 1 из 2 — объект</b>\n"
-                "Пришли фото <b>того, что нужно перенести</b> (машина, вещь, предмет — что угодно, главное чтобы объект был понятен).\n"
+                "<b>Шаг 1 из 2 - объект</b>\n"
+                "Пришли фото <b>того, что нужно перенести</b> (машина, вещь, предмет - что угодно, главное чтобы объект был понятен).\n"
                 "ℹ️ Это не фон: нужен именно объект (лучше на простом фоне)."
             )
         if received == 1:
             return (
                 "<b>Фото получено: 1/2</b>\n"
-                "<b>Шаг 2 из 2 — место</b>\n"
-                "Пришли фото <b>куда вставить</b> — целая сцена, интерьер, улица (куда объект должен попасть).\n"
+                "<b>Шаг 2 из 2 - место</b>\n"
+                "Пришли фото <b>куда вставить</b> - целая сцена, интерьер, улица (куда объект должен попасть).\n"
                 "✨ ИИ вставит объект с первого фото в эту сцену."
             )
         return "<b>Фото получено: 2/2</b>"
@@ -2351,7 +2351,7 @@ def _ready_photo_upload_hint(
         if received == 1:
             return (
                 "<b>Фото получено: 1/2</b>\n"
-                "Пришли <b>второе</b> фото — второй участник."
+                "Пришли <b>второе</b> фото - второй участник."
             )
         return "<b>Фото получено: 2/2</b>"
     if is_for_two:
@@ -2555,7 +2555,7 @@ def _ready_idea_result_keyboard(
     )
 
 
-# document_id премиум-эмодзи 🔥 — только в тексте подписи к фото (не в пикселях картинки).
+# document_id премиум-эмодзи 🔥 - только в тексте подписи к фото (не в пикселях картинки).
 _SHARD_IMAGE_BADGE_TG_EMOJI_ID = "5389038097860144794"
 
 
@@ -2577,7 +2577,7 @@ async def _shard_creator_brand_blockquote_html(message: Message) -> str:
 
 
 async def _made_in_shard_caption(message: Message) -> str:
-    """Подпись под результатом готовой идеи — только бренд-цитата."""
+    """Подпись под результатом готовой идеи - только бренд-цитата."""
     return await _shard_creator_brand_blockquote_html(message)
 
 
@@ -2639,18 +2639,18 @@ async def _send_result_photo_with_regen(
             u, lim = q
             day_note = (
                 f"\n<blockquote><i>Картинки без подписки (цикл {NONSUB_IMAGE_WINDOW_MAX} шт.):</i> "
-                f"<b>{esc(u)}/{esc(lim)}</b> <i>— сброс цикла через {NONSUB_IMAGE_WINDOW_DAYS} суток после исчерпания.</i></blockquote>"
+                f"<b>{esc(u)}/{esc(lim)}</b> <i>- сброс цикла через {NONSUB_IMAGE_WINDOW_DAYS} суток после исчерпания.</i></blockquote>"
             )
         else:
             day_note = ""
     if is_admin:
         cache_note = ""
         if served_from_cache:
-            cache_note = "\n<i>Кэш: тот же промпт+модель — файл с диска, запрос к API не уходил.</i>"
+            cache_note = "\n<i>Кэш: тот же промпт+модель - файл с диска, запрос к API не уходил.</i>"
         caption = (
             "<b>Готово!</b>\n"
             "<i>сгенерировано при помощи Shard Creator</i>\n"
-            f"<i>Режим админа — {CREDITS_COIN_TG_HTML} кредиты не списывались.</i>{cache_note}\n"
+            f"<i>Режим админа - {CREDITS_COIN_TG_HTML} кредиты не списывались.</i>{cache_note}\n"
             f"{brand_bq}"
         )
     else:
@@ -2994,7 +2994,7 @@ def _overlay_minecraft_nick(image_bytes: bytes, username: str | None) -> bytes:
             rgba = im.convert("RGBA")
             w, h = rgba.size
             text = nick
-            # Пытаемся взять аккуратный моноширинный шрифт; если нет — fallback.
+            # Пытаемся взять аккуратный моноширинный шрифт; если нет - fallback.
             size = max(14, min(32, w // 28))
             font = ImageFont.load_default()
             for p in (
@@ -3509,7 +3509,7 @@ async def remind_pick_model_or_ignore(message: Message, state: FSMContext) -> No
             return
         await state.clear()
         await message.answer(
-            "<b>Подписка не активна.</b> Доступна базовая модель и лимит как без подписки — дальше опиши картинку.",
+            "<b>Подписка не активна.</b> Доступна базовая модель и лимит как без подписки - дальше опиши картинку.",
             parse_mode=HTML,
         )
         await _start_image_flow(message, state, uid, message.from_user.username)
@@ -4202,7 +4202,7 @@ async def ready_nav_cards(callback: CallbackQuery, state: FSMContext) -> None:
     current_idx = int(data.get("_ready_index") or 0) % total
 
     if action in ("prev", "next"):
-        # При одном варианте стрелки ведут на тот же индекс — не дублировать сообщение (edit «не изменился»).
+        # При одном варианте стрелки ведут на тот же индекс - не дублировать сообщение (edit «не изменился»).
         if idx == current_idx:
             await callback.answer("В этой категории только один вариант.")
             return
@@ -4439,18 +4439,18 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
         await state.set_state(ImageGenState.ready_waiting_poster_text)
         if (title or "").strip() == _FLUFFY_LETTERS_TITLE:
             head_hint = (
-                f"<blockquote><i>Теперь введи слово или короткую фразу (до {_FLUFFY_TEXT_MAX_LEN} символов, пробелы считаются) — "
+                f"<blockquote><i>Теперь введи слово или короткую фразу (до {_FLUFFY_TEXT_MAX_LEN} символов, пробелы считаются) - "
                 "из неё соберут пушистые 3D-буквы с мордочками. Лицо берётся только с фото выше.</i></blockquote>"
             )
         elif (title or "").strip() == _PLASTER_FASHION_STUDIO_TITLE:
             head_hint = (
-                "<blockquote><i>Теперь пришли <b>текст для гипсовых букв</b> — кириллица или латиница, лаконично, как на обложке. "
+                "<blockquote><i>Теперь пришли <b>текст для гипсовых букв</b> - кириллица или латиница, лаконично, как на обложке. "
                 "Можно две строки через перевод строки: верхний и нижний ярус скульптуры. "
                 "Слова лягут на объёмные гипсовые буквы рядом с тобой.</i></blockquote>"
             )
         elif (title or "").strip() == _CHALK_ON_ASPHALT_TITLE:
             head_hint = (
-                f"<blockquote><i>Теперь пришли <b>надпись мелом</b> над портретом (до {_CHALK_ASPHALT_TEXT_MAX_LEN} символов) — кириллица или латиница. "
+                f"<blockquote><i>Теперь пришли <b>надпись мелом</b> над портретом (до {_CHALK_ASPHALT_TEXT_MAX_LEN} символов) - кириллица или латиница. "
                 "Можно несколько строк через перевод строки. Рисунок на асфальте строится по твоему фото выше.</i></blockquote>"
             )
         else:
@@ -4579,7 +4579,7 @@ async def ready_collect_fantasy_headline(message: Message, state: FSMContext) ->
         (
             f"<b>Заголовок:</b> <code>{esc(raw)}</code>\n"
             "<blockquote><i>Теперь введи <b>базовый цвет по-русски</b> одним словом "
-            "(например: <b>Синий</b>) — без узких оттенков вроде «лавандовый». "
+            "(например: <b>Синий</b>) - без узких оттенков вроде «лавандовый». "
             "Пробелы и регистр сохраним, как напишешь.</i></blockquote>"
         ),
         reply_markup=_ready_wait_photo_keyboard(),
@@ -4590,7 +4590,7 @@ async def ready_collect_fantasy_headline(message: Message, state: FSMContext) ->
 @router.message(ImageGenState.ready_waiting_fantasy_color, ~F.text)
 async def ready_fantasy_color_need_text(message: Message) -> None:
     await message.answer(
-        "Пришли цвет текстом по-русски — например: Синий",
+        "Пришли цвет текстом по-русски - например: Синий",
         reply_markup=_ready_wait_photo_keyboard(),
     )
 
@@ -4604,11 +4604,11 @@ async def ready_collect_fantasy_color(message: Message, state: FSMContext) -> No
         return
     if len(color) > _FANTASY_COLOR_MAX_LEN:
         await message.answer(
-            f"Слишком длинно — до {_FANTASY_COLOR_MAX_LEN} символов. Одно базовое слово цвета."
+            f"Слишком длинно - до {_FANTASY_COLOR_MAX_LEN} символов. Одно базовое слово цвета."
         )
         return
     if not _has_cyrillic(color):
-        await message.answer("Введи цвет по-русски одним словом — например: Синий")
+        await message.answer("Введи цвет по-русски одним словом - например: Синий")
         return
     if not message.from_user:
         return
@@ -4949,7 +4949,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
             _SONY_ERICSSON_T100_TITLE,
             _CHALK_ON_ASPHALT_TITLE,
         ):
-            # Nano Banana 2 (preview): типографика/сцена; для постера и пушистых букв — ещё референс лица; см. .env
+            # Nano Banana 2 (preview): типографика/сцена; для постера и пушистых букв - ещё референс лица; см. .env
             model_override = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or (
                 "google/gemini-3.1-flash-image-preview"
             )
@@ -5168,7 +5168,7 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
         logging.exception("ready_confirm_and_generate failed")
         await _edit_ready_nav_message(
             callback.message,
-            caption="Ошибка запуска. Попробуй снова — открыл раздел «Готовые идеи».",
+            caption="Ошибка запуска. Попробуй снова - открыл раздел «Готовые идеи».",
             reply_markup=None,
             listing_photo=_ready_categories_listing_photo(),
         )
@@ -5200,7 +5200,7 @@ async def ready_choose_category_hint(message: Message, state: FSMContext) -> Non
 
 @router.message(ImageGenState.ready_browsing_idea)
 async def ready_browse_hint(message: Message, state: FSMContext) -> None:
-    """Текст вместо стрелок; кнопка «🎛 Режим» (в т.ч. с U+FE0F в эмодзи) — открыть пикер из commands."""
+    """Текст вместо стрелок; кнопка «🎛 Режим» (в т.ч. с U+FE0F в эмодзи) - открыть пикер из commands."""
     raw = (message.text or "").strip()
     if raw and message.from_user:
         plain = raw.replace("\ufe0f", "").strip()
@@ -5312,7 +5312,7 @@ async def wrong_type_waiting_refs_photos(message: Message) -> None:
     if message.media_group_id:
         return
     await message.answer(
-        "Нужны фото без текста — отправь одно или несколько изображений в одном сообщении (альбом).",
+        "Нужны фото без текста - отправь одно или несколько изображений в одном сообщении (альбом).",
         reply_markup=_waiting_refs_photos_keyboard(),
         parse_mode=HTML,
     )
@@ -5523,7 +5523,7 @@ async def result_ok_to_main_menu(callback: CallbackQuery, state: FSMContext) -> 
 
 @router.callback_query(F.data == CB_REGEN)
 async def regenerate_new_prompt(callback: CallbackQuery, state: FSMContext) -> None:
-    """Та же модель и цена — пользователь вводит новый промпт; готовые идеи — повтор сценария или список идей."""
+    """Та же модель и цена - пользователь вводит новый промпт; готовые идеи - повтор сценария или список идей."""
     if not callback.from_user or not callback.message:
         await callback.answer()
         return
@@ -5636,7 +5636,7 @@ async def ready_redo_from_button(callback: CallbackQuery, state: FSMContext) -> 
 
 @router.callback_query(F.data == CB_READY_RESULT_MAIN_MENU)
 async def ready_result_main_menu(callback: CallbackQuery, state: FSMContext) -> None:
-    """Шорткат Роналдо: из результата — в главное меню (не в листинг готовых идей)."""
+    """Шорткат Роналдо: из результата - в главное меню (не в листинг готовых идей)."""
     if not callback.from_user or not callback.message:
         await callback.answer()
         return

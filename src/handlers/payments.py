@@ -3,11 +3,11 @@ from __future__ import annotations
 """
 Подписки, бонус-пакеты, Stars и внешние способы оплаты (callback + pre_checkout).
 
-Автоматическая запись подписки в БД — только при успешной оплате Telegram Stars
-(SUCCESSFUL_PAYMENT): срок подписки + кредиты; при активной подписке — продление срока
+Автоматическая запись подписки в БД - только при успешной оплате Telegram Stars
+(SUCCESSFUL_PAYMENT): срок подписки + кредиты; при активной подписке - продление срока
 (extend) и бонус к кредитам за продление (включая окно 2 дня после окончания).
 Оплата картой РФ через Wata API (если задан WATA_ACCESS_TOKEN): одноразовая ссылка с orderId,
-кнопка «Проверить оплату». INTL/крипта — статические PAY_URL_* или поддержка.
+кнопка «Проверить оплату». INTL/крипта - статические PAY_URL_* или поддержка.
 """
 
 import logging
@@ -173,7 +173,7 @@ async def try_apply_pending_wata_after_redirect(
     if result is None:
         await message.answer(
             "<blockquote><i>Нет незавершённой оплаты. "
-            "Если уже платил — нажми «Проверить оплату» в меню «Оплатить».</i></blockquote>",
+            "Если уже платил - нажми «Проверить оплату» в меню «Оплатить».</i></blockquote>",
             parse_mode=HTML,
         )
         return True
@@ -218,7 +218,7 @@ async def try_apply_pending_heleket_after_redirect(
     if result is None:
         await message.answer(
             "<blockquote><i>Нет незавершённой крипто-оплаты. "
-            "Если уже платил — нажми «Проверить оплату» в меню «Оплатить».</i></blockquote>",
+            "Если уже платил - нажми «Проверить оплату» в меню «Оплатить».</i></blockquote>",
             parse_mode=HTML,
         )
         return True
@@ -245,12 +245,12 @@ def _log_payment_event(event: str, **kwargs: object) -> None:
         parts.append(f"{k}={v!r}")
     logger.info("payment_event %s", " ".join(parts))
 
-# Перки по тарифам — как в img_commands._model_choices_for_subscription_plan и _image_gen_priority_from_user_id.
+# Перки по тарифам - как в img_commands._model_choices_for_subscription_plan и _image_gen_priority_from_user_id.
 _PLAN_PAY_PERKS_HTML: dict[str, str] = {
     "starter": (
         "<b>Пробный 3 дня.</b> Те же модели, что у Universe (Klein, Nano Banana, GPT Image 1.5, FLUX Pro, Nano Banana 2, GPT‑5 Image). "
         "Приоритет очереди. Готовые идеи: <b>⚡ Fast 15</b> / <b>🚀 Medium 30</b> / <b>💎 Premium 50</b> кр. "
-        "Скидка на бонус-паки — <b>−15%</b>, пока подписка активна. "
+        "Скидка на бонус-паки - <b>−15%</b>, пока подписка активна. "
         "<b>Один раз на аккаунт.</b> Не откладывает 30-дневную паузу между полными тарифами."
     ),
     "nova": (
@@ -265,23 +265,23 @@ _PLAN_PAY_PERKS_HTML: dict[str, str] = {
     "galaxy": (
         "<b>Galaxy.</b> <b>Klein</b> + <b>Nano Banana</b> + <b>GPT Image 1.5</b>. "
         "<b>Приоритет</b> очереди. Готовые идеи: <b>⚡ Fast 20</b> / <b>🚀 Medium 35</b> / <b>💎 Premium 55</b> кр. "
-        "Скидка на бонус-паки — <b>−5%</b>, пока подписка активна."
+        "Скидка на бонус-паки - <b>−5%</b>, пока подписка активна."
     ),
     "universe": (
         "<b>Universe.</b> Все модели (Klein, Nano Banana, GPT Image 1.5, FLUX Pro, Nano Banana 2, GPT‑5 Image). "
         "<b>Приоритет</b> очереди. Готовые идеи: <b>⚡ Fast 15</b> / <b>🚀 Medium 30</b> / <b>💎 Premium 50</b> кр. "
-        "При продлении того же тарифа — <b>+10%</b> к бонусным кредитам "
+        "При продлении того же тарифа - <b>+10%</b> к бонусным кредитам "
         "(если подписка активна или прошло не более 2 дней после окончания). "
-        "Скидка на бонус-паки — <b>−15%</b>, пока подписка активна."
+        "Скидка на бонус-паки - <b>−15%</b>, пока подписка активна."
     ),
 }
 
-# Короткие перки для подписи под баннером тарифов (Telegram caption ≤ 1024 — иначе текст уходит отдельным сообщением).
+# Короткие перки для подписи под баннером тарифов (Telegram caption ≤ 1024 - иначе текст уходит отдельным сообщением).
 _PLAN_PAY_PERKS_PHOTO_HTML: dict[str, str] = {
     "starter": (
         "<blockquote><i><b>Пробный 3 дня.</b> Модели как у Universe; готовые идеи: <b>⚡15 / 🚀30 / 💎50 кр.</b>; скидка на бонус-паки <b>−15%</b>. "
         "<b>Один раз на аккаунт.</b></i></blockquote>\n"
-        "<blockquote><i>После пробного — полные тарифы в меню оплаты.</i></blockquote>\n"
+        "<blockquote><i>После пробного - полные тарифы в меню оплаты.</i></blockquote>\n"
     ),
     "nova": (
         "<blockquote><i><b>Nova:</b> только Klein 4B; готовые идеи: <b>⚡30 / 🚀45 / 💎65 кр.</b>.</i></blockquote>\n"
@@ -300,7 +300,7 @@ _PLAN_PAY_PERKS_PHOTO_HTML: dict[str, str] = {
 }
 
 _COOLDOWN_PHOTO_HTML = (
-    f"<blockquote><i>После окончания подписки следующий <b>полный</b> тариф — не раньше чем через "
+    f"<blockquote><i>После окончания подписки следующий <b>полный</b> тариф - не раньше чем через "
     f"<b>{esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дн. Продление того же тарифа суммирует дни. "
     "Бонус за продление: +5% (для Universe +10%) при активной подписке или в течение 2 дней после окончания.</i></blockquote>\n"
 )
@@ -315,7 +315,7 @@ def _plan_pay_perks_block_html(plan_id: str) -> str:
 def _plan_list_button_text(p: SubscriptionPlan) -> str:
     """Подпись кнопки в меню тарифов (Telegram ≤64 символов): название, кредиты, цена в ₽."""
     name = p.title.split(" ", 1)[-1]
-    s = f"{name} — +{p.bonus_credits} кр. · {p.price_rub} ₽"
+    s = f"{name} - +{p.bonus_credits} кр. · {p.price_rub} ₽"
     return s[:64]
 
 def _plan_invoice_plain_texts(plan_id: str) -> tuple[str, str, str]:
@@ -327,7 +327,7 @@ def _plan_invoice_plain_texts(plan_id: str) -> tuple[str, str, str]:
     title = f"Shard Creator — {name}"[:32]
     desc = (
         f"Подписка {name}: +{p.bonus_credits} кредитов, "
-        f"{pd} дн. Картинки и готовые идеи — по кредитам."
+        f"{pd} дн. Картинки и готовые идеи - по кредитам."
     )[:255]
     price_lbl = f"{name} ({pd} дн.)"[:64]
     return title, desc, price_lbl
@@ -382,7 +382,7 @@ def _invoice_back_after_stars_data(
     back_to_bonus: str,
     photo_message_id: int | None = None,
 ) -> str:
-    """Callback ≤64 байта: при наличии photo_message_id — вернём подпись на тот же баннер тарифов."""
+    """Callback ≤64 байта: при наличии photo_message_id - вернём подпись на тот же баннер тарифов."""
     if item_id in PLANS:
         ctx = "h" if back_to_plans == CB_PAY_MENU_HUB else "m"
         base = f"{CB_PAY_INVOICE_BACK_PREFIX}p:{item_id}:{ctx}"
@@ -441,7 +441,7 @@ def _payment_type_label(sp: SuccessfulPayment) -> str:
 def _user_line_html(user: User) -> str:
     uid = user.id
     un = (user.username or "").strip().lstrip("@")
-    fn = esc((user.first_name or "").strip() or "—")
+    fn = esc((user.first_name or "").strip() or "-")
     ln = esc((user.last_name or "").strip())
     name = f"{fn} {ln}".strip() if ln else fn
     if un:
@@ -544,7 +544,7 @@ def _subscriptions_pricing_image_path() -> Path | None:
 
 
 def _plan_payment_preview_image_path(plan_id: str) -> Path | None:
-    """Экран оплаты выбранного тарифа — отдельная карточка-превью; общий баннер см. subscriptions_pricing."""
+    """Экран оплаты выбранного тарифа - отдельная карточка-превью; общий баннер см. subscriptions_pricing."""
     name = {
         "starter": "starter_subscription_preview.png",
         "nova": "nova_subscription_preview.png",
@@ -564,7 +564,7 @@ def _plans_screen_uses_pricing_image() -> bool:
 
 
 def _plans_menu_photo_caption() -> str:
-    """Короткая подпись к баннеру тарифов (детали цен — на картинке)."""
+    """Короткая подпись к баннеру тарифов (детали цен - на картинке)."""
     return (
         "<b>Тарифы</b>\n"
         f"<i>На баланс начисляются {CREDITS_COIN_TG_HTML} кредиты. Выбери тариф кнопкой ниже.</i>"
@@ -615,17 +615,17 @@ async def _apply_plan_payment_to_message(
 def _plans_menu_caption() -> str:
     u_h = plan_subscription_title_html("universe")
     return (
-        f"<b>Тарифы</b> — при оплате на баланс начисляются <b>{CREDITS_COIN_TG_HTML} кредиты</b>.\n"
-        f"Ограничений на число генераций по подписке нет — списываются {CREDITS_COIN_TG_HTML} кредиты.\n\n"
+        f"<b>Тарифы</b> - при оплате на баланс начисляются <b>{CREDITS_COIN_TG_HTML} кредиты</b>.\n"
+        f"Ограничений на число генераций по подписке нет - списываются {CREDITS_COIN_TG_HTML} кредиты.\n\n"
         "<blockquote><i>Стоимость «Готовых идей» зависит от режима <b>⚡ Fast / 🚀 Medium / 💎 Premium</b> "
         "и подписки: от <b>15</b> до <b>65</b> кр. за генерацию.</i></blockquote>\n\n"
         f"<blockquote><i>Продление и пауза:</i> после <b>окончания</b> подписки следующую покупку полного тарифа можно оформить "
         f"не раньше чем через <b>{esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дней. Пока подписка ещё действует, заранее можно "
-        f"продлить только <b>тот же</b> тариф — дни суммируются; бонус за продление того же тарифа: <b>+5%</b>, "
-        f"для {u_h} — <b>+10%</b> (если подписка активна или прошло не более 2 дней после окончания).</blockquote>\n\n"
-        f"<blockquote><i>Если подписка не активна:</i> за один цикл — до <b>{esc(NONSUB_IMAGE_WINDOW_MAX)}</b> картинок; "
+        f"продлить только <b>тот же</b> тариф - дни суммируются; бонус за продление того же тарифа: <b>+5%</b>, "
+        f"для {u_h} - <b>+10%</b> (если подписка активна или прошло не более 2 дней после окончания).</blockquote>\n\n"
+        f"<blockquote><i>Если подписка не активна:</i> за один цикл - до <b>{esc(NONSUB_IMAGE_WINDOW_MAX)}</b> картинок; "
         f"когда все слоты цикла израсходованы, новый цикл откроется через <b>{esc(NONSUB_IMAGE_WINDOW_DAYS)}</b> суток "
-        f"от этого момента. {CREDITS_COIN_TG_HTML} Кредиты этот лимит не обходят — сначала действует лимит цикла.</blockquote>"
+        f"от этого момента. {CREDITS_COIN_TG_HTML} Кредиты этот лимит не обходят - сначала действует лимит цикла.</blockquote>"
     )
 
 
@@ -756,14 +756,14 @@ def _pay_methods_text(plan_id: str, *, for_photo_caption: bool = False) -> str:
     starter_extra = ""
     cooldown_block = (
         f"<blockquote><i>После <b>окончания</b> подписки следующую покупку полного тарифа можно оформить не раньше чем через "
-        f"<b>{esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дней. Пока срок идёт — продлевается только <b>тот же</b> тариф "
-        f"(дни суммируются; за продление того же тарифа — <b>+5%</b> к кредитам, у {plan_subscription_title_html('universe')} — <b>+10%</b>; "
+        f"<b>{esc(SUBSCRIPTION_PURCHASE_COOLDOWN_DAYS)}</b> дней. Пока срок идёт - продлевается только <b>тот же</b> тариф "
+        f"(дни суммируются; за продление того же тарифа - <b>+5%</b> к кредитам, у {plan_subscription_title_html('universe')} - <b>+10%</b>; "
         "бонус действует при активной подписке или в течение 2 дней после её окончания). "
         f'Оплата <tg-emoji emoji-id="5267500801240092311">⭐️</tg-emoji> учитывается автоматически.</i></blockquote>\n'
     )
     if plan_id == "starter":
         starter_extra = (
-            f"<blockquote><i>После пробного — полные тарифы: {full_plans_after_starter_html(sep=' / ')}.</i></blockquote>\n"
+            f"<blockquote><i>После пробного - полные тарифы: {full_plans_after_starter_html(sep=' / ')}.</i></blockquote>\n"
         )
         cooldown_block = ""
     return (
@@ -776,7 +776,7 @@ def _pay_methods_text(plan_id: str, *, for_photo_caption: bool = False) -> str:
         f"{cooldown_block}"
         "\n"
         "<i>Оформляя оплату, ты соглашаешься с условиями сервиса и политикой возврата "
-        "(подробности — в поддержке или на странице оплаты).</i>"
+        "(подробности - в поддержке или на странице оплаты).</i>"
     )
 
 
@@ -798,10 +798,10 @@ def _pack_methods_text(
         "<b>💳 Выбери способ оплаты</b>\n\n"
         f'<tg-emoji emoji-id="5203996991054432397">🎁</tg-emoji> <b>Пакет бонусов:</b> <b>{esc(p.title)}</b>\n'
         f"<i>Начисление на баланс:</i> <b>+{esc(p.credits)}</b> кредитов\n"
-        f"<blockquote><i>Пакет не продлевает подписку — только {CREDITS_COIN_TG_HTML} кредиты на баланс.</i></blockquote>\n"
+        f"<blockquote><i>Пакет не продлевает подписку - только {CREDITS_COIN_TG_HTML} кредиты на баланс.</i></blockquote>\n"
         f"{discount_block}\n"
         "<i>Оформляя оплату, ты соглашаешься с условиями сервиса и политикой возврата "
-        "(подробности — в поддержке или на странице оплаты).</i>"
+        "(подробности - в поддержке или на странице оплаты).</i>"
     )
 
 
@@ -935,7 +935,7 @@ async def send_subscription_menu(
     back_callback: str = CB_MENU_BACK_START,
     bonus_menu_callback: str = CB_PAY_BONUS_MENU,
 ) -> None:
-    """Тарифы и оплата — то же, что кнопка «Оплатить» в /start."""
+    """Тарифы и оплата - то же, что кнопка «Оплатить» в /start."""
     if not message.from_user:
         return
     await ensure_user(message.from_user.id, message.from_user.username)
@@ -1196,7 +1196,7 @@ def _pay_item_info(item_id: str, *, pack_rub_override: int | None = None) -> tup
 
 
 def _wata_payment_description(*, kind: str, item_id: str, title: str) -> str:
-    """Описание заказа для Wata (без HTML и эмодзи — только текст)."""
+    """Описание заказа для Wata (без HTML и эмодзи - только текст)."""
     if kind == "plan":
         return f"Подписка {item_id}"
     return (title or item_id).strip()[:500]
@@ -1213,8 +1213,8 @@ def _wata_checkout_screen_html(*, kind: str, item_id: str, price_rub: int) -> st
             f'<tg-emoji emoji-id="5203996991054432397">🎁</tg-emoji> <b>{esc(pack.title)}</b>'
         )
     return (
-        f"<b>{pay_icon} Оплата:</b> {product_line} — <b>{esc(price_rub)} ₽</b>\n"
-        f"<i>{PROFILE_AVATAR_TG_HTML} Заказ привязан к твоему Telegram — подписка или кредиты "
+        f"<b>{pay_icon} Оплата:</b> {product_line} - <b>{esc(price_rub)} ₽</b>\n"
+        f"<i>{PROFILE_AVATAR_TG_HTML} Заказ привязан к твоему Telegram - подписка или кредиты "
         f"начислятся этому аккаунту.</i>"
     )
 
@@ -1226,7 +1226,7 @@ async def _send_wata_checkout_screen(
     keyboard: InlineKeyboardMarkup,
 ) -> None:
     """
-    Экран оплаты Wata. На фото (превью тарифа) не редактируем подпись с url-кнопкой —
+    Экран оплаты Wata. На фото (превью тарифа) не редактируем подпись с url-кнопкой -
     Telegram часто отклоняет такую клавиатуру; шлём отдельное текстовое сообщение.
     """
     if message.photo and not _is_generated_image_result_message(message):
@@ -1318,7 +1318,7 @@ def _heleket_checkout_screen_html(
             f'<tg-emoji emoji-id="5203996991054432397">🎁</tg-emoji> <b>{esc(pack.title)}</b>'
         )
     return (
-        f"<b>{pay_icon} Оплата криптой:</b> {product_line} — {price_label_html}\n"
+        f"<b>{pay_icon} Оплата криптой:</b> {product_line} - {price_label_html}\n"
         f"<i>{PROFILE_AVATAR_TG_HTML} На странице Heleket выбери монету (USDT, BTC и др.) и сеть. "
         f"После перевода вернись в бот и нажми «Проверить оплату».</i>"
     )
@@ -1471,7 +1471,7 @@ async def _start_wata_rub_checkout(
             if callback.message:
                 await callback.message.answer(
                     "<blockquote><i>Ссылка на оплату создана, но Telegram не принял кнопку. "
-                    "Напиши в поддержку — пришлём ссылку вручную.</i></blockquote>",
+                    "Напиши в поддержку - пришлём ссылку вручную.</i></blockquote>",
                     parse_mode=HTML,
                 )
             return
@@ -1738,7 +1738,7 @@ async def _external_pay_hint(
             await edit_or_send_nav_message(
                 callback.message,
                 text=(
-                    "<blockquote><i>Открой страницу оплаты.</i> Если на кассе есть выбор тарифа — "
+                    "<blockquote><i>Открой страницу оплаты.</i> Если на кассе есть выбор тарифа - "
                     f"укажи: <b>{esc(title)}</b>.</blockquote>"
                 ),
                 reply_markup=keyboard,
@@ -2093,7 +2093,7 @@ async def pay_stars_invoice(callback: CallbackQuery) -> None:
             item_id, discount_multiplier=discount_multiplier
         )
         payload = f"pack:{callback.from_user.id}:{item_id}"
-        title = f"Shard Creator — бонус-пакет {b.credits} кредитов"
+        title = f"Shard Creator - бонус-пакет {b.credits} кредитов"
         if discounted and discount_multiplier is not None:
             pct = int(round((1.0 - float(discount_multiplier)) * 100))
             title += f" (-{pct}%)"
@@ -2127,7 +2127,7 @@ async def pay_stars_invoice(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith(CB_PAY_INVOICE_BACK_PREFIX))
 async def pay_invoice_back_to_methods(callback: CallbackQuery) -> None:
-    """Со счёта Stars — вернуться к выбору способа оплаты (тот же hub/main, что был до счёта)."""
+    """Со счёта Stars - вернуться к выбору способа оплаты (тот же hub/main, что был до счёта)."""
     if callback.message is None or callback.from_user is None or not callback.data:
         await callback.answer()
         return
@@ -2289,7 +2289,7 @@ async def successful_payment(message: Message) -> None:
             payload=payload,
         )
         await message.answer(
-            f"Этот платёж уже учтён. Если подписка или {CREDITS_COIN_TG_HTML} кредиты не отображаются — напиши в поддержку.",
+            f"Этот платёж уже учтён. Если подписка или {CREDITS_COIN_TG_HTML} кредиты не отображаются - напиши в поддержку.",
             parse_mode=HTML,
         )
         return
@@ -2318,7 +2318,7 @@ async def successful_payment(message: Message) -> None:
             await release_star_payment_claim(charge_id)
             await message.answer(
                 "Оплата получена, но сумма или валюта счёта не совпали с тарифом. "
-                "Напиши в поддержку — проверим и оформим вручную."
+                "Напиши в поддержку - проверим и оформим вручную."
             )
             return
         allowed, reason = await subscription_can_purchase_plan(message.from_user.id, item_id)
@@ -2327,7 +2327,7 @@ async def successful_payment(message: Message) -> None:
             await message.answer(
                 "<b>Платёж получен</b>, но оформить подписку сейчас нельзя: "
                 f"{esc(reason or 'условия сервиса')}.\n\n"
-                "<blockquote><i>Если Stars уже списались, напиши в поддержку — подскажем, что делать.</i></blockquote>",
+                "<blockquote><i>Если Stars уже списались, напиши в поддержку - подскажем, что делать.</i></blockquote>",
                 parse_mode=HTML,
             )
             return
@@ -2344,7 +2344,7 @@ async def successful_payment(message: Message) -> None:
             )
             await release_star_payment_claim(charge_id)
             await message.answer(
-                "Ошибка записи подписки в базу. Сохрани это сообщение и напиши в поддержку — проверим оплату."
+                "Ошибка записи подписки в базу. Сохрани это сообщение и напиши в поддержку - проверим оплату."
             )
             return
         end_h = format_subscription_ends_at(apply_result.new_end)
@@ -2352,11 +2352,11 @@ async def successful_payment(message: Message) -> None:
         if not apply_result.sub_active_ok:
             verify_tail = (
                 "\n\n<blockquote><i>Если в</i> <code>/profile</code> <i>подписка всё ещё «не активна», "
-                "обнови меню или напиши в поддержку — проверим запись.</i></blockquote>"
+                "обнови меню или напиши в поддержку - проверим запись.</i></blockquote>"
             )
         if not apply_result.credited and not apply_result.had_active_renewal:
             verify_tail += (
-                "\n\n<blockquote><i>Кредиты не начислены автоматически — напиши в поддержку.</i></blockquote>"
+                "\n\n<blockquote><i>Кредиты не начислены автоматически - напиши в поддержку.</i></blockquote>"
             )
         if (
             apply_result.referral_bonus_credited > 0
@@ -2455,7 +2455,7 @@ async def successful_payment(message: Message) -> None:
         await release_star_payment_claim(charge_id)
         await message.answer(
             "Оплата получена, но сумма пакета не совпала с текущими условиями. "
-            "Напиши в поддержку — проверим и зачислим вручную."
+            "Напиши в поддержку - проверим и зачислим вручную."
         )
         return
     credited = await add_credits_with_reason(
@@ -2506,6 +2506,6 @@ async def successful_payment(message: Message) -> None:
         await release_star_payment_claim(charge_id)
         await message.answer(
             f"Оплата получена, но {CREDITS_COIN_TG_HTML} кредиты не удалось начислить автоматически. "
-            "Напиши в поддержку — начислим вручную.",
+            "Напиши в поддержку - начислим вручную.",
             parse_mode=HTML,
         )

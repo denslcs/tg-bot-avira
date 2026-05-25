@@ -54,22 +54,22 @@ def _admin_home_html() -> str:
     tariffs = esc(_plans_readable())
     return (
         "<b>🛡️ Админ-панель · Shard Creator</b>\n\n"
-        "<blockquote><i>Быстрые отчёты — кнопками ниже. Команды вводите в этот чат.</i></blockquote>\n\n"
+        "<blockquote><i>Быстрые отчёты - кнопками ниже. Команды вводите в этот чат.</i></blockquote>\n\n"
         "<b>👤 Пользователь и баланс</b>\n"
-        f"• <code>/user ID</code> — {CREDITS_COIN_TG_HTML} кредиты, подписка, тикет, число сообщений в диалоге\n"
+        f"• <code>/user ID</code> - {CREDITS_COIN_TG_HTML} кредиты, подписка, тикет, число сообщений в диалоге\n"
         "• <code>/addcredits ID сумма</code> · <code>/takecredits ID сумма</code>\n\n"
         "<b>📅 Подписка</b>\n"
-        "• <code>/setsub ID дни</code> — продлить срок; в конце можно указать тариф\n"
+        "• <code>/setsub ID дни</code> - продлить срок; в конце можно указать тариф\n"
         f"• Тарифы: <i>{tariffs}</i>\n"
-        "• <code>/setplan ID тариф</code> — сменить тариф в БД <b>без</b> сдвига даты окончания\n"
-        "• <code>/clearsub ID</code> — снять подписку (срок и тариф)\n"
-        f"<blockquote><i>Бонусные {CREDITS_COIN_TG_HTML} кредиты по тарифу при ручной выдаче не начисляются — только при оплате Stars.</i></blockquote>\n\n"
+        "• <code>/setplan ID тариф</code> - сменить тариф в БД <b>без</b> сдвига даты окончания\n"
+        "• <code>/clearsub ID</code> - снять подписку (срок и тариф)\n"
+        f"<blockquote><i>Бонусные {CREDITS_COIN_TG_HTML} кредиты по тарифу при ручной выдаче не начисляются - только при оплате Stars.</i></blockquote>\n\n"
         "<b>🗑 Диалог и рассылка</b>\n"
-        "• <code>/wipechat ID</code> — очистить историю диалога у пользователя\n"
-        "• <code>/broadcast текст</code> — рассылка в ЛС всем из базы\n\n"
+        "• <code>/wipechat ID</code> - очистить историю диалога у пользователя\n"
+        "• <code>/broadcast текст</code> - рассылка в ЛС всем из базы\n\n"
         "<b>📎 Прочее</b>\n"
-        "• <code>/stats</code> — сводка (дублирует кнопку «Статистика»)\n"
-        "• <code>/faq</code> — шаблоны ответов · <code>/chatid</code> — ID чата в группе"
+        "• <code>/stats</code> - сводка (дублирует кнопку «Статистика»)\n"
+        "• <code>/faq</code> - шаблоны ответов · <code>/chatid</code> - ID чата в группе"
     )
 
 
@@ -79,21 +79,21 @@ def _admin_help_html() -> str:
     return (
         "<b>📖 Справка по командам</b>\n\n"
         "<b>Обзор</b>\n"
-        f"• <code>/stats</code> — пользователи, подписки, {CREDITS_COIN_TG_HTML} кредиты, объём диалогов\n"
-        "• <code>/user ID</code> — полная карточка пользователя\n\n"
+        f"• <code>/stats</code> - пользователи, подписки, {CREDITS_COIN_TG_HTML} кредиты, объём диалогов\n"
+        "• <code>/user ID</code> - полная карточка пользователя\n\n"
         "<b>Кредиты</b>\n"
         "• <code>/addcredits ID сумма</code>\n"
         "• <code>/takecredits ID сумма</code>\n\n"
         "<b>Подписка</b>\n"
-        "• <code>/setsub ID дни</code> — +дни к сроку; тариф в БД не меняется, если не указать\n"
+        "• <code>/setsub ID дни</code> - +дни к сроку; тариф в БД не меняется, если не указать\n"
         f"• Пример с тарифом: <code>/setsub 123 30 nova</code> · доступно: <i>{p}</i>\n"
-        "• <code>/setplan ID тариф</code> — только тариф, дата окончания без изменений\n"
-        "• <code>/clearsub ID</code> — обнулить подписку\n\n"
+        "• <code>/setplan ID тариф</code> - только тариф, дата окончания без изменений\n"
+        "• <code>/clearsub ID</code> - обнулить подписку\n\n"
         "<b>Сервис</b>\n"
-        "• <code>/wipechat ID</code> — очистить <code>dialog_messages</code>\n"
-        "• <code>/broadcast текст</code> — рассылка в ЛС\n"
-        "• <code>/faq</code> — шаблоны для пользователей\n"
-        "• <code>/chatid</code> — ID чата (в группе)"
+        "• <code>/wipechat ID</code> - очистить <code>dialog_messages</code>\n"
+        "• <code>/broadcast текст</code> - рассылка в ЛС\n"
+        "• <code>/faq</code> - шаблоны для пользователей\n"
+        "• <code>/chatid</code> - ID чата (в группе)"
     )
 
 
@@ -140,12 +140,12 @@ def _main_kb_rows(*, with_home: bool) -> list[list[InlineKeyboardButton]]:
 
 
 def _main_kb() -> InlineKeyboardMarkup:
-    """Главный экран /admin — без лишней кнопки «назад»."""
+    """Главный экран /admin - без лишней кнопки «назад»."""
     return InlineKeyboardMarkup(inline_keyboard=_main_kb_rows(with_home=False))
 
 
 def _main_kb_nav() -> InlineKeyboardMarkup:
-    """Внутренние экраны панели — с возвратом к обзору."""
+    """Внутренние экраны панели - с возвратом к обзору."""
     return InlineKeyboardMarkup(inline_keyboard=_main_kb_rows(with_home=True))
 
 
@@ -236,7 +236,7 @@ async def _main_bot_stats_html() -> str:
         f"• Сообщений в историях диалогов (всего): <b>{esc(dialog_n)}</b>\n\n"
         '<b><tg-emoji emoji-id="5443038326535759644">💬</tg-emoji> Поддержка</b>\n'
         f"• Открытых тикетов: <b>{esc(tickets_n)}</b>\n\n"
-        "<i>Подробные оценки и SLA — в support-боте:</i> <code>/report</code>, <code>/sla</code>"
+        "<i>Подробные оценки и SLA - в support-боте:</i> <code>/report</code>, <code>/sla</code>"
     )
 
 
@@ -278,7 +278,7 @@ async def cmd_broadcast(message: Message, bot: Bot) -> None:
         await message.answer(
             "Формат:\n"
             "/broadcast Текст одним сообщением (до 4096 символов).\n\n"
-            "Уйдёт всем user_id из базы — тем, кто хоть раз писал боту или нажал /start. "
+            "Уйдёт всем user_id из базы - тем, кто хоть раз писал боту или нажал /start. "
             "Кто заблокировал бота, попадёт в счётчик «не доставлено»."
         )
         return
@@ -361,7 +361,7 @@ async def cmd_user_lookup(message: Message) -> None:
     sub_till = (
         format_subscription_ends_at(profile.subscription_ends_at)
         if profile.subscription_ends_at
-        else "—"
+        else "-"
     )
     pr = profile.subscription_plan
     if pr and pr in PLANS:
@@ -369,11 +369,11 @@ async def cmd_user_lookup(message: Message) -> None:
     elif pr:
         plan_line = esc(pr)
     else:
-        plan_line = "—"
+        plan_line = "-"
     last_buy = (
         format_subscription_ends_at(profile.subscription_last_purchase_at)
         if profile.subscription_last_purchase_at
-        else "—"
+        else "-"
     )
     ticket = await get_open_ticket_by_user(uid)
     if ticket:
@@ -381,7 +381,7 @@ async def cmd_user_lookup(message: Message) -> None:
     else:
         ticket_block = "<i>Открытых тикетов нет</i>"
     msgs = await count_dialog_messages(uid)
-    un_html = f"@{esc(profile.username)}" if profile.username else "—"
+    un_html = f"@{esc(profile.username)}" if profile.username else "-"
     await message.answer(
         "<b>👤 Карточка пользователя</b>\n"
         "<blockquote>"
@@ -461,7 +461,7 @@ async def cmd_setsub(message: Message) -> None:
     )
     if not is_active_now:
         active_line += (
-            '\n<tg-emoji emoji-id="5447644880824181073">⚠️</tg-emoji> Ожидалось «активна» — проверь значение <code>subscription_ends_at</code> в БД или перезапусти бота.'
+            '\n<tg-emoji emoji-id="5447644880824181073">⚠️</tg-emoji> Ожидалось «активна» - проверь значение <code>subscription_ends_at</code> в БД или перезапусти бота.'
         )
     await message.answer(
         f"Подписка пользователя <code>{uid}</code> продлена на <b>{days}</b> д.\n"
@@ -546,7 +546,7 @@ async def cmd_setplan(message: Message) -> None:
     title = plan_subscription_title_html(plan)
     await message.answer(
         f"Тариф пользователя <code>{uid}</code> установлен: <b>{title}</b> (<code>{esc(plan)}</code>). "
-        "<blockquote><i>Срок окончания подписки не менялся — только поле тарифа в БД.</i></blockquote>",
+        "<blockquote><i>Срок окончания подписки не менялся - только поле тарифа в БД.</i></blockquote>",
         parse_mode=HTML,
     )
     try:
