@@ -84,9 +84,13 @@ from src.keyboards.callback_data import (
     CB_BACK_IMAGE_MODELS,
     CB_CREATE_IMAGE_HUB,
     CB_CREATE_IMAGE,
+    CB_GEN_EDIT,
+    CB_GEN_TEXT,
     CB_IMG_CANCEL,
+    CB_IMG_GEN_CONFIRM,
     CB_IMG_MODEL_SEL_PREFIX,
     CB_IMG_OK,
+    CB_IMG_REFS_BACK_PHOTOS,
     CB_MENU_BACK_START,
     CB_MENU_HUB,
     CB_MENU_MELLSTROY,
@@ -130,6 +134,12 @@ except Exception:  # pragma: no cover - pillow is optional at runtime
     ImageFont = None
 
 router = Router(name="img_commands")
+
+# Доплата за каждое референс-фото в режиме «текст + изображения».
+REF_PHOTO_EXTRA_CREDITS = 3
+MAX_REF_PHOTOS_PER_MESSAGE = 5
+MAX_IMAGE_PROMPT_CHARS = 1200
+_ref_album_finalize_tasks: dict[tuple[int, str], asyncio.Task] = {}
 
 READY_IDEA_CATEGORIES: list[tuple[str, str]] = [
     ("memes", "Мемы"),
@@ -1131,7 +1141,36 @@ _STYLE_HINT_GPT5_IMG = (
 
 _WAITING_PROMPT_HTML = (
     "<b>🎨 Картинка по описанию</b>\n"
-    "<blockquote><i>Напиши одним сообщением, что должно быть на картинке.</i></blockquote>"
+    "<blockquote><i>Напиши одним сообщением, что должно быть на картинке "
+    f"(до <b>{MAX_IMAGE_PROMPT_CHARS}</b> символов).</i></blockquote>"
+)
+
+
+def _image_prompt_too_long(prompt: str) -> bool:
+    return len((prompt or "").strip()) > MAX_IMAGE_PROMPT_CHARS
+
+
+def _image_prompt_too_long_html() -> str:
+    return (
+        "<b>Слишком длинный текст</b>\n"
+        f"<blockquote><i>Не больше <b>{esc(MAX_IMAGE_PROMPT_CHARS)}</b> символов.</i> "
+        "Сократи описание и напиши заново одним сообщением.</blockquote>"
+    )
+
+_WAITING_REFS_PHOTOS_HTML = (
+    "<b>🎨 Картинка по фото и тексту</b>\n"
+    "<blockquote><i>Сначала загрузите фото в одно сообщение без текста "
+    f"(до <b>{MAX_REF_PHOTOS_PER_MESSAGE}</b> шт.).</i>\n"
+    f"<i>За каждое фото к стоимости модели добавится <b>+{REF_PHOTO_EXTRA_CREDITS}</b> кр.</i></blockquote>"
+)
+
+_GEN_MODE_PICK_HTML = (
+    "<b>Выберите режим генерации изображения</b>\n\n"
+    "<blockquote>"
+    "<b>1) Текстом</b> — описание без референсных фото.\n"
+    f"<b>2) Текстом с изображениями</b> — до <b>{MAX_REF_PHOTOS_PER_MESSAGE}</b> фото и текст; "
+    f"за каждое фото <b>+{REF_PHOTO_EXTRA_CREDITS}</b> кр. к стоимости модели (модели — как в «текстом», по тарифу)."
+    "</blockquote>"
 )
 
 _IMAGE_GEN_MISSING_TEXT = (
@@ -1369,6 +1408,105 @@ def _waiting_prompt_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def _waiting_refs_photos_keyboard() -> InlineKeyboardMarkup:
+    return _waiting_prompt_keyboard()
+
+
+def _waiting_refs_prompt_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Назад",
+                    callback_data=CB_IMG_REFS_BACK_PHOTOS,
+                    icon_custom_emoji_id="5256247952564825322",
+                ),
+                InlineKeyboardButton(
+                    text="Отмена",
+                    callback_data=CB_IMG_CANCEL,
+                    style=BTN_DANGER,
+                    icon_custom_emoji_id="6302868067407890482",
+                ),
+            ],
+        ]
+    )
+
+
+def _refs_confirm_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Сгенерировать",
+                    callback_data=CB_IMG_GEN_CONFIRM,
+                    style=BTN_SUCCESS,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Отмена",
+                    callback_data=CB_IMG_CANCEL,
+                    style=BTN_DANGER,
+                    icon_custom_emoji_id="6302868067407890482",
+                ),
+            ],
+        ]
+    )
+
+
+def _gen_mode_pick_keyboard(back_callback: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="1) Текстом",
+                    callback_data=CB_GEN_TEXT,
+                    style=BTN_PRIMARY,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="2) Текстом с изображениями",
+                    callback_data=CB_GEN_EDIT,
+                    style=BTN_PRIMARY,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Назад",
+                    callback_data=back_callback,
+                    icon_custom_emoji_id="5256247952564825322",
+                ),
+            ],
+        ]
+    )
+
+
+def _self_gen_result_keyboard(back_callback: str) -> InlineKeyboardMarkup:
+    back_btn_kwargs: dict = {}
+    if "назад" in (back_callback or "").lower() or back_callback.startswith("menu:"):
+        back_btn_kwargs["icon_custom_emoji_id"] = "5256247952564825322"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Ещё раз",
+                    callback_data=CB_REGEN,
+                    style=BTN_PRIMARY,
+                    icon_custom_emoji_id="5244758760429213978",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Назад",
+                    callback_data=back_callback,
+                    **back_btn_kwargs,
+                ),
+            ],
+        ]
+    )
+
+
 def _missing_config_kb(back_callback: str = CB_MENU_BACK_START) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -1384,8 +1522,12 @@ def _missing_config_kb(back_callback: str = CB_MENU_BACK_START) -> InlineKeyboar
 
 
 class ImageGenState(StatesGroup):
+    choosing_gen_mode = State()
     choosing_model = State()
     waiting_prompt = State()
+    waiting_refs_photos = State()
+    waiting_refs_prompt = State()
+    waiting_refs_confirm = State()
     ready_choosing_category = State()
     ready_browsing_idea = State()
     ready_waiting_photos = State()
@@ -1410,12 +1552,18 @@ def _dedupe_model_choices(items: list[tuple[str, str, int, str]]) -> list[tuple[
     return out
 
 
-def _model_pick_caption_html(*, for_admin: bool, choices: list[tuple[str, str, int, str]]) -> str:
-    intro = (
-        "Режим администратора — доступны все модели. Ниже кратко, в каких стилях каждая из них обычно сильна."
-        if for_admin
-        else "Тариф в профиле определяет список моделей. Ниже — подсказки по стилю. Выбери вариант и опиши картинку."
-    )
+def _model_pick_caption_html(
+    *,
+    for_admin: bool,
+    choices: list[tuple[str, str, int, str]],
+    intro: str | None = None,
+) -> str:
+    if intro is None:
+        intro = (
+            "Режим администратора — доступны все модели. Ниже кратко, в каких стилях каждая из них обычно сильна."
+            if for_admin
+            else "Тариф в профиле определяет список моделей. Ниже — подсказки по стилю. Выбери вариант и опиши картинку."
+        )
     lines = [
         "<b>Выбор модели ИИ</b>",
         f"<blockquote><i>{esc(intro)}</i></blockquote>",
@@ -1472,6 +1620,80 @@ def _model_choices_for_subscription_plan(plan_id: str) -> list[tuple[str, str, i
         return _dedupe_model_choices([klein, gemini, gpt_img_15])
     # starter, universe и неизвестный plan — полная матрица
     return _dedupe_model_choices([klein, gemini, gpt_img_15, pro, gemini_preview, gpt5_img])
+
+
+def _refs_base_cost_by_model_id() -> dict[str, int]:
+    """Базовая стоимость модели в режиме «текст + изображения» (без доплаты за фото)."""
+    klein_id = (OPENROUTER_IMAGE_MODEL or "").strip() or "black-forest-labs/flux.2-klein-4b"
+    pro_id = (OPENROUTER_IMAGE_MODEL_ALT or "").strip() or "black-forest-labs/flux.2-pro"
+    gemini_id = (OPENROUTER_IMAGE_GEMINI_MODEL or "").strip() or "google/gemini-2.5-flash-image"
+    preview_id = (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip() or "google/gemini-3.1-flash-image-preview"
+    return {
+        klein_id: 5,
+        gemini_id: 10,
+        (POLZA_IMAGE_MODEL_GPT_IMAGE_15 or "").strip(): 15,
+        (POLZA_IMAGE_MODEL_GPT5_IMAGE or "").strip(): 17,
+        preview_id: 20,
+        pro_id: 25,
+    }
+
+
+def _model_choices_for_gen_mode(plan_id: str, gen_mode: str) -> list[tuple[str, str, int, str]]:
+    """Текст — как по тарифу; текст+фото — те же модели по тарифу, другие базовые цены."""
+    text_choices = _model_choices_for_subscription_plan(plan_id)
+    if (gen_mode or "").strip() != "refs":
+        return text_choices
+    refs_costs = _refs_base_cost_by_model_id()
+    out: list[tuple[str, str, int, str]] = []
+    for label, mid, text_cost, hint in text_choices:
+        key = (mid or "").strip()
+        if not key:
+            continue
+        refs_cost = refs_costs.get(key, text_cost)
+        out.append((label, mid, refs_cost, hint))
+    return out
+
+
+async def _model_choices_for_user(user_id: int, gen_mode: str) -> list[tuple[str, str, int, str]]:
+    if user_id in ADMIN_IDS:
+        plan_id = "universe"
+    else:
+        profile = await get_user_admin_profile(user_id)
+        if not profile or not subscription_is_active(profile.subscription_ends_at):
+            plan_id = ""
+        else:
+            plan_id = (profile.subscription_plan or "").strip().lower()
+    if not plan_id:
+        klein_id = (OPENROUTER_IMAGE_MODEL or "").strip() or "black-forest-labs/flux.2-klein-4b"
+        cost = _refs_base_cost_by_model_id().get(klein_id, OPENROUTER_IMAGE_COST_CREDITS)
+        if (gen_mode or "").strip() == "refs":
+            return [("⚡ FLUX Klein 4B", klein_id, cost, _STYLE_HINT_KLEIN)]
+        return [
+            (
+                "⚡ FLUX Klein 4B",
+                klein_id,
+                OPENROUTER_IMAGE_COST_CREDITS,
+                _STYLE_HINT_KLEIN,
+            )
+        ]
+    return _model_choices_for_gen_mode(plan_id, gen_mode)
+
+
+def _refs_total_cost(base_cost: int, photo_count: int) -> int:
+    n = max(0, int(photo_count))
+    return max(0, int(base_cost)) + n * REF_PHOTO_EXTRA_CREDITS
+
+
+def _resolve_refs_api_model(model: str) -> str:
+    """Polza — только text-to-image; для референсов используем OpenRouter multimodal."""
+    if is_polza_image_model(model):
+        fallback = (
+            (OPENROUTER_IMAGE_GPT54_IMAGE2_MODEL or "").strip()
+            or (OPENROUTER_IMAGE_GEMINI_PREVIEW_MODEL or "").strip()
+            or (OPENROUTER_IMAGE_GEMINI_MODEL or "").strip()
+        )
+        return fallback or model.strip()
+    return (model or "").strip()
 
 
 async def _effective_image_model_and_cost(user_id: int, requested_model: str) -> tuple[str, int]:
@@ -2351,6 +2573,11 @@ async def _made_in_shard_caption(message: Message) -> str:
     return await _shard_creator_brand_blockquote_html(message)
 
 
+async def _record_successful_image_in_profile(user_id: int) -> None:
+    """+1 к «Сгенерировано изображений» в профиле (текст, текст+фото, готовые идеи)."""
+    await increment_user_generated_images_total(user_id)
+
+
 def _credits_word(n: int) -> str:
     n = abs(int(n)) % 100
     n1 = n % 10
@@ -2382,9 +2609,10 @@ async def _send_result_photo_with_regen(
     ready_idea_title: str | None = None,
     mark_redo_half_after_success: bool = False,
 ) -> None:
+    ctx_kind = "refs" if refs_file_ids and usage_kind == "self" else "text"
     await save_last_image_context(
         user_id,
-        "text",
+        ctx_kind,
         prompt,
         model,
         cost,
@@ -2430,6 +2658,7 @@ async def _send_result_photo_with_regen(
             f'<blockquote><i>{CREDITS_COIN_TG_HTML} кредиты:</i> <b>{esc(balance)}</b></blockquote>{day_note}\n'
             f"{brand_bq}"
         )
+    photo_delivered = False
     # Для готовых идей: сначала отдельное фото с бренд-подписью, затем отдельное сообщение с действиями.
     if usage_kind == "ready" and refs_file_ids:
         made_caption = await _made_in_shard_caption(message)
@@ -2438,7 +2667,7 @@ async def _send_result_photo_with_regen(
             caption=made_caption,
             parse_mode=HTML,
         )
-        await increment_user_generated_images_total(user_id)
+        photo_delivered = True
         if is_admin:
             await message.answer(
                 f"👑 Режим админа: {CREDITS_COIN_TG_HTML} кредиты не списывались.",
@@ -2473,13 +2702,45 @@ async def _send_result_photo_with_regen(
             parse_mode=HTML,
         )
     else:
+        result_back = (
+            str((await state.get_data()).get("_img_back_cb") or CB_MENU_BACK_START)
+            if state is not None
+            else CB_MENU_BACK_START
+        )
+        made_caption = await _made_in_shard_caption(message)
         await message.answer_photo(
             photo=BufferedInputFile(image_bytes, filename=filename),
-            caption=caption,
-            reply_markup=_regen_keyboard(),
+            caption=made_caption,
             parse_mode=HTML,
         )
-        await increment_user_generated_images_total(user_id)
+        photo_delivered = True
+        if is_admin:
+            await message.answer(
+                f"👑 Режим админа: {CREDITS_COIN_TG_HTML} кредиты не списывались.",
+                parse_mode=HTML,
+            )
+        elif charge and deducted_credits:
+            balance_after = await get_credits(user_id)
+            cw = _credits_word(cost)
+            await message.answer(
+                f'<tg-emoji emoji-id="5444856076954520455">🧾</tg-emoji> Списано: <b>{esc(cost)}</b> {cw}.\n'
+                f"{CREDITS_COIN_TG_HTML} кредиты: <b>{esc(balance_after)}</b>.",
+                parse_mode=HTML,
+            )
+        elif charge:
+            balance_after = await get_credits(user_id)
+            await message.answer(
+                "ℹ️ Кредиты за эту генерацию не списались.\n"
+                f"{CREDITS_COIN_TG_HTML} кредиты: <b>{esc(balance_after)}</b>.",
+                parse_mode=HTML,
+            )
+        await message.answer(
+            'Готово <tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Выбери действие:',
+            reply_markup=_self_gen_result_keyboard(result_back),
+            parse_mode=HTML,
+        )
+    if photo_delivered:
+        await _record_successful_image_in_profile(user_id)
     if state is not None:
         await state.clear()
 
@@ -2497,12 +2758,20 @@ async def _execute_text_generation(
     use_image_cache: bool = True,
     override_cost: int | None = None,
 ) -> None:
+    prompt = (prompt or "").strip()
+    if _image_prompt_too_long(prompt):
+        await message.answer(_image_prompt_too_long_html(), parse_mode=HTML)
+        return
     await ensure_user(user_id, username)
     is_admin = user_id in ADMIN_IDS
     charge = not is_admin
     if not is_admin:
-        model, plan_cost = await _effective_image_model_and_cost(user_id, model)
-        cost = override_cost if override_cost is not None else plan_cost
+        if override_cost is not None:
+            cost = int(override_cost)
+            model, _plan_cost = await _effective_image_model_and_cost(user_id, model)
+        else:
+            model, plan_cost = await _effective_image_model_and_cost(user_id, model)
+            cost = plan_cost
 
     if is_polza_image_model(model):
         if not is_polza_configured():
@@ -2579,6 +2848,116 @@ async def _execute_text_generation(
         deducted_credits=meta.credit_charged,
         served_from_cache=from_cache,
         usage_kind=usage_kind,
+    )
+
+
+async def _execute_refs_generation(
+    message: Message,
+    state: FSMContext | None,
+    *,
+    user_id: int,
+    username: str | None,
+    prompt: str,
+    model: str,
+    total_cost: int,
+    refs_file_ids: list[str],
+) -> None:
+    prompt = (prompt or "").strip()
+    if _image_prompt_too_long(prompt):
+        await message.answer(_image_prompt_too_long_html(), parse_mode=HTML)
+        return
+    await ensure_user(user_id, username)
+    is_admin = user_id in ADMIN_IDS
+    charge = not is_admin
+    allowed = await _model_choices_for_user(user_id, "refs")
+    want = (model or "").strip()
+    picked: tuple[str, int] | None = None
+    for _lb, mid, cst, _h in allowed:
+        if (mid or "").strip() == want:
+            picked = (mid.strip(), int(cst))
+            break
+    if picked is None:
+        await message.answer(
+            "<b>Модель недоступна</b> на вашем тарифе. Выберите модель заново из меню.",
+            parse_mode=HTML,
+        )
+        return
+    model, base_cost = picked
+    if len(refs_file_ids) > MAX_REF_PHOTOS_PER_MESSAGE:
+        await message.answer(
+            f"Максимум <b>{esc(MAX_REF_PHOTOS_PER_MESSAGE)}</b> фото за раз.",
+            parse_mode=HTML,
+        )
+        return
+    total_cost = _refs_total_cost(base_cost, len(refs_file_ids))
+    api_model = _resolve_refs_api_model(model)
+
+    if not is_openrouter_image_configured():
+        await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
+        return
+
+    prep = await _prepare_image_charge_and_daily_slot(
+        message,
+        user_id=user_id,
+        is_admin=is_admin,
+        charge=charge,
+        cost=total_cost,
+        usage_kind="self",
+    )
+    ok, meta = prep
+    if not ok or meta is None:
+        return
+    wait_msg = await message.answer(_gen_progress_caption(0), parse_mode=HTML)
+    try:
+        _prio = await _image_gen_priority_from_user_id(user_id)
+
+        async def _gen_refs() -> tuple[bytes, bool]:
+            refs: list[bytes] = []
+            for fid in refs_file_ids:
+                refs.append(await _download_telegram_photo_bytes(message.bot, fid))
+            img = await openrouter_text_and_refs_to_image_bytes(
+                prompt,
+                refs=refs,
+                model=api_model,
+            )
+            return img, False
+
+        image_bytes, from_cache = await _await_generation_with_progress(
+            wait_msg, _gen_refs, priority=_prio
+        )
+    except Exception as exc:
+        if isinstance(exc, OpenRouterApiError):
+            logging.warning(
+                "OpenRouter refs (free gen) user_id=%s http=%s: %s",
+                user_id,
+                exc.http_status,
+                exc,
+            )
+        else:
+            logging.exception("Free refs image generation failed user_id=%s", user_id)
+        await _rollback_generation_charge(user_id, meta, usage_kind="self", cost=total_cost)
+        await _notify_image_generation_failure(wait_msg, message, state)
+        return
+    if not image_bytes or len(image_bytes) < 64:
+        await _rollback_generation_charge(user_id, meta, usage_kind="self", cost=total_cost)
+        await _notify_image_generation_failure(wait_msg, message, state)
+        return
+    await _finalize_generation_status_message(wait_msg)
+    await _send_result_photo_with_regen(
+        message,
+        state,
+        user_id=user_id,
+        image_bytes=image_bytes,
+        filename="image.png",
+        prompt=prompt,
+        model=model,
+        cost=total_cost,
+        is_admin=is_admin,
+        charge=charge,
+        deducted_credits=meta.credit_charged,
+        served_from_cache=from_cache,
+        usage_kind="self",
+        refs_file_ids=list(refs_file_ids),
     )
 
 
@@ -2774,6 +3153,104 @@ async def _execute_ready_with_refs_generation(
     )
 
 
+async def _send_waiting_refs_photos_step(
+    bot,
+    chat_id: int,
+    state: FSMContext,
+    *,
+    model: str,
+    base_cost: int,
+    replace_message: Message | None = None,
+    model_style_hint: str | None = None,
+) -> None:
+    await state.update_data(
+        selected_model=model,
+        selected_cost=base_cost,
+        selected_base_cost=base_cost,
+        selected_usage_kind="self",
+        _gen_mode="refs",
+        _ref_photos=[],
+        _ref_prompt="",
+    )
+    await state.set_state(ImageGenState.waiting_refs_photos)
+    body = _WAITING_REFS_PHOTOS_HTML
+    if model_style_hint:
+        body += f"\n<blockquote><i>{esc(model_style_hint)}</i></blockquote>"
+    kb = _waiting_refs_photos_keyboard()
+    if replace_message is not None:
+        edited = await edit_or_send_nav_message(
+            replace_message,
+            text=body,
+            reply_markup=kb,
+            parse_mode=HTML,
+        )
+        await _set_img_flow_anchor(state, edited or replace_message)
+        return
+    sent = await bot.send_message(chat_id, body, reply_markup=kb, parse_mode=HTML)
+    await _set_img_flow_anchor(state, sent)
+
+
+async def _refs_confirm_caption_html(*, base_cost: int, photo_count: int, prompt: str) -> str:
+    total = _refs_total_cost(base_cost, photo_count)
+    extra = photo_count * REF_PHOTO_EXTRA_CREDITS
+    return (
+        "<b>Подтвердите генерацию</b>\n"
+        "<blockquote>"
+        f"<i>Модель:</i> <b>{esc(base_cost)}</b> кр.\n"
+        f"<i>Фото:</i> <b>{esc(photo_count)}</b> × <b>{esc(REF_PHOTO_EXTRA_CREDITS)}</b> кр. = <b>{esc(extra)}</b> кр.\n"
+        f"<i>Итого к списанию:</i> <b>{esc(total)}</b> кр.\n\n"
+        f"<i>Текст:</i> {esc(prompt[:500])}"
+        "</blockquote>"
+    )
+
+
+async def _finalize_ref_photos_collected(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    photos = list(data.get("_ref_photos") or [])
+    if not photos:
+        await message.answer(
+            "Не удалось принять фото. Отправь одно или несколько фото <b>без текста</b> в одном сообщении (альбом).",
+            reply_markup=_waiting_refs_photos_keyboard(),
+            parse_mode=HTML,
+        )
+        return
+    base_cost = int(data.get("selected_base_cost") or data.get("selected_cost") or 0)
+    n = len(photos)
+    total = _refs_total_cost(base_cost, n)
+    await message.answer(
+        "<b>Фото приняты.</b>\n"
+        f"<blockquote><i>Загружено: <b>{esc(n)}</b>. Доплата за фото: <b>{esc(n * REF_PHOTO_EXTRA_CREDITS)}</b> кр. "
+        f"(итого с моделью: <b>{esc(total)}</b> кр.).</i>\n\n"
+        f"<i>Теперь напиши одним сообщением, что должно быть на картинке "
+        f"(до <b>{esc(MAX_IMAGE_PROMPT_CHARS)}</b> символов).</i></blockquote>",
+        reply_markup=_waiting_refs_prompt_keyboard(),
+        parse_mode=HTML,
+    )
+    await state.set_state(ImageGenState.waiting_refs_prompt)
+
+
+def _schedule_ref_album_finalize(message: Message, state: FSMContext, media_group_id: str) -> None:
+    key = (message.chat.id, media_group_id)
+
+    async def _run() -> None:
+        try:
+            await asyncio.sleep(0.9)
+            cur = await state.get_state()
+            if cur != ImageGenState.waiting_refs_photos:
+                return
+            data = await state.get_data()
+            if str(data.get("_ref_album_id") or "") != media_group_id:
+                return
+            await _finalize_ref_photos_collected(message, state)
+        finally:
+            _ref_album_finalize_tasks.pop(key, None)
+
+    prev = _ref_album_finalize_tasks.pop(key, None)
+    if prev and not prev.done():
+        prev.cancel()
+    _ref_album_finalize_tasks[key] = asyncio.create_task(_run())
+
+
 async def _send_waiting_prompt_step(
     bot,
     chat_id: int,
@@ -2784,7 +3261,13 @@ async def _send_waiting_prompt_step(
     replace_message: Message | None = None,
     model_style_hint: str | None = None,
 ) -> None:
-    await state.update_data(selected_model=model, selected_cost=cost, selected_usage_kind="self")
+    await state.update_data(
+        selected_model=model,
+        selected_cost=cost,
+        selected_usage_kind="self",
+        _gen_mode="text",
+        _ref_photos=[],
+    )
     await state.set_state(ImageGenState.waiting_prompt)
     body = _WAITING_PROMPT_HTML
     if model_style_hint:
@@ -2807,6 +3290,33 @@ async def _send_waiting_prompt_step(
     await _set_img_flow_anchor(state, sent)
 
 
+async def _show_gen_mode_pick(
+    message: Message,
+    state: FSMContext,
+    user_id: int,
+    username: str | None,
+    *,
+    back_callback: str = CB_MENU_BACK_START,
+) -> None:
+    if not is_openrouter_image_configured():
+        await edit_or_send_nav_message(
+            message,
+            text=_IMAGE_GEN_MISSING_TEXT,
+            reply_markup=_missing_config_kb(back_callback),
+            parse_mode=HTML,
+        )
+        return
+    await ensure_user(user_id, username)
+    await state.update_data(_img_back_cb=back_callback, _gen_mode=None)
+    await state.set_state(ImageGenState.choosing_gen_mode)
+    await edit_or_send_nav_message(
+        message,
+        text=_GEN_MODE_PICK_HTML,
+        reply_markup=_gen_mode_pick_keyboard(back_callback),
+        parse_mode=HTML,
+    )
+
+
 async def _show_image_model_pick(
     message: Message,
     state: FSMContext,
@@ -2814,6 +3324,7 @@ async def _show_image_model_pick(
     username: str | None,
     *,
     back_callback: str = CB_MENU_BACK_START,
+    gen_mode: str = "text",
 ) -> None:
     if not is_openrouter_image_configured():
         await edit_or_send_nav_message(
@@ -2841,23 +3352,50 @@ async def _show_image_model_pick(
             return
         plan_id = (profile.subscription_plan or "").strip().lower()
     await state.clear()
-    await state.update_data(_img_back_cb=back_callback)
-    choices = _model_choices_for_subscription_plan(plan_id)
+    await state.update_data(_img_back_cb=back_callback, _gen_mode=(gen_mode or "text").strip())
+    gm = (gen_mode or "text").strip()
+    choices = _model_choices_for_gen_mode(plan_id, gm)
     if len(choices) < 2:
         m = choices[0]
-        await _send_waiting_prompt_step(
-            message.bot,
-            message.chat.id,
-            state,
-            model=m[1],
-            cost=m[2],
-            replace_message=message,
-            model_style_hint=m[3],
-        )
+        if gm == "refs":
+            await _send_waiting_refs_photos_step(
+                message.bot,
+                message.chat.id,
+                state,
+                model=m[1],
+                base_cost=m[2],
+                replace_message=message,
+                model_style_hint=m[3],
+            )
+        else:
+            await _send_waiting_prompt_step(
+                message.bot,
+                message.chat.id,
+                state,
+                model=m[1],
+                cost=m[2],
+                replace_message=message,
+                model_style_hint=m[3],
+            )
         return
-    await state.update_data(_model_pick_plan=("__admin__" if is_admin else (plan_id or "").strip().lower()))
+    await state.update_data(
+        _model_pick_plan=("__admin__" if is_admin else (plan_id or "").strip().lower()),
+        _gen_mode=gm,
+    )
     await state.set_state(ImageGenState.choosing_model)
-    cap = _model_pick_caption_html(for_admin=is_admin, choices=choices)
+    if gm == "refs":
+        refs_intro = (
+            "Те же модели, что в режиме «текстом», по вашему тарифу. "
+            f"За каждое фото к стоимости модели +{REF_PHOTO_EXTRA_CREDITS} кр. "
+            f"До {MAX_REF_PHOTOS_PER_MESSAGE} фото за раз."
+        )
+        if is_admin:
+            refs_intro = (
+                "Режим администратора — доступны все модели. " + refs_intro
+            )
+        cap = _model_pick_caption_html(for_admin=is_admin, choices=choices, intro=refs_intro)
+    else:
+        cap = _model_pick_caption_html(for_admin=is_admin, choices=choices)
     await edit_or_send_nav_message(
         message,
         text=cap,
@@ -2929,21 +3467,34 @@ async def subscriber_picked_model(callback: CallbackQuery, state: FSMContext) ->
             )
             return
         plan_id = (profile.subscription_plan or "").strip().lower()
-    models = _model_choices_for_subscription_plan(plan_id)
+    data = await state.get_data()
+    gen_mode = str(data.get("_gen_mode") or "text").strip()
+    models = _model_choices_for_gen_mode(plan_id, gen_mode)
     if idx < 0 or idx >= len(models):
         await callback.answer("Нет такой модели.", show_alert=True)
         return
     _label, model_id, cost, hint = models[idx]
     await callback.answer()
-    await _send_waiting_prompt_step(
-        callback.bot,
-        callback.message.chat.id,
-        state,
-        model=model_id,
-        cost=cost,
-        replace_message=callback.message,
-        model_style_hint=hint,
-    )
+    if gen_mode == "refs":
+        await _send_waiting_refs_photos_step(
+            callback.bot,
+            callback.message.chat.id,
+            state,
+            model=model_id,
+            base_cost=cost,
+            replace_message=callback.message,
+            model_style_hint=hint,
+        )
+    else:
+        await _send_waiting_prompt_step(
+            callback.bot,
+            callback.message.chat.id,
+            state,
+            model=model_id,
+            cost=cost,
+            replace_message=callback.message,
+            model_style_hint=hint,
+        )
 
 
 @router.message(ImageGenState.choosing_model)
@@ -2953,8 +3504,18 @@ async def remind_pick_model_or_ignore(message: Message, state: FSMContext) -> No
         return
     uid = message.from_user.id
     if uid in ADMIN_IDS:
-        choices = _model_choices_for_subscription_plan("universe")
-        cap = _model_pick_caption_html(for_admin=True, choices=choices)
+        data = await state.get_data()
+        gm = (data.get("_gen_mode") or "text").strip()
+        choices = _model_choices_for_gen_mode("universe", gm)
+        if gm == "refs":
+            refs_intro = (
+                "Режим администратора — доступны все модели. "
+                f"За каждое фото к стоимости модели +{REF_PHOTO_EXTRA_CREDITS} кр. "
+                f"До {MAX_REF_PHOTOS_PER_MESSAGE} фото за раз."
+            )
+            cap = _model_pick_caption_html(for_admin=True, choices=choices, intro=refs_intro)
+        else:
+            cap = _model_pick_caption_html(for_admin=True, choices=choices)
         await message.answer(
             cap,
             reply_markup=_subscriber_model_pick_keyboard(choices),
@@ -2971,9 +3532,19 @@ async def remind_pick_model_or_ignore(message: Message, state: FSMContext) -> No
         await _start_image_flow(message, state, uid, message.from_user.username)
         return
     plan_id = (profile.subscription_plan or "").strip().lower()
+    data = await state.get_data()
+    gm = (data.get("_gen_mode") or "text").strip()
     await state.update_data(_model_pick_plan=plan_id)
-    choices = _model_choices_for_subscription_plan(plan_id)
-    cap = _model_pick_caption_html(for_admin=False, choices=choices)
+    choices = _model_choices_for_gen_mode(plan_id, gm)
+    if gm == "refs":
+        refs_intro = (
+            "Те же модели, что в режиме «текстом», по вашему тарифу. "
+            f"За каждое фото к стоимости модели +{REF_PHOTO_EXTRA_CREDITS} кр. "
+            f"До {MAX_REF_PHOTOS_PER_MESSAGE} фото за раз."
+        )
+        cap = _model_pick_caption_html(for_admin=False, choices=choices, intro=refs_intro)
+    else:
+        cap = _model_pick_caption_html(for_admin=False, choices=choices)
     await message.answer(
         cap,
         reply_markup=_subscriber_model_pick_keyboard(choices),
@@ -3024,6 +3595,27 @@ async def cancel_image_flow(callback: CallbackQuery, state: FSMContext) -> None:
             back_callback=back_callback,
         )
         return
+    cur_s = str(cur or "")
+    if any(
+        cur_s.endswith(s)
+        for s in (
+            "waiting_refs_photos",
+            "waiting_refs_prompt",
+            "waiting_refs_confirm",
+            "choosing_model",
+            "choosing_gen_mode",
+            "waiting_prompt",
+        )
+    ):
+        await state.clear()
+        back_callback = str(data.get("_img_back_cb") or CB_MENU_BACK_START)
+        await _restore_image_flow_parent_menu(
+            callback,
+            back_callback=back_callback,
+            user_id=user_id,
+            username=callback.from_user.username,
+        )
+        return
     await state.clear()
     back_callback = str(data.get("_img_back_cb") or CB_MENU_BACK_START)
     await _restore_image_flow_parent_menu(
@@ -3043,8 +3635,46 @@ async def back_to_image_flow(callback: CallbackQuery, state: FSMContext) -> None
     uid = callback.from_user.id
     data = await state.get_data()
     back_callback = str(data.get("_img_back_cb") or CB_MENU_BACK_START)
-    if uid in ADMIN_IDS:
-        await _show_image_model_pick(
+    gen_mode = str(data.get("_gen_mode") or "text").strip()
+    cur = await state.get_state()
+    await ensure_user(uid, callback.from_user.username)
+    profile = await get_user_admin_profile(uid)
+    has_sub = bool(profile and subscription_is_active(profile.subscription_ends_at))
+
+    cur_s = str(cur or "")
+    if cur_s.endswith("waiting_refs_photos") or cur_s.endswith("waiting_prompt"):
+        if gen_mode == "refs" and (uid in ADMIN_IDS or has_sub):
+            await _show_image_model_pick(
+                callback.message,
+                state,
+                uid,
+                callback.from_user.username,
+                back_callback=back_callback,
+                gen_mode="refs",
+            )
+            return
+        if uid in ADMIN_IDS or has_sub:
+            await _show_image_model_pick(
+                callback.message,
+                state,
+                uid,
+                callback.from_user.username,
+                back_callback=back_callback,
+                gen_mode="text",
+            )
+            return
+        await _start_image_flow(
+            callback.message,
+            state,
+            uid,
+            callback.from_user.username,
+            replace_menu=True,
+            back_callback=back_callback,
+        )
+        return
+
+    if cur_s.endswith("choosing_model") and (uid in ADMIN_IDS or has_sub):
+        await _show_gen_mode_pick(
             callback.message,
             state,
             uid,
@@ -3052,24 +3682,23 @@ async def back_to_image_flow(callback: CallbackQuery, state: FSMContext) -> None
             back_callback=back_callback,
         )
         return
-    await ensure_user(uid, callback.from_user.username)
-    profile = await get_user_admin_profile(uid)
-    if profile and subscription_is_active(profile.subscription_ends_at):
-        await _show_image_model_pick(
+
+    if uid in ADMIN_IDS or has_sub:
+        await _show_gen_mode_pick(
             callback.message,
             state,
             uid,
             callback.from_user.username,
             back_callback=back_callback,
         )
-    else:
-        await state.clear()
-        await _restore_image_flow_parent_menu(
-            callback,
-            back_callback=back_callback,
-            user_id=uid,
-            username=callback.from_user.username,
-        )
+        return
+    await state.clear()
+    await _restore_image_flow_parent_menu(
+        callback,
+        back_callback=back_callback,
+        user_id=uid,
+        username=callback.from_user.username,
+    )
 
 
 async def _send_ready_ideas_screen(
@@ -4633,6 +5262,220 @@ async def ready_waiting_beard_size_hint(message: Message) -> None:
     )
 
 
+@router.callback_query(F.data == CB_GEN_TEXT)
+async def pick_gen_mode_text(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.from_user is None or callback.message is None:
+        await callback.answer("Ошибка запроса.", show_alert=True)
+        return
+    await callback.answer()
+    uid = callback.from_user.id
+    data = await state.get_data()
+    back_callback = str(data.get("_img_back_cb") or CB_MENU_BACK_START)
+    if uid in ADMIN_IDS:
+        await _show_image_model_pick(
+            callback.message,
+            state,
+            uid,
+            callback.from_user.username,
+            back_callback=back_callback,
+            gen_mode="text",
+        )
+        return
+    profile = await get_user_admin_profile(uid)
+    if not profile or not subscription_is_active(profile.subscription_ends_at):
+        await _start_image_flow(
+            callback.message,
+            state,
+            uid,
+            callback.from_user.username,
+            replace_menu=True,
+            back_callback=back_callback,
+        )
+        return
+    await _show_image_model_pick(
+        callback.message,
+        state,
+        uid,
+        callback.from_user.username,
+        back_callback=back_callback,
+        gen_mode="text",
+    )
+
+
+@router.callback_query(F.data == CB_GEN_EDIT)
+async def pick_gen_mode_refs(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.from_user is None or callback.message is None:
+        await callback.answer("Ошибка запроса.", show_alert=True)
+        return
+    uid = callback.from_user.id
+    if uid not in ADMIN_IDS:
+        profile = await get_user_admin_profile(uid)
+        if not profile or not subscription_is_active(profile.subscription_ends_at):
+            await callback.answer(
+                "Режим «текст + изображения» доступен с активной подпиской.",
+                show_alert=True,
+            )
+            return
+    await callback.answer()
+    data = await state.get_data()
+    back_callback = str(data.get("_img_back_cb") or CB_MENU_BACK_START)
+    await _show_image_model_pick(
+        callback.message,
+        state,
+        uid,
+        callback.from_user.username,
+        back_callback=back_callback,
+        gen_mode="refs",
+    )
+
+
+@router.callback_query(F.data == CB_IMG_REFS_BACK_PHOTOS)
+async def refs_back_to_photos(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.from_user is None or callback.message is None:
+        await callback.answer()
+        return
+    await callback.answer()
+    data = await state.get_data()
+    model = str(data.get("selected_model") or OPENROUTER_IMAGE_MODEL)
+    base_cost = int(data.get("selected_base_cost") or data.get("selected_cost") or 0)
+    await state.update_data(_ref_photos=[], _ref_prompt="")
+    await _send_waiting_refs_photos_step(
+        callback.bot,
+        callback.message.chat.id,
+        state,
+        model=model,
+        base_cost=base_cost,
+        replace_message=callback.message,
+    )
+
+
+@router.message(ImageGenState.waiting_refs_photos, ~F.photo)
+async def wrong_type_waiting_refs_photos(message: Message) -> None:
+    if message.media_group_id:
+        return
+    await message.answer(
+        "Нужны фото без текста — отправь одно или несколько изображений в одном сообщении (альбом).",
+        reply_markup=_waiting_refs_photos_keyboard(),
+        parse_mode=HTML,
+    )
+
+
+@router.message(ImageGenState.waiting_refs_photos, F.photo)
+async def collect_refs_photos(message: Message, state: FSMContext) -> None:
+    if not message.from_user or not message.photo:
+        return
+    ph = message.photo[-1]
+    if not ph.file_id:
+        await message.answer("Не удалось прочитать фото, попробуй ещё раз.")
+        return
+    data = await state.get_data()
+    photos = list(data.get("_ref_photos") or [])
+    if len(photos) >= MAX_REF_PHOTOS_PER_MESSAGE:
+        await message.answer(
+            f"Максимум <b>{esc(MAX_REF_PHOTOS_PER_MESSAGE)}</b> фото за раз. Удали лишние или начни заново.",
+            reply_markup=_waiting_refs_photos_keyboard(),
+            parse_mode=HTML,
+        )
+        return
+    photos.append(ph.file_id)
+    mgid = message.media_group_id
+    if mgid:
+        await state.update_data(_ref_photos=photos, _ref_album_id=str(mgid))
+        _schedule_ref_album_finalize(message, state, str(mgid))
+        return
+    await state.update_data(_ref_photos=photos, _ref_album_id=None)
+    await _finalize_ref_photos_collected(message, state)
+
+
+@router.message(ImageGenState.waiting_refs_prompt, ~F.text)
+async def wrong_type_waiting_refs_prompt(message: Message) -> None:
+    await message.answer(
+        "Нужен текстовый промпт: напиши описание картинки одним сообщением.",
+        reply_markup=_waiting_refs_prompt_keyboard(),
+    )
+
+
+@router.message(ImageGenState.waiting_refs_prompt)
+async def refs_prompt_received(message: Message, state: FSMContext) -> None:
+    if not message.from_user:
+        return
+    prompt = (message.text or "").strip()
+    if not prompt:
+        await message.answer(
+            "Нужен текст. Опиши, что должно быть на картинке.",
+            reply_markup=_waiting_refs_prompt_keyboard(),
+        )
+        return
+    if prompt.startswith("/"):
+        return
+    if _image_prompt_too_long(prompt):
+        await message.answer(
+            _image_prompt_too_long_html(),
+            reply_markup=_waiting_refs_prompt_keyboard(),
+            parse_mode=HTML,
+        )
+        return
+    data = await state.get_data()
+    photos = list(data.get("_ref_photos") or [])
+    if not photos:
+        await message.answer(
+            "Сначала загрузи фото.",
+            reply_markup=_waiting_refs_photos_keyboard(),
+            parse_mode=HTML,
+        )
+        return
+    base_cost = int(data.get("selected_base_cost") or data.get("selected_cost") or 0)
+    await state.update_data(_ref_prompt=prompt)
+    await state.set_state(ImageGenState.waiting_refs_confirm)
+    cap = await _refs_confirm_caption_html(
+        base_cost=base_cost,
+        photo_count=len(photos),
+        prompt=prompt,
+    )
+    await message.answer(cap, reply_markup=_refs_confirm_keyboard(), parse_mode=HTML)
+
+
+@router.callback_query(F.data == CB_IMG_GEN_CONFIRM)
+async def refs_confirm_generate(callback: CallbackQuery, state: FSMContext) -> None:
+    if not callback.from_user or not callback.message:
+        await callback.answer()
+        return
+    await callback.answer()
+    data = await state.get_data()
+    photos = list(data.get("_ref_photos") or [])
+    prompt = str(data.get("_ref_prompt") or "").strip()
+    if not photos or not prompt:
+        await callback.answer("Не хватает фото или текста.", show_alert=True)
+        return
+    if _image_prompt_too_long(prompt):
+        await callback.answer(
+            f"Слишком длинный текст (макс. {MAX_IMAGE_PROMPT_CHARS} символов). Сократи и отправь заново.",
+            show_alert=True,
+        )
+        return
+    model = str(data.get("selected_model") or OPENROUTER_IMAGE_MODEL)
+    base_cost = int(data.get("selected_base_cost") or data.get("selected_cost") or 0)
+    total = _refs_total_cost(base_cost, len(photos))
+    await _execute_refs_generation(
+        callback.message,
+        state,
+        user_id=callback.from_user.id,
+        username=callback.from_user.username,
+        prompt=prompt,
+        model=model,
+        total_cost=total,
+        refs_file_ids=photos,
+    )
+
+
+@router.message(ImageGenState.choosing_gen_mode)
+async def choosing_gen_mode_hint(message: Message) -> None:
+    await message.answer(
+        "Выбери режим кнопками: «Текстом» или «Текстом с изображениями».",
+        parse_mode=HTML,
+    )
+
+
 @router.callback_query((F.data == CB_CREATE_IMAGE) | (F.data == CB_CREATE_IMAGE_HUB))
 async def open_image_menu(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.from_user is None or callback.message is None:
@@ -4645,7 +5488,7 @@ async def open_image_menu(callback: CallbackQuery, state: FSMContext) -> None:
     profile = await get_user_admin_profile(uid)
     has_sub = bool(profile and subscription_is_active(profile.subscription_ends_at))
     if uid in ADMIN_IDS or has_sub:
-        await _show_image_model_pick(
+        await _show_gen_mode_pick(
             callback.message,
             state,
             uid,
@@ -4683,6 +5526,13 @@ async def create_image_from_prompt(message: Message, state: FSMContext) -> None:
         )
         return
     if prompt.startswith("/"):
+        return
+    if _image_prompt_too_long(prompt):
+        await message.answer(
+            _image_prompt_too_long_html(),
+            reply_markup=_waiting_prompt_keyboard(),
+            parse_mode=HTML,
+        )
         return
 
     user_id = message.from_user.id
@@ -4741,13 +5591,35 @@ async def regenerate_new_prompt(callback: CallbackQuery, state: FSMContext) -> N
             show_alert=True,
         )
         return
-    if ctx.kind != "text":
+    if ctx.kind not in ("text", "refs"):
         await callback.answer("Создай картинку через меню.", show_alert=True)
         return
     await callback.answer()
     uk = str(ctx.usage_kind or "self")
     if uk not in ("ready", "self"):
         uk = "self"
+    if ctx.kind == "refs" and ctx.refs_file_ids:
+        data = await state.get_data()
+        back_callback = str(data.get("_ready_back_cb") or data.get("_img_back_cb") or CB_MENU_BACK_START)
+        base_cost = max(0, int(ctx.cost) - len(ctx.refs_file_ids) * REF_PHOTO_EXTRA_CREDITS)
+        await state.update_data(
+            selected_model=ctx.model,
+            selected_cost=ctx.cost,
+            selected_base_cost=base_cost,
+            selected_usage_kind="self",
+            _gen_mode="refs",
+            _ref_photos=list(ctx.refs_file_ids),
+            _ref_prompt="",
+            _img_back_cb=back_callback,
+        )
+        await state.set_state(ImageGenState.waiting_refs_prompt)
+        await callback.message.answer(
+            "<b>Ещё раз</b>\n"
+            "<blockquote><i>Те же фото. Напиши <b>новый</b> текст для картинки одним сообщением.</i></blockquote>",
+            reply_markup=_waiting_refs_prompt_keyboard(),
+            parse_mode=HTML,
+        )
+        return
     if uk == "ready":
         data = await state.get_data()
         back_callback = str(data.get("_ready_back_cb") or data.get("_img_back_cb") or CB_MENU_BACK_START)

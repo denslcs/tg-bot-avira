@@ -32,6 +32,8 @@ CB_MENU_BACK_START = "menu:back_start"
 CB_BACK_IMAGE_MODELS = "img:back_models"
 CB_GEN_TEXT = "img:mode:text"
 CB_GEN_EDIT = "img:mode:edit"
+CB_IMG_GEN_CONFIRM = "img:gen_confirm"
+CB_IMG_REFS_BACK_PHOTOS = "img:refs_back_photos"
 CB_PICK_NANO = "img:pick_nano"
 CB_PICK_NANO_2 = "img:pick_nano2"
 CB_PICK_QWEN = "img:pick_qwen"
@@ -89,7 +91,9 @@ __all__ = [
     "CB_GEN_EDIT",
     "CB_GEN_TEXT",
     "CB_IMG_CANCEL",
+    "CB_IMG_GEN_CONFIRM",
     "CB_IMG_MODEL_SEL_PREFIX",
+    "CB_IMG_REFS_BACK_PHOTOS",
     "CB_IMG_OK",
     "CB_MENU_ABOUT",
     "CB_MENU_BACK_START",

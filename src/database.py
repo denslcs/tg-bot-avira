@@ -2742,7 +2742,7 @@ async def count_generated_images_total(user_id: int) -> int:
 
 
 async def increment_user_generated_images_total(user_id: int, delta: int = 1) -> None:
-    """+1 к счётчику профиля после успешной выдачи сгенерированного изображения."""
+    """+1 к «Сгенерировано изображений» в профиле (текст, текст+фото, готовые идеи)."""
     d = max(1, int(delta))
     async with open_db() as db:
         await db.execute(
