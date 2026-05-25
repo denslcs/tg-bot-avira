@@ -1158,18 +1158,22 @@ def _image_prompt_too_long_html() -> str:
     )
 
 _WAITING_REFS_PHOTOS_HTML = (
-    "<b>🎨 Картинка по фото и тексту</b>\n"
-    "<blockquote><i>Сначала загрузите фото в одно сообщение без текста "
-    f"(до <b>{MAX_REF_PHOTOS_PER_MESSAGE}</b> шт.).</i>\n"
-    f"<i>За каждое фото к стоимости модели добавится <b>+{REF_PHOTO_EXTRA_CREDITS}</b> кр.</i></blockquote>"
+    "<b>🎨 Картинка по фото и тексту</b>\n\n"
+    f"<i>Сейчас отправь фото одним сообщением — до <b>{MAX_REF_PHOTOS_PER_MESSAGE}</b> шт., "
+    "без текста в подписи (можно альбомом).</i>"
 )
 
+_GEN_MODE_PICK_EMOJI_ID = "5974287633151432130"
+_GEN_MODE_BTN_TEXT_EMOJI_ID = "5395444784611480792"
+_GEN_MODE_BTN_REFS_EMOJI_ID = "5271604874419647061"
+
 _GEN_MODE_PICK_HTML = (
-    "<b>Выберите режим генерации изображения</b>\n\n"
+    '<b>Выберите режим генерации изображения '
+    f'<tg-emoji emoji-id="{_GEN_MODE_PICK_EMOJI_ID}">🎨</tg-emoji></b>\n\n'
     "<blockquote>"
-    "<b>1) Текстом</b> — описание без референсных фото.\n"
-    f"<b>2) Текстом с изображениями</b> — до <b>{MAX_REF_PHOTOS_PER_MESSAGE}</b> фото и текст; "
-    f"за каждое фото <b>+{REF_PHOTO_EXTRA_CREDITS}</b> кр. к стоимости модели (модели — как в «текстом», по тарифу)."
+    "<i>Текстом - описание без референсных фото.\n"
+    f"Текстом с изображениями - генерация с добавлением фото, за каждое "
+    f"{REF_PHOTO_EXTRA_CREDITS} кредита. (максимум {MAX_REF_PHOTOS_PER_MESSAGE})</i>"
     "</blockquote>"
 )
 
@@ -1459,16 +1463,18 @@ def _gen_mode_pick_keyboard(back_callback: str) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="1) Текстом",
+                    text="Текстом",
                     callback_data=CB_GEN_TEXT,
                     style=BTN_PRIMARY,
+                    icon_custom_emoji_id=_GEN_MODE_BTN_TEXT_EMOJI_ID,
                 ),
             ],
             [
                 InlineKeyboardButton(
-                    text="2) Текстом с изображениями",
+                    text="Текстом с изображениями",
                     callback_data=CB_GEN_EDIT,
                     style=BTN_PRIMARY,
+                    icon_custom_emoji_id=_GEN_MODE_BTN_REFS_EMOJI_ID,
                 ),
             ],
             [
@@ -1612,6 +1618,8 @@ def _model_choices_for_subscription_plan(plan_id: str) -> list[tuple[str, str, i
     )
 
     p = (plan_id or "").strip().lower()
+    if not p:
+        return _dedupe_model_choices([klein])
     if p == "nova":
         return _dedupe_model_choices([klein])
     if p == "supernova":
@@ -3194,7 +3202,7 @@ async def _refs_confirm_caption_html(*, base_cost: int, photo_count: int, prompt
     total = _refs_total_cost(base_cost, photo_count)
     extra = photo_count * REF_PHOTO_EXTRA_CREDITS
     return (
-        "<b>Подтвердите генерацию</b>\n"
+        '<b>Подтвердите генерацию <tg-emoji emoji-id="5444856076954520455">🧾</tg-emoji></b>\n'
         "<blockquote>"
         f"<i>Модель:</i> <b>{esc(base_cost)}</b> кр.\n"
         f"<i>Фото:</i> <b>{esc(photo_count)}</b> × <b>{esc(REF_PHOTO_EXTRA_CREDITS)}</b> кр. = <b>{esc(extra)}</b> кр.\n"
@@ -3218,7 +3226,7 @@ async def _finalize_ref_photos_collected(message: Message, state: FSMContext) ->
     n = len(photos)
     total = _refs_total_cost(base_cost, n)
     await message.answer(
-        "<b>Фото приняты.</b>\n"
+        '<b><tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Фото приняты.</b>\n'
         f"<blockquote><i>Загружено: <b>{esc(n)}</b>. Доплата за фото: <b>{esc(n * REF_PHOTO_EXTRA_CREDITS)}</b> кр. "
         f"(итого с моделью: <b>{esc(total)}</b> кр.).</i>\n\n"
         f"<i>Теперь напиши одним сообщением, что должно быть на картинке "
@@ -3336,21 +3344,14 @@ async def _show_image_model_pick(
         return
     await ensure_user(user_id, username)
     is_admin = user_id in ADMIN_IDS
+    profile = await get_user_admin_profile(user_id) if not is_admin else None
+    has_sub = bool(profile and subscription_is_active(profile.subscription_ends_at))
     if is_admin:
         plan_id = "universe"
-    else:
-        profile = await get_user_admin_profile(user_id)
-        if not profile or not subscription_is_active(profile.subscription_ends_at):
-            await _start_image_flow(
-                message,
-                state,
-                user_id,
-                username,
-                replace_menu=True,
-                back_callback=back_callback,
-            )
-            return
+    elif has_sub:
         plan_id = (profile.subscription_plan or "").strip().lower()
+    else:
+        plan_id = ""
     await state.clear()
     await state.update_data(_img_back_cb=back_callback, _gen_mode=(gen_mode or "text").strip())
     gm = (gen_mode or "text").strip()
@@ -3384,14 +3385,24 @@ async def _show_image_model_pick(
     )
     await state.set_state(ImageGenState.choosing_model)
     if gm == "refs":
-        refs_intro = (
-            "Те же модели, что в режиме «текстом», по вашему тарифу. "
-            f"За каждое фото к стоимости модели +{REF_PHOTO_EXTRA_CREDITS} кр. "
-            f"До {MAX_REF_PHOTOS_PER_MESSAGE} фото за раз."
-        )
         if is_admin:
             refs_intro = (
-                "Режим администратора — доступны все модели. " + refs_intro
+                "Режим администратора — доступны все модели. "
+                f"За каждое фото +{REF_PHOTO_EXTRA_CREDITS} кр. "
+                f"До {MAX_REF_PHOTOS_PER_MESSAGE} фото за раз."
+            )
+        elif has_sub:
+            refs_intro = (
+                "Те же модели, что в режиме «текстом», по вашему тарифу. "
+                f"За каждое фото +{REF_PHOTO_EXTRA_CREDITS} кр. "
+                f"До {MAX_REF_PHOTOS_PER_MESSAGE} фото за раз."
+            )
+        else:
+            refs_intro = (
+                "Базовая модель Klein. "
+                f"За каждое фото +{REF_PHOTO_EXTRA_CREDITS} кр. "
+                f"До {MAX_REF_PHOTOS_PER_MESSAGE} фото. "
+                f"Лимит как у «текстом»: {NONSUB_IMAGE_WINDOW_MAX} картинки за цикл без подписки."
             )
         cap = _model_pick_caption_html(for_admin=is_admin, choices=choices, intro=refs_intro)
     else:
@@ -3523,7 +3534,25 @@ async def remind_pick_model_or_ignore(message: Message, state: FSMContext) -> No
         )
         return
     profile = await get_user_admin_profile(uid)
-    if not profile or not subscription_is_active(profile.subscription_ends_at):
+    has_sub = bool(profile and subscription_is_active(profile.subscription_ends_at))
+    if not has_sub:
+        data = await state.get_data()
+        gm = (data.get("_gen_mode") or "text").strip()
+        if gm == "refs":
+            choices = _model_choices_for_gen_mode("", gm)
+            refs_intro = (
+                "Базовая модель Klein. "
+                f"За каждое фото +{REF_PHOTO_EXTRA_CREDITS} кр. "
+                f"До {MAX_REF_PHOTOS_PER_MESSAGE} фото. "
+                f"Лимит: {NONSUB_IMAGE_WINDOW_MAX} картинки за цикл без подписки."
+            )
+            cap = _model_pick_caption_html(for_admin=False, choices=choices, intro=refs_intro)
+            await message.answer(
+                cap,
+                reply_markup=_subscriber_model_pick_keyboard(choices),
+                parse_mode=HTML,
+            )
+            return
         await state.clear()
         await message.answer(
             "<b>Подписка не активна.</b> Доступна базовая модель и лимит как без подписки — дальше опиши картинку.",
@@ -3643,7 +3672,7 @@ async def back_to_image_flow(callback: CallbackQuery, state: FSMContext) -> None
 
     cur_s = str(cur or "")
     if cur_s.endswith("waiting_refs_photos") or cur_s.endswith("waiting_prompt"):
-        if gen_mode == "refs" and (uid in ADMIN_IDS or has_sub):
+        if gen_mode == "refs":
             await _show_image_model_pick(
                 callback.message,
                 state,
@@ -3673,7 +3702,7 @@ async def back_to_image_flow(callback: CallbackQuery, state: FSMContext) -> None
         )
         return
 
-    if cur_s.endswith("choosing_model") and (uid in ADMIN_IDS or has_sub):
+    if cur_s.endswith("choosing_model"):
         await _show_gen_mode_pick(
             callback.message,
             state,
@@ -3683,21 +3712,12 @@ async def back_to_image_flow(callback: CallbackQuery, state: FSMContext) -> None
         )
         return
 
-    if uid in ADMIN_IDS or has_sub:
-        await _show_gen_mode_pick(
-            callback.message,
-            state,
-            uid,
-            callback.from_user.username,
-            back_callback=back_callback,
-        )
-        return
-    await state.clear()
-    await _restore_image_flow_parent_menu(
-        callback,
+    await _show_gen_mode_pick(
+        callback.message,
+        state,
+        uid,
+        callback.from_user.username,
         back_callback=back_callback,
-        user_id=uid,
-        username=callback.from_user.username,
     )
 
 
@@ -4431,7 +4451,7 @@ async def ready_collect_photos(message: Message, state: FSMContext) -> None:
         await state.set_state(ImageGenState.ready_waiting_confirm)
         charge_show = int(data.get("_ready_redo_charge") or 0)
         await message.answer(
-            "<b>Фото приняты.</b>\n"
+            '<b><tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Фото приняты.</b>\n'
             f"<blockquote><i>К списанию: <b>{charge_show}</b> кр. Нажми «Подтвердить», чтобы запустить тот же сценарий.</i></blockquote>",
             reply_markup=_ready_confirm_keyboard(),
             parse_mode=HTML,
@@ -5307,16 +5327,8 @@ async def pick_gen_mode_refs(callback: CallbackQuery, state: FSMContext) -> None
     if callback.from_user is None or callback.message is None:
         await callback.answer("Ошибка запроса.", show_alert=True)
         return
-    uid = callback.from_user.id
-    if uid not in ADMIN_IDS:
-        profile = await get_user_admin_profile(uid)
-        if not profile or not subscription_is_active(profile.subscription_ends_at):
-            await callback.answer(
-                "Режим «текст + изображения» доступен с активной подпиской.",
-                show_alert=True,
-            )
-            return
     await callback.answer()
+    uid = callback.from_user.id
     data = await state.get_data()
     back_callback = str(data.get("_img_back_cb") or CB_MENU_BACK_START)
     await _show_image_model_pick(
@@ -5485,25 +5497,13 @@ async def open_image_menu(callback: CallbackQuery, state: FSMContext) -> None:
     uid = callback.from_user.id
     back_callback = CB_MENU_HUB if callback.data == CB_CREATE_IMAGE_HUB else CB_MENU_BACK_START
     await ensure_user(uid, callback.from_user.username)
-    profile = await get_user_admin_profile(uid)
-    has_sub = bool(profile and subscription_is_active(profile.subscription_ends_at))
-    if uid in ADMIN_IDS or has_sub:
-        await _show_gen_mode_pick(
-            callback.message,
-            state,
-            uid,
-            callback.from_user.username,
-            back_callback=back_callback,
-        )
-    else:
-        await _start_image_flow(
-            callback.message,
-            state,
-            uid,
-            callback.from_user.username,
-            replace_menu=True,
-            back_callback=back_callback,
-        )
+    await _show_gen_mode_pick(
+        callback.message,
+        state,
+        uid,
+        callback.from_user.username,
+        back_callback=back_callback,
+    )
 
 
 @router.message(ImageGenState.waiting_prompt, ~F.text)
