@@ -422,7 +422,7 @@ async def support_private_messages(message: Message) -> None:
             f"user_id: {user_id}\n"
             f"username: {username}\n"
             f"подписка/тариф: {sub_line}\n"
-            f"действует до (UTC): {sub_till}\n"
+            f"действует до: {sub_till}\n"
             f"дней в основном боте: {days_in_bot}\n"
             f"сгенерировано изображений: {generated_total}\n\n"
             f"{support_text}"

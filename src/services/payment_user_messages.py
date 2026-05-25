@@ -32,7 +32,7 @@ def plan_purchase_success_html(
         if apply_result.renewal_release_at:
             release_h = format_subscription_ends_at(apply_result.renewal_release_at)
         credits_when = (
-            f"<b>{esc(release_h)}</b> (UTC)"
+            f"<b>{esc(release_h)}</b>"
             if release_h
             else "окончания текущего оплаченного периода"
         )

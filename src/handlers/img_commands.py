@@ -446,8 +446,7 @@ def _ready_idea_recommendation_line(*, title: str, photos_required: int) -> str:
     if int(photos_required) <= 0:
         return ""
     return (
-        '<blockquote><i><tg-emoji emoji-id="5447644880824181073">⚠️</tg-emoji> Рекомендуется фото, где в кадре только один человек — '
-        "так результат обычно получается точнее и качественнее.</i></blockquote>"
+        '<blockquote><i><tg-emoji emoji-id="5447644880824181073">⚠️</tg-emoji> Рекомендуется фото, где в кадре только один человек.</i></blockquote>'
     )
 
 
@@ -523,7 +522,7 @@ READY_IDEA_ITEMS: dict[str, list[tuple[str, str, str, int]]] = {
         (
             "Повязанный",
             "Живой 9:16-кадр с iPhone: задержание, ФСБ в тактике, на столе — пачки евро, карты, iPhone и MacBook; лёгкий motion blur у головы.",
-            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve exact facial structure, skin texture, age cues, hairline, and recognizable likeness — no face replacement, no beautification drift. EXPRESSION: light natural smile; subtle motion blur on the head/hair as if captured mid-movement in a chaotic live moment (face still readable). GENDER / OUTFIT (strict from reference): if female-presenting — black athletic jumpsuit with front zipper, partly unzipped at the chest; if male-presenting — black T-shirt and wide black jeans; if ambiguous — black minimal streetwear (dark top + wide dark trousers). POSE: realistic detention / restraint moment — hands controlled by officers, body language tense but not theatrical. TABLE PROPS (foreground): on a table, large sums of cash shown as dense bundles of crisp new euro banknotes straight from a bank, each bundle tied with paper bands/ribbons, arranged in separate groups totaling roughly five million euros worth visually, with slight uneven stacking and natural mess. About twenty bank cards laid in one line with small random offsets (not perfectly aligned). Several iPhones of different models in a row plus two closed MacBook laptops nearby, all placed imperfectly (casual raid/evidence-table look). OFFICERS: Russian FSB (Федеральная служба безопасности) tactical personnel in black gear — helmets, body armor vests, tactical boots; three officers in frame: one holding/controlling the subject's hands, one standing close beside, one partially visible at the edge; natural documentary positions, officer faces softly out of focus / not the hero of the shot. INSIGNIA / PATCH CLARITY (strict, high priority): patches must be simple and clean — no Cyrillic words on shoulder patches, no coats of arms, no eagles. Shoulder patches (each officer): rectangular cloth patch showing ONLY the Russian flag — three horizontal stripes white (top), blue (middle), red (bottom), crisp edges, correct order, no text, no emblem overlay. Chest/vest tag: exact Cyrillic \"ФСБ\" only (three letters Ф-С-Б, bold, high contrast, legible, no extra characters). Patch edges stitched or molded; stable colors. DEVICES & PROPS TEXT RULE: iPhones and closed MacBooks with accurate Apple-style proportions; Apple logo on MacBook lid clean and centered; phone screens off or dark (no UI text). Bank cards: realistic chips and color blocks only — do NOT render readable card numbers, names, or bank logos (avoid fake illegible microtext). Euro bundles: plausible €50/€100 color cues and banded stacks without microscopic unreadable bill typography. ATMOSPHERE: photorealistic detention scene, live candid raid energy, slight chaos, natural shadows, no glossy staged advertising look, no studio polish. CAMERA: shot on iPhone 16 Pro Max, vertical 9:16, harsh realistic indoor light, documentary smartphone color science, mild noise acceptable. NEGATIVE: cartoon, anime, plastic skin, wrong user face, perfect studio lighting, smiling officers, watermark, chat caption overlays, extra limbs, duplicated faces, fantasy uniforms, US SWAT instead of plausible Russian tactical raid look, shoulder text РОССИЯ, double-headed eagle, coat of arms, garbled Cyrillic, wrong or extra letters on chest tag, ГБР instead of ФСБ, pseudo-text on patches, illegible bank card numbers, warped Apple logos, random alphabet soup on uniforms, wrong flag colors or vertical stripes.",
+            "CRITICAL IDENTITY LOCK: The uploaded user photo is the ONLY source of facial identity. Preserve exact facial structure, skin texture, age cues, hairline, and recognizable likeness — no face replacement, no beautification drift. EXPRESSION: light natural smile; subtle motion blur on the head/hair as if captured mid-movement in a chaotic live moment (face still readable). GENDER / OUTFIT (strict from reference): if female-presenting — black athletic jumpsuit with front zipper, partly unzipped at the chest; if male-presenting — black T-shirt and wide black jeans; if ambiguous — black minimal streetwear (dark top + wide dark trousers). POSE: realistic detention / restraint moment — hands controlled by officers, body language tense but not theatrical. TABLE PROPS (foreground): on a table, large sums of cash shown as dense bundles of crisp new euro banknotes straight from a bank, each bundle tied with paper bands/ribbons, arranged in separate groups totaling roughly five million euros worth visually, with slight uneven stacking and natural mess. About twenty bank cards laid in one line with small random offsets (not perfectly aligned). Several iPhones of different models in a row plus two closed MacBook laptops nearby, all placed imperfectly (casual raid/evidence-table look). OFFICERS: Russian FSB (Федеральная служба безопасности) tactical personnel in black gear — helmets, body armor vests, tactical boots; three officers in frame: one holding/controlling the subject's hands, one standing close beside, one partially visible at the edge; natural documentary positions, officer faces softly out of focus / not the hero of the shot. INSIGNIA / PATCH PLACEMENT (strict, highest priority): (A) SHOULDER ONLY — Russian flag: each officer has exactly ONE flag patch on the shoulder/arm area — a single rectangular tricolor (white top, blue middle, red bottom), crisp edges, correct stripe order; no second flag patch, no duplicate flags, no flag on chest/vest/back/helmet. The shoulder flag patch must have ZERO text — no Cyrillic, no \"ФСБ\", no \"РОССИЯ\", no eagles, no coat of arms. (B) CHEST ONLY — \"ФСБ\": the three Cyrillic letters Ф-С-Б appear ONLY on the chest/vest front tag (bold, high contrast, legible); NEVER on shoulders, sleeves, back, helmet, or on the flag patch. No other Cyrillic words on uniforms. Patch edges stitched or molded; stable colors. DEVICES & PROPS TEXT RULE: iPhones and closed MacBooks with accurate Apple-style proportions; Apple logo on MacBook lid clean and centered; phone screens off or dark (no UI text). Bank cards: realistic chips and color blocks only — do NOT render readable card numbers, names, or bank logos (avoid fake illegible microtext). Euro bundles: plausible €50/€100 color cues and banded stacks without microscopic unreadable bill typography. ATMOSPHERE: photorealistic detention scene, live candid raid energy, slight chaos, natural shadows, no glossy staged advertising look, no studio polish. CAMERA: shot on iPhone 16 Pro Max, vertical 9:16, harsh realistic indoor light, documentary smartphone color science, mild noise acceptable. NEGATIVE: cartoon, anime, plastic skin, wrong user face, perfect studio lighting, smiling officers, watermark, chat caption overlays, extra limbs, duplicated faces, fantasy uniforms, US SWAT instead of plausible Russian tactical raid look, shoulder text РОССИЯ, double-headed eagle, coat of arms, garbled Cyrillic, wrong or extra letters on chest tag, ГБР instead of ФСБ, pseudo-text on patches, multiple flag patches on one shoulder, duplicate Russian flags, flag on chest or vest, ФСБ on shoulder or sleeve, ФСБ printed on flag patch, Cyrillic on shoulder patches, illegible bank card numbers, warped Apple logos, random alphabet soup on uniforms, wrong flag colors or vertical stripes.",
             1,
         ),
     ],
@@ -1548,7 +1547,7 @@ async def _prepare_image_charge_and_daily_slot(
             await message.answer(
                 "<b>Готовые идеи без подписки</b>\n"
                 f"<blockquote>Бесплатный слот в цикле уже использован — следующий будет через <b>{NONSUB_IMAGE_WINDOW_DAYS}</b> суток "
-                "от момента исчерпания (то же время суток по UTC). Оформи подписку в <code>/start</code> → <b>Оплатить</b> "
+                "от момента исчерпания (в то же время суток). Оформи подписку в <code>/start</code> → <b>Оплатить</b> "
                 "или получи дополнительный запуск: <b>+1 за каждых 2 приглашённых друзей</b> по <code>/ref</code>.</blockquote>",
                 parse_mode=HTML,
             )
@@ -1594,7 +1593,7 @@ async def _prepare_image_charge_and_daily_slot(
             await message.answer(
                 "<b>Лимит без подписки</b>\n"
                 f"<blockquote>В цикле доступно не более <b>{NONSUB_IMAGE_WINDOW_MAX}</b> генераций картинок; после полного исчерпания "
-                f"следующий цикл — через <b>{NONSUB_IMAGE_WINDOW_DAYS}</b> суток от этого момента (то же время суток по UTC). "
+                f"следующий цикл — через <b>{NONSUB_IMAGE_WINDOW_DAYS}</b> суток от этого момента (в то же время суток). "
                 "Кредиты лимит не обходят. Оформи подписку в <code>/start</code> → <b>Оплатить</b> или дождись обновления цикла.</blockquote>",
                 parse_mode=HTML,
             )
@@ -1639,7 +1638,7 @@ async def _prepare_image_charge_and_daily_slot(
             await add_credits_with_reason(user_id, cost, source=refund_source, details=refund_details)
         await message.answer(
             "<b>Лимит занят</b>\n"
-            f"<blockquote><i>Параллельный запрос.</i> Сегодня (МСК): <b>{esc(used)}/{esc(limit)}</b>. "
+            f"<blockquote><i>Параллельный запрос.</i> Сегодня: <b>{esc(used)}/{esc(limit)}</b>. "
             "Попробуй позже.</blockquote>",
             parse_mode=HTML,
         )
@@ -2404,7 +2403,7 @@ async def _send_result_photo_with_regen(
             u, lim = q
             day_note = (
                 f"\n<blockquote><i>Картинки без подписки (цикл {NONSUB_IMAGE_WINDOW_MAX} шт.):</i> "
-                f"<b>{esc(u)}/{esc(lim)}</b> <i>— сброс цикла через {NONSUB_IMAGE_WINDOW_DAYS} суток после исчерпания (UTC).</i></blockquote>"
+                f"<b>{esc(u)}/{esc(lim)}</b> <i>— сброс цикла через {NONSUB_IMAGE_WINDOW_DAYS} суток после исчерпания.</i></blockquote>"
             )
         else:
             day_note = ""

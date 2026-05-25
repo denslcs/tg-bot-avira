@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import re
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from aiogram.enums import ParseMode
 
@@ -21,6 +22,9 @@ PROFILE_AVATAR_TG_HTML = f'<tg-emoji emoji-id="{PROFILE_AVATAR_PREMIUM_EMOJI_ID}
 PROFILE_SUBSCRIPTION_LABEL_TG_HTML = '<tg-emoji emoji-id="5427168083074628963">💎</tg-emoji>'
 PROFILE_VALID_UNTIL_LABEL_TG_HTML = '<tg-emoji emoji-id="5893102202817352158">🕞</tg-emoji>'
 PROFILE_GENERATED_IMAGES_LABEL_TG_HTML = '<tg-emoji emoji-id="5305265301917549162">📎</tg-emoji>'
+
+# Даты и время в сообщениях пользователям — Europe/Moscow (без подписи «UTC» / «МСК»).
+MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 
 
 def esc(value: str | int | float) -> str:
@@ -82,7 +86,7 @@ def starter_already_purchased_message_html() -> str:
 
 
 def format_subscription_ends_at(iso_str: str | None, *, default: str = "—") -> str:
-    """Дата окончания подписки для людей: ДД.ММ.ГГГГ ЧЧ:ММ UTC."""
+    """Дата/время для людей: ДД.ММ.ГГГГ ЧЧ:ММ (московское время)."""
     text = (iso_str or "").strip()
     if text.lower() in ("none", "null"):
         return default
@@ -99,5 +103,5 @@ def format_subscription_ends_at(iso_str: str | None, *, default: str = "—") ->
         return text
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    dt = dt.astimezone(timezone.utc)
-    return dt.strftime("%d.%m.%Y %H:%M UTC")
+    dt = dt.astimezone(MOSCOW_TZ)
+    return dt.strftime("%d.%m.%Y %H:%M")

@@ -625,7 +625,7 @@ def _plans_menu_caption() -> str:
         f"для {u_h} — <b>+10%</b> (если подписка активна или прошло не более 2 дней после окончания).</blockquote>\n\n"
         f"<blockquote><i>Если подписка не активна:</i> за один цикл — до <b>{esc(NONSUB_IMAGE_WINDOW_MAX)}</b> картинок; "
         f"когда все слоты цикла израсходованы, новый цикл откроется через <b>{esc(NONSUB_IMAGE_WINDOW_DAYS)}</b> суток "
-        f"от этого момента (UTC). {CREDITS_COIN_TG_HTML} Кредиты этот лимит не обходят — сначала действует лимит цикла.</blockquote>"
+        f"от этого момента. {CREDITS_COIN_TG_HTML} Кредиты этот лимит не обходят — сначала действует лимит цикла.</blockquote>"
     )
 
 
@@ -2406,7 +2406,7 @@ async def successful_payment(message: Message) -> None:
             f'<tg-emoji emoji-id="5382164415019768638">🪙</tg-emoji> Кредиты: <b>+{esc(apply_result.total_bonus_credits)}</b>'
             f"{(' (в т.ч. продление +' + str(apply_result.renewal_extra) + ')' if apply_result.renewal_extra else '')}"
             f" · начислено: <i>{esc(credit_ok)}</i>\n"
-            f"До (UTC): <code>{esc(end_h)}</code>\n"
+            f"Действует до: <code>{esc(end_h)}</code>\n"
             f"Сумма: <b>{esc(stars_amt)}</b> {esc(cur)}\n"
             f"charge: <code>{esc(charge_id)}</code>"
         )
