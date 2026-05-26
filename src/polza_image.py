@@ -14,6 +14,10 @@ from src.config import (
     POLZA_IMAGE_INPUT_RESOLUTION,
     POLZA_IMAGE_MODEL_IDS,
 )
+from src.image_upstream_errors import (
+    UPSTREAM_BILLING_USER_MESSAGE,
+    text_looks_like_upstream_provider_billing,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,37 +42,24 @@ def is_polza_image_model(model: str) -> bool:
 
 
 # Не раскрываем пользователю сбои биллинга/квот на стороне Polza.ai.
-_IMAGE_GEN_TRY_LATER = (
-    "Сейчас не получилось сгенерировать картинку. Попробуй позже или повтори запрос чуть позже."
-)
+_IMAGE_GEN_TRY_LATER = UPSTREAM_BILLING_USER_MESSAGE
+
+
+def polza_exc_is_provider_unavailable(exc: BaseException) -> bool:
+    if isinstance(exc, PolzaApiError):
+        return _polza_error_looks_like_provider_billing(exc)
+    return text_looks_like_upstream_provider_billing(str(exc))
 
 
 def _polza_error_looks_like_provider_billing(exc: PolzaApiError) -> bool:
     if exc.http_status == 402:
         return True
-    t = str(exc).lower()
-    hints = (
-        "402",
-        "payment",
-        "insufficient",
-        "balance",
-        "billing",
-        "quota",
-        "not enough",
-        "funds",
-        "квот",
-        "баланс",
-        "оплат",
-        "недостаточно",
-        "лимит",
-        "credit limit",
-    )
-    return any(h in t for h in hints)
+    return text_looks_like_upstream_provider_billing(str(exc))
 
 
 def format_polza_image_user_error(exc: BaseException) -> str:
     if isinstance(exc, PolzaApiError):
-        if _polza_error_looks_like_provider_billing(exc):
+        if polza_exc_is_provider_unavailable(exc):
             return _IMAGE_GEN_TRY_LATER
         msg = str(exc) or ""
         if "polzaai_api_key" in msg.lower():
@@ -80,7 +71,11 @@ def format_polza_image_user_error(exc: BaseException) -> str:
             return _IMAGE_GEN_TRY_LATER
         if exc.http_status == 429:
             return "Сервис генерации перегружен или сработал лимит. Попробуй через минуту."
-        return msg or _IMAGE_GEN_TRY_LATER
+        if text_looks_like_upstream_provider_billing(msg):
+            return _IMAGE_GEN_TRY_LATER
+        # Сырой текст API не показываем - там часто ссылки «пополните Polza.ai».
+        logger.warning("Polza error sanitized for user (http=%s): %s", exc.http_status, msg[:300])
+        return "Не удалось получить картинку. Попробуй позже или смени модель."
     if isinstance(exc, TimeoutError):
         return "Генерация через Polza.ai слишком долгая. Попробуй ещё раз позже."
     return "Не удалось получить картинку через Polza.ai. Попробуй позже или смени модель."

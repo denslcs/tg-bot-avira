@@ -111,13 +111,19 @@ from src.keyboards.callback_data import (
 from src.keyboards.styles import BTN_DANGER, BTN_PRIMARY, BTN_SUCCESS
 from src.openrouter_image import (
     OpenRouterApiError,
-    is_openrouter_image_configured,
     openrouter_text_and_refs_to_image_bytes,
     openrouter_text_to_image_bytes,
 )
+from src.image_provider_user import (
+    format_image_generation_failure_html,
+    image_gen_disabled_html,
+    image_provider_for_model,
+    is_image_model_provider_configured,
+    notify_provider_failure_from_exc,
+    provider_blocks_image_use,
+)
 from src.polza_image import (
     PolzaApiError,
-    is_polza_configured,
     is_polza_image_model,
     polza_text_to_image_bytes,
 )
@@ -1178,18 +1184,6 @@ _GEN_MODE_PICK_HTML = (
     "</blockquote>"
 )
 
-_IMAGE_GEN_MISSING_TEXT = (
-    "<b>Генерация картинок выключена.</b>\n\n"
-    "<blockquote>Администратору: задай <code>OPENROUTER_API_KEY</code> и при необходимости "
-    "<code>OPENROUTER_IMAGE_MODEL</code> в <code>.env</code> (см. .env.example).</blockquote>"
-)
-
-_POLZA_MISSING_TEXT = (
-    "<b>Модель GPT Image (Polza.ai) недоступна.</b>\n\n"
-    "<blockquote>Администратору: задай <code>POLZAAI_API_KEY</code> в <code>.env</code> "
-    "(см. .env.example).</blockquote>"
-)
-
 # После успешной генерации не удаляем служебное сообщение - только обновляем текст.
 _GEN_STATUS_DONE_TEXT = (
     '<i><tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Генерация завершена.</i> Результат - в следующем сообщении.'
@@ -1334,6 +1328,10 @@ async def _notify_image_generation_failure(
     wait_msg: Message | None,
     message: Message,
     state: FSMContext | None,
+    *,
+    exc: BaseException | None = None,
+    user_id: int | None = None,
+    model: str | None = None,
 ) -> None:
     kb = start_menu_keyboard()
     if state is not None:
@@ -1341,13 +1339,23 @@ async def _notify_image_generation_failure(
             await state.clear()
         except Exception:
             logging.debug("state clear on gen failure", exc_info=True)
+    uid = user_id if user_id is not None else message.chat.id
+    if exc is not None:
+        notify_provider_failure_from_exc(exc, model=model)
+    failure_text = (
+        format_image_generation_failure_html(exc, user_id=uid, model=model)
+        if exc is not None
+        else _GEN_FAILURE_TEXT
+    )
+    if not failure_text:
+        failure_text = _GEN_FAILURE_TEXT
     if wait_msg is not None:
         try:
-            await _edit_message_progress_text(wait_msg, _GEN_FAILURE_TEXT, reply_markup=kb)
+            await _edit_message_progress_text(wait_msg, failure_text, reply_markup=kb)
             return
         except Exception:
             logging.debug("failure notify: edit failed, sending new message", exc_info=True)
-    await message.answer(_GEN_FAILURE_TEXT, parse_mode=HTML, reply_markup=kb)
+    await message.answer(failure_text, parse_mode=HTML, reply_markup=kb)
 
 
 async def _await_generation_with_progress(
@@ -1546,6 +1554,12 @@ class ImageGenState(StatesGroup):
     ready_waiting_confirm = State()
 
 
+def _filter_configured_model_choices(
+    items: list[tuple[str, str, int, str]],
+) -> list[tuple[str, str, int, str]]:
+    return [c for c in items if is_image_model_provider_configured(c[1])]
+
+
 def _dedupe_model_choices(items: list[tuple[str, str, int, str]]) -> list[tuple[str, str, int, str]]:
     """Один id модели - одна кнопка (если в .env Klein и Pro совпали)."""
     seen: set[str] = set()
@@ -1648,7 +1662,9 @@ def _refs_base_cost_by_model_id() -> dict[str, int]:
 
 def _model_choices_for_gen_mode(plan_id: str, gen_mode: str) -> list[tuple[str, str, int, str]]:
     """Текст - как по тарифу; текст+фото - те же модели по тарифу, другие базовые цены."""
-    text_choices = _model_choices_for_subscription_plan(plan_id)
+    text_choices = _filter_configured_model_choices(
+        _model_choices_for_subscription_plan(plan_id)
+    )
     if (gen_mode or "").strip() != "refs":
         return text_choices
     refs_costs = _refs_base_cost_by_model_id()
@@ -1749,6 +1765,24 @@ def _subscriber_model_pick_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def _image_gen_unavailable_html(user_id: int, *, model: str | None = None) -> str:
+    prov = image_provider_for_model(model) if model else "openrouter"
+    return image_gen_disabled_html(user_id, provider=prov)
+
+
+async def _answer_image_service_unavailable(
+    message: Message,
+    user_id: int,
+    *,
+    model: str | None = None,
+) -> None:
+    await message.answer(
+        _image_gen_unavailable_html(user_id, model=model),
+        reply_markup=_missing_config_kb(),
+        parse_mode=HTML,
+    )
+
+
 async def _prepare_image_charge_and_daily_slot(
     message: Message,
     *,
@@ -1757,6 +1791,7 @@ async def _prepare_image_charge_and_daily_slot(
     charge: bool,
     cost: int,
     usage_kind: str,
+    model: str | None = None,
 ) -> tuple[bool, ImageChargeMeta | None]:
     meta = ImageChargeMeta()
     profile = await get_user_admin_profile(user_id) if not is_admin else None
@@ -1764,6 +1799,10 @@ async def _prepare_image_charge_and_daily_slot(
 
     if is_admin:
         return True, meta
+
+    if provider_blocks_image_use(model):
+        await _answer_image_service_unavailable(message, user_id, model=model)
+        return False, None
 
     is_ready = usage_kind == "ready"
     charge_source = "ready_idea_generate" if is_ready else "image_generate"
@@ -2781,16 +2820,18 @@ async def _execute_text_generation(
             model, plan_cost = await _effective_image_model_and_cost(user_id, model)
             cost = plan_cost
 
-    if is_polza_image_model(model):
-        if not is_polza_configured():
-            await message.answer(_POLZA_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
-            return
-    elif not is_openrouter_image_configured():
-        await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
+    if provider_blocks_image_use(model):
+        await _answer_image_service_unavailable(message, user_id, model=model)
         return
 
     prep = await _prepare_image_charge_and_daily_slot(
-        message, user_id=user_id, is_admin=is_admin, charge=charge, cost=cost, usage_kind=usage_kind
+        message,
+        user_id=user_id,
+        is_admin=is_admin,
+        charge=charge,
+        cost=cost,
+        usage_kind=usage_kind,
+        model=model,
     )
     ok, meta = prep
     if not ok or meta is None:
@@ -2832,14 +2873,16 @@ async def _execute_text_generation(
         await _rollback_generation_charge(
             user_id, meta, usage_kind=usage_kind, cost=cost
         )
-        await _notify_image_generation_failure(wait_msg, message, state)
+        await _notify_image_generation_failure(
+            wait_msg, message, state, exc=exc, user_id=user_id, model=model
+        )
         return
     if not image_bytes or len(image_bytes) < 64:
         logging.warning("empty or tiny image after text gen user_id=%s", user_id)
         await _rollback_generation_charge(
             user_id, meta, usage_kind=usage_kind, cost=cost
         )
-        await _notify_image_generation_failure(wait_msg, message, state)
+        await _notify_image_generation_failure(wait_msg, message, state, user_id=user_id, model=model)
         return
     await _finalize_generation_status_message(wait_msg)
     await _send_result_photo_with_regen(
@@ -2900,8 +2943,8 @@ async def _execute_refs_generation(
     total_cost = _refs_total_cost(base_cost, len(refs_file_ids))
     api_model = _resolve_refs_api_model(model)
 
-    if not is_openrouter_image_configured():
-        await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
+    if provider_blocks_image_use(api_model):
+        await _answer_image_service_unavailable(message, user_id, model=api_model)
         return
 
     prep = await _prepare_image_charge_and_daily_slot(
@@ -2911,6 +2954,7 @@ async def _execute_refs_generation(
         charge=charge,
         cost=total_cost,
         usage_kind="self",
+        model=api_model,
     )
     ok, meta = prep
     if not ok or meta is None:
@@ -2944,11 +2988,13 @@ async def _execute_refs_generation(
         else:
             logging.exception("Free refs image generation failed user_id=%s", user_id)
         await _rollback_generation_charge(user_id, meta, usage_kind="self", cost=total_cost)
-        await _notify_image_generation_failure(wait_msg, message, state)
+        await _notify_image_generation_failure(
+            wait_msg, message, state, exc=exc, user_id=user_id, model=api_model
+        )
         return
     if not image_bytes or len(image_bytes) < 64:
         await _rollback_generation_charge(user_id, meta, usage_kind="self", cost=total_cost)
-        await _notify_image_generation_failure(wait_msg, message, state)
+        await _notify_image_generation_failure(wait_msg, message, state, user_id=user_id, model=api_model)
         return
     await _finalize_generation_status_message(wait_msg)
     await _send_result_photo_with_regen(
@@ -3067,13 +3113,19 @@ async def _execute_ready_with_refs_generation(
         model = (OPENROUTER_IMAGE_GEMINI_MODEL or "").strip()
     if not model:
         model = OPENROUTER_IMAGE_MODEL
-    if not is_openrouter_image_configured():
-        await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
+    if provider_blocks_image_use(model):
+        await _answer_image_service_unavailable(message, user_id, model=model)
         return
 
     chat_id = message.chat.id
     prep = await _prepare_image_charge_and_daily_slot(
-        message, user_id=user_id, is_admin=is_admin, charge=charge, cost=cost, usage_kind="ready"
+        message,
+        user_id=user_id,
+        is_admin=is_admin,
+        charge=charge,
+        cost=cost,
+        usage_kind="ready",
+        model=model,
     )
     ok, meta = prep
     if not ok or meta is None:
@@ -3129,14 +3181,16 @@ async def _execute_ready_with_refs_generation(
         await _rollback_generation_charge(
             user_id, meta, usage_kind="ready", cost=cost
         )
-        await _notify_image_generation_failure(wait_msg, message, state)
+        await _notify_image_generation_failure(
+            wait_msg, message, state, exc=exc, user_id=user_id, model=model
+        )
         return
     if not image_bytes or len(image_bytes) < 64:
         logging.warning("empty or tiny image after ready refs user_id=%s", user_id)
         await _rollback_generation_charge(
             user_id, meta, usage_kind="ready", cost=cost
         )
-        await _notify_image_generation_failure(wait_msg, message, state)
+        await _notify_image_generation_failure(wait_msg, message, state, user_id=user_id, model=model)
         return
     if overlay_nick:
         image_bytes = _overlay_minecraft_nick(image_bytes, overlay_nick)
@@ -3300,10 +3354,10 @@ async def _show_gen_mode_pick(
     *,
     back_callback: str = CB_MENU_BACK_START,
 ) -> None:
-    if not is_openrouter_image_configured():
+    if provider_blocks_image_use(None):
         await edit_or_send_nav_message(
             message,
-            text=_IMAGE_GEN_MISSING_TEXT,
+            text=_image_gen_unavailable_html(user_id),
             reply_markup=_missing_config_kb(back_callback),
             parse_mode=HTML,
         )
@@ -3328,10 +3382,10 @@ async def _show_image_model_pick(
     back_callback: str = CB_MENU_BACK_START,
     gen_mode: str = "text",
 ) -> None:
-    if not is_openrouter_image_configured():
+    if provider_blocks_image_use(None):
         await edit_or_send_nav_message(
             message,
-            text=_IMAGE_GEN_MISSING_TEXT,
+            text=_image_gen_unavailable_html(user_id),
             reply_markup=_missing_config_kb(back_callback),
             parse_mode=HTML,
         )
@@ -3394,17 +3448,18 @@ async def _start_image_flow(
     replace_menu: bool = False,
     back_callback: str = CB_MENU_BACK_START,
 ) -> None:
-    if not is_openrouter_image_configured():
+    if provider_blocks_image_use(None):
+        unavailable = _image_gen_unavailable_html(user_id)
         if replace_menu:
             await edit_or_send_nav_message(
                 message,
-                text=_IMAGE_GEN_MISSING_TEXT,
+                text=unavailable,
                 reply_markup=_missing_config_kb(back_callback),
                 parse_mode=HTML,
             )
         else:
             await message.answer(
-                _IMAGE_GEN_MISSING_TEXT,
+                unavailable,
                 reply_markup=_missing_config_kb(back_callback),
                 parse_mode=HTML,
             )
@@ -3685,12 +3740,13 @@ async def _send_ready_ideas_screen(
     await _purge_ready_category_album_messages_only(bot, chat_id, prior, keep_message_id=keep_mid)
 
     await state.clear()
-    if not is_openrouter_image_configured():
+    if provider_blocks_image_use(None):
+        unavailable = _image_gen_unavailable_html(user_id)
         if edit:
             if _is_generated_image_result_message(message):
                 await bot.send_message(
                     chat_id,
-                    _IMAGE_GEN_MISSING_TEXT,
+                    unavailable,
                     reply_markup=_missing_config_kb(back_callback),
                     parse_mode=HTML,
                 )
@@ -3698,7 +3754,7 @@ async def _send_ready_ideas_screen(
                 listing = _ready_categories_listing_photo()
                 ok = await replace_nav_screen_in_message(
                     message,
-                    caption_html=_IMAGE_GEN_MISSING_TEXT,
+                    caption_html=unavailable,
                     reply_markup=_missing_config_kb(back_callback),
                     new_media_path=listing if listing is not None and listing.is_file() else None,
                 )
@@ -3708,19 +3764,19 @@ async def _send_ready_ideas_screen(
                     if listing is not None and listing.is_file():
                         await replace_nav_screen_or_send_photo(
                             message,
-                            caption_html=_IMAGE_GEN_MISSING_TEXT,
+                            caption_html=unavailable,
                             reply_markup=kb,
                             media_path=listing,
                         )
                     else:
                         await edit_or_send_nav_message(
                             message,
-                            text=_IMAGE_GEN_MISSING_TEXT,
+                            text=unavailable,
                             reply_markup=kb,
                             parse_mode=HTML,
                         )
         else:
-            await message.answer(_IMAGE_GEN_MISSING_TEXT, reply_markup=_missing_config_kb(), parse_mode=HTML)
+            await message.answer(unavailable, reply_markup=_missing_config_kb(), parse_mode=HTML)
         return
     await ensure_user(user_id, username)
     await state.set_state(ImageGenState.ready_choosing_category)
@@ -3836,10 +3892,11 @@ async def open_mellstroy_prompt(callback: CallbackQuery, state: FSMContext) -> N
         await callback.answer("Ошибка запроса.", show_alert=True)
         return
     await callback.answer()
-    if not is_openrouter_image_configured():
+    user_id = callback.from_user.id
+    if provider_blocks_image_use(None):
         await _edit_ready_nav_message(
             callback.message,
-            caption=_IMAGE_GEN_MISSING_TEXT,
+            caption=_image_gen_unavailable_html(user_id),
             reply_markup=_missing_config_kb(CB_MENU_BACK_START),
             listing_photo=_ready_categories_listing_photo(),
         )
@@ -4780,10 +4837,10 @@ async def ready_confirm_and_generate(callback: CallbackQuery, state: FSMContext)
     # Сразу снимаем «часики» у кнопки, чтобы клик всегда ощущался.
     await callback.answer()
     try:
-        if not is_openrouter_image_configured():
+        if provider_blocks_image_use(None):
             await _edit_ready_nav_message(
                 callback.message,
-                caption=_IMAGE_GEN_MISSING_TEXT,
+                caption=_image_gen_unavailable_html(user_id),
                 reply_markup=_missing_config_kb(),
                 listing_photo=_ready_categories_listing_photo(),
             )

@@ -22,6 +22,10 @@ from src.config import (
     OPENROUTER_IMAGE_MODEL,
     OPENROUTER_IMAGE_OUTPUT_SIZE,
 )
+from src.image_upstream_errors import (
+    UPSTREAM_BILLING_USER_MESSAGE,
+    text_looks_like_upstream_provider_billing,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,21 +45,26 @@ def is_openrouter_image_configured() -> bool:
 
 
 # Не раскрываем пользователю сбои биллинга/баланса на стороне OpenRouter.
-_IMAGE_GEN_TRY_LATER = (
-    "Сейчас не получилось сгенерировать картинку. Попробуй позже или повтори запрос чуть позже."
-)
+_IMAGE_GEN_TRY_LATER = UPSTREAM_BILLING_USER_MESSAGE
+
+
+def openrouter_exc_is_provider_unavailable(exc: BaseException) -> bool:
+    """402 и похожие ответы - неоплаченный/пустой аккаунт OpenRouter, не кредиты бота."""
+    if isinstance(exc, OpenRouterApiError) and exc.http_status == 402:
+        return True
+    return text_looks_like_upstream_provider_billing(str(exc))
 
 
 def format_openrouter_image_user_error(exc: BaseException) -> str:
+    if isinstance(exc, OpenRouterApiError) and text_looks_like_upstream_provider_billing(str(exc)):
+        return _IMAGE_GEN_TRY_LATER
     text = str(exc).lower()
     if "401" in text or ("invalid" in text and "key" in text):
         return (
             "Ошибка доступа к генерации картинок. Администратору: проверь ключ в "
             "<code>.env</code> (без лишних пробелов и кавычек)."
         )
-    if isinstance(exc, OpenRouterApiError) and exc.http_status == 402:
-        return _IMAGE_GEN_TRY_LATER
-    if "402" in text or "payment" in text or "credits" in text:
+    if openrouter_exc_is_provider_unavailable(exc):
         return _IMAGE_GEN_TRY_LATER
     if "429" in text or "rate" in text:
         return "Сервис генерации перегружен или сработал лимит. Попробуй через минуту."
